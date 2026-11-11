@@ -610,7 +610,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         x /= x.std() + 1e-9
         tt = np.arange(m) / SR
         if burst:
-            e = np.exp(-tt / (d * .6)) * np.minimum(1, tt / .001) * TUNE['burst']
+            e = np.exp(-tt / (max(d, .003) * .6)) * np.minimum(1, tt / .001) * TUNE['burst']     # a click squeezed to nothing is still a click
         else:
             e = np.minimum(1, tt / .02) * np.minimum(1, (m / SR - tt) / .025) * TUNE['fric'] * P['sib']
         i0 = int((t0 - tA) * SR)
@@ -635,4 +635,4 @@ def render_singer(args):
         gap = 9. if prev_end is None else T(ph[0][0]) - T(prev_end)
         render_phrase(ph, P, rng, out, gap=gap)
         prev_end = ph[-1][0] + ph[-1][1]
-    return sect, P['x'], P['y'], P['star'], out
+    return sect, P['x'], P['y'], P['star'], np.nan_to_num(out)

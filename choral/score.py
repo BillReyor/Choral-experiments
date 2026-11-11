@@ -29,6 +29,7 @@ class Score:
         self.tempo = []                                           # (beat, bpm)
         self.timing = None                                        # measured beat -> second map, if any
         self.language = 'english'
+        self.printed = None                                       # performed measure -> printed measure, when a play: order is given
         self.marks = {'voice': [], 'piano': []}                   # (beat, mark)
         self.measures = {}                                        # number -> (start beat, length)
         self.beats = 0.
@@ -65,8 +66,92 @@ def _dur(code):
     return d * (2 - .5 ** len(rest))
 
 
+def play_order(spec, have):
+    """'1-15 14-15 16-62' -> [1, 2, ..., 15, 14, 15, 16, ...]"""
+    order = []
+    for tok in spec.split():
+        a, _, b = tok.partition('-')
+        a, b = int(a), int(b or a)
+        if a > b or a not in have or b not in have:
+            raise ScoreError(f'play: "{tok}" names measures that are not in the score')
+        order += [n for n in range(a, b + 1) if n in have]
+    return order
+
+
+def unroll(text, warn=print):
+    """A score written as printed, with a `play:` line giving the order its measures are performed in
+    (repeats, D.S., coda), becomes the score as performed: measures renumbered 1, 2, 3 ... and the
+    time signature, key, tempo and dynamic level put right wherever the music jumps.
+    Returns (text, {performed number: printed number})."""
+    lines = text.splitlines()
+    spec = next((l.split('//')[0].partition(':')[2].strip() for l in lines if l.split('//')[0].strip().startswith('play:')), None)
+    if spec is None:
+        return text, None
+    STATE = ('time', 'key', 'tempo', 'dynamic')
+    head, blocks, pre, cur = [], {}, [], None                 # blocks[n] = (lines before it, its own lines)
+    for raw in lines:
+        line = raw.split('//')[0].strip()
+        if line.startswith('play:'):
+            continue
+        if line.startswith('=='):
+            cur = int(line.strip('= ').split()[0])
+            blocks[cur] = (pre, []); pre = []
+        elif cur is None:
+            head.append(raw)
+        elif line.partition(':')[0].strip() in VOCAL or line.partition(':')[0].strip() in PIANO:
+            blocks[cur][1].append(raw)
+        else:
+            pre.append(raw)                                   # a directive or comment: it belongs to what follows
+    state = {k: None for k in STATE}
+    for raw in head:
+        k, _, v = raw.split('//')[0].partition(':')
+        if k.strip() in STATE:
+            state[k.strip()] = v.strip()
+    at, after = {}, {}
+    for n in blocks:                                          # what holds at the start of each printed measure, and after it
+        for raw in blocks[n][0]:
+            k, _, v = raw.split('//')[0].partition(':')
+            if k.strip() in STATE:
+                state[k.strip()] = v.strip()
+        at[n] = dict(state)
+        for raw in blocks[n][1]:
+            if raw.split('//')[0].partition(':')[0].strip() in VOCAL:
+                for tok in raw.split():
+                    if tok[1:] in DYN and tok.startswith('!'):
+                        state['dynamic'] = tok[1:]
+        after[n] = dict(state)
+    order = play_order(spec, blocks)
+    if '=*' in text:
+        warn('  ! play: with lyrics taken from a lyricsfile is not supported: a repeated measure would use up new words')
+    out, now, printed = list(head), {k: None for k in STATE}, {}
+    for k_, raw in ((r.split('//')[0].partition(':')[0].strip(), r) for r in head):
+        if k_ in STATE:
+            now[k_] = raw.split('//')[0].partition(':')[2].strip()
+    for i, n in enumerate(order):
+        out += [r for r in blocks[n][0] if r.split('//')[0].partition(':')[0].strip() not in STATE]
+        for k in STATE:
+            if at[n][k] is not None and at[n][k] != now[k]:
+                out.append(f'{k}: {at[n][k]}')
+        printed[i + 1] = n
+        out.append(f'== {i + 1}   // printed {n}')
+        jump = i + 1 < len(order) and order[i + 1] != n + 1
+        for raw in blocks[n][1]:
+            if jump:                                          # a tie cannot reach across a jump
+                toks = raw.split()
+                note, eq, lyr = toks[-1].partition('=')
+                if '/' in note and '~' in note.split('/')[-1]:
+                    d = note.rsplit('/', 1)
+                    toks[-1] = d[0] + '/' + d[1].replace('~', '') + eq + lyr
+                    raw = ' '.join(toks)
+            out.append(raw)
+        now = dict(after[n])
+    return '\n'.join(out) + '\n', printed
+
+
 def parse(text, warn=print, base='.'):
+    text, printed = unroll(text, warn)
     sc = Score()
+    sc.printed = printed
     key, meas_len, beat0, cur = 0, 4., 0., None
     lines_in_measure = {}
 

@@ -277,7 +277,7 @@ parts only; "right" means the same note in the same order as the hand transcript
 |---|---|---|---|---|
 | piece 1 (a phone scan) | 83 / 83 | 99.8% | 95.7% | 71% / 69% |
 | piece 3 | 99 / 99 | 98.5% | 96.5% | 88% / 70% |
-| piece 4 (Latin, 10/8 and 6/8 bars, triplets) | 75 / 76 | 98.7% | 96.5% | 66% / 71% |
+| piece 4 (Latin, 10/8 and 6/8 bars, triplets) | 75 / 75 | 98.7% | 96.5% | 66% / 71% |
 | piece 5 (the part read by hand) | - | 98.6% | 98.1% | 68% (soloist) |
 
 The printed tempo was found on every one (in piece 3 as half notes, which the reader converts).
@@ -294,8 +294,28 @@ What the first run on these exposed, and what was done:
   hyphens are checked against a dictionary (English) or against the piece's own repeated words;
   false hyphens after punctuation are dropped. That took the words from 32-86% to the figures above.
 
-Not yet done for scans: repeats, D.S. and codas are read as printed, not unrolled; words are
-still wrong or missing roughly one time in four; and where there are no practice tracks nothing
-checks the notes except that every measure adds up.
+**Repeats, D.S. and codas** are now unrolled. The score format has a `play:` line giving the order
+the printed measures are performed in, and the scan reader writes it: repeat barlines come from the
+recognition engine, the words ("D.S. al Coda", "to Coda", "Coda", "Fine") from text recognition
+above each system, and the segno sign from its shape (about three staff spaces tall with two
+separate dots beside it). On piece 4 it found all five things on the page - a repeat, the sign,
+"to coda", the D.S. and the coda - and wrote the correct order. The unrolled result has the same
+87 measures and 349 beats as the hand-unrolled transcription, and against the isolated real
+singers 97% of the first tenor's notes and 98% of the second tenor's are right.
+
+Two things had to be fixed to get there. A "measure" holding only the clef and key before a
+repeat sign was being counted. And the engine's reading of time signatures is unreliable (it
+gave 3/4, 5/4 and 15/8 where the page has 4/4 and 10/8), so each measure's length is now counted
+from its notes - the total most voices agree on - which reproduced the printed sequence exactly.
+
+From scan to audio in one command, the Latin piece now comes out with 40% of its words recognized
+by the multilingual recognizer, against 57% when rendered from the hand transcription and 62% for
+the real choir. The notes are not the difference; the misread words are.
+
+Not yet done for scans: first and second endings; D.C. and "al Fine" are written but untested;
+different words on a repeat; words are still wrong or missing roughly one time in four; and where
+there are no practice tracks nothing checks the notes except that every measure adds up. The
+sign detector also reported two signs on piece 1 that are not there - harmless without a D.S.,
+but a reason to look at the `play:` line it writes.
 
 None of these numbers says the result would pass for a recording.

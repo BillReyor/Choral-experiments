@@ -45,9 +45,22 @@ which catches most misread rhythms. A line that is absent is a bar of rest.
   the same moment.
 - **Dynamics** go between notes: `!pp !p !mp !mf !f !ff`, `!cresc`, `!dim`.
 
-Repeats, D.S. and codas are written out: number the measures in the order they are performed
-(the printed number can go in a comment). `tempo:` and `time:` may change between measures; `10/8`
-and `6/8` are counted in eighths, with the tempo still given in quarter notes per minute.
+`tempo:` and `time:` may change between measures; `10/8` and `6/8` are counted in eighths, with the
+tempo still given in quarter notes per minute.
+
+## Repeats, D.S. and codas
+
+Write every measure once, numbered as printed, and say near the top in what order they are
+performed:
+
+```
+play: 1-15 14-15 16-62 24-33 63-75     // repeat 14-15; D.S. back to 24; to the coda after 33
+```
+
+The reader unrolls it: the measures are renumbered 1, 2, 3 ... as performed, and the time
+signature, key, tempo and dynamic level are put right wherever the music jumps. A tie cannot reach
+across a jump. (Different words on the repeat are not supported yet: the second time through
+sings the same words.)
 
 ## Words
 

@@ -169,7 +169,7 @@ def read_xml(path):
     for part in root.findall('part'):
         nst = int(part.findtext('measure/attributes/staves') or 1)
         mine = [dict(clef=None, measures=[]) for _ in range(nst)]
-        div, seg = 1, 0
+        div, seg, carry = 1, 0, None
         for m in part.findall('measure'):
             pr = m.find('print')
             if pr is not None and pr.get('new-system') == 'yes' and mine[0]['measures']:
@@ -177,6 +177,11 @@ def read_xml(path):
                 mine = [dict(clef=None, measures=[]) for _ in range(nst)]
             cur = Fraction(0); last_on = Fraction(0)
             per = [dict(len=None, time=None, notes=[]) for _ in range(nst)]
+            for bl in m.findall('barline'):
+                d = bl.find('repeat')
+                if d is not None:
+                    for x in per:
+                        x['rep_start' if d.get('direction') == 'forward' else 'rep_end'] = True
             for e in m:
                 if e.tag == 'attributes':
                     if e.findtext('divisions'):
@@ -216,8 +221,14 @@ def read_xml(path):
             dyn = m.find('direction/direction-type/dynamics')
             if dyn is not None and len(dyn):
                 per[0]['dyn'] = dyn[0].tag
+            if m.find('note') is None:                  # only a clef and key before a repeat sign: not a measure
+                carry = per[0]['time'] or carry
+                continue
             for k in range(nst):
+                if carry and not per[k]['time']:
+                    per[k]['time'] = carry
                 mine[k]['measures'].append(per[k])
+            carry = None
         segments.setdefault(seg, []).extend(mine)
     return [st for k in sorted(segments) for st in segments[k]]
 
@@ -478,6 +489,85 @@ def barlines(img, staves, x0, x1, piano):
     return [float(x0)] + inner + [float(x1)]
 
 
+def find_segno(img, y0, y1, unit):
+    """x of every segno sign in a band above a staff: a shape about three spaces tall with two separate dots
+    beside it (an S, a slash, two dots) - nothing else printed up there looks like that."""
+    from scipy import ndimage
+    lab, n = ndimage.label(img[int(y0):int(y1)] < 140)
+    sizes = ndimage.sum(np.ones_like(lab), lab, range(1, n + 1)) if n else []
+    out = []
+    for i, sl in enumerate(ndimage.find_objects(lab), 1):
+        h, w = sl[0].stop - sl[0].start, sl[1].stop - sl[1].start
+        if 2.4 * unit <= h <= 4.3 * unit and 1.8 * unit <= w <= 3.5 * unit and .22 <= sizes[i - 1] / (h * w) <= .6:
+            box = lab[max(0, sl[0].start - int(.3 * unit)):sl[0].stop + int(.3 * unit), max(0, sl[1].start - int(.8 * unit)):sl[1].stop + int(.8 * unit)]
+            dots = [j for j in set(np.unique(box)) - {0, i} if 4 < sizes[j - 1] < .5 * unit * unit]
+            if len(dots) == 2:
+                out.append((sl[1].start + sl[1].stop) / 2)
+    return out
+
+
+def navigation(words, segnos, bars, first, unit):
+    """Words and signs above a system -> [(what, printed measure)], measures counted from `first`.
+    A jump instruction is printed at the end of the measure it follows; a section label at its start."""
+    at = lambda x: first + int(np.clip(np.searchsorted(bars, x) - 1, 0, len(bars) - 2))
+    words = sorted(words, key=lambda w: w[2])
+    out = [('segno', at(x)) for x in segnos]
+    for i, w in enumerate(words):
+        t = re.sub(r"[^a-z.]", '', w[4].lower())
+        rest = ' '.join(re.sub(r"[^a-z]", '', v[4].lower()) for v in words[i + 1:i + 5] if v[2] - w[3] < 22 * unit)
+        end = max([w[3]] + [v[3] for v in words[i + 1:i + 6] if v[2] - w[3] < 22 * unit and abs(v[1] - w[1]) < 1.5 * unit])
+        if t in ('d.s.', 'd.s', 'ds', 'ds.') or t in ('d.c.', 'd.c', 'dc', 'dc.'):
+            out.append((('ds' if 's' in t else 'dc') + (' fine' if 'fine' in rest else ' coda' if 'coda' in rest else ''), at(end - 3 * unit)))
+        elif t == 'coda' or t == 'coda.':
+            before = ' '.join(re.sub(r"[^a-z]", '', v[4].lower()) for v in words[max(0, i - 3):i] if w[2] - v[3] < 14 * unit)
+            if re.search(r'\bal\b', before):
+                continue                                     # "D.S. al Coda": handled with the D.S.
+            out.append(('to coda', at(w[3] - 3 * unit)) if re.search(r'\bto\b', before) else ('coda', at(w[2] + 2 * unit)))
+        elif t in ('fine', 'fine.'):
+            before = ' '.join(re.sub(r"[^a-z]", '', v[4].lower()) for v in words[max(0, i - 2):i])
+            if not re.search(r'\bal\b', before):
+                out.append(('fine', at(w[3] - 3 * unit)))
+    return out
+
+
+def performed(n, nav, starts, ends):
+    """The order the printed measures 1..n are played in, by the usual rules: a repeated passage twice;
+    D.S. / D.C. back to the sign / the top, no repeats the second time; then on to the coda at "to coda",
+    or stop at "Fine".  -> list of printed measure numbers, or None when there is nothing to unroll."""
+    where = lambda k: next((m for what, m in nav if what == k), None)
+    jump = next(((what, m) for what, m in nav if what.startswith(('ds', 'dc'))), None)
+    if not jump and not ends:
+        return None
+    order, i, taken, back, second = [], 1, set(), 1, False
+    while 1 <= i <= n and len(order) < 6 * n:
+        if i in starts and not second:
+            back = i
+        order.append(i)
+        if i in ends and i not in taken and not second:
+            taken.add(i); i = back
+            continue
+        if jump and not second and i == jump[1]:
+            target = where('segno') if jump[0].startswith('ds') else 1
+            if target:
+                second = True; i = target
+                continue
+        if second and 'coda' in jump[0] and i == where('to coda') and where('coda'):
+            i = where('coda')
+            continue
+        if second and 'fine' in jump[0] and i == where('fine'):
+            break
+        i += 1
+    return order
+
+
+def ranges(order):
+    out, a = [], 0
+    for b in range(1, len(order) + 1):
+        if b == len(order) or order[b] != order[b - 1] + 1:
+            out.append(f'{order[a]}-{order[b - 1]}' if b - 1 > a else str(order[a])); a = b
+    return ' '.join(out)
+
+
 def place(slots, syls):
     """Give syllables to note slots, both in left-to-right order, so that they sit closest together.
     slots: [(x, note)], syls: [(x, text)] -> {id(note): text}; unmatched notes continue the previous vowel."""
@@ -609,6 +699,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                                 if not w[1].endswith('-'):
                                     w[1] += '-'
             c['texts'][si] = ([[tuple(w) for w in line] for line in lines], bars, unit, ys)
+    nav, rep_starts, rep_ends = [], set(), set()    # what sends the music elsewhere: signs, words, repeat barlines
     last = {}                                       # (role, voice) -> (line number in out, pitch) of the note that ended the previous bar
     for c in crops:
         if not c['read']:
@@ -627,6 +718,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             bars0 = barlines(img, c['staves'], c['x0'], c['x1'], 'RH' in c['roles'])
             bars0 = bars0 if len(bars0) == M + 1 else list(np.linspace(c['x0'], c['x1'], M + 1))
             line = ' '.join(w[4] for w in sorted(above, key=lambda w: w[2]))
+            nav += navigation(above, find_segno(img, max(c['top'], top - 9 * unit0), top - .2 * unit0, unit0), bars0, num + 1, unit0)
             for mm in re.finditer(r'=\s*(?:ca\.?\s*)?(\d{2,3})', line):
                 if 30 <= int(mm.group(1)) <= 240:
                     num_w = next((w for w in above if mm.group(1) in w[4]), None)
@@ -637,13 +729,34 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 marks[max(0, int(np.searchsorted(bars0, xw)) - 1)] = float(tempo)
         for j in range(M):
             num += 1
-            t = next((st['measures'][j]['time'] for st in c['read'] if j < len(st['measures']) and st['measures'][j]['time']), None)
-            if t and t != cur_time:
-                cur_time = t; length = Fraction(int(t.split('/')[0]) * 4, int(t.split('/')[1]))
+            # How long is this measure?  Count it: the total most voices agree on.  (The printed time signature is
+            # read too, but it is the less reliable of the two, and most systems do not print one at all.)
+            totals = []
+            for st in c['read']:
+                if j < len(st['measures']):
+                    by_voice = {}
+                    for n in st['measures'][j]['notes']:
+                        if not n['chord']:
+                            by_voice[n['voice']] = by_voice.get(n['voice'], Fraction(0)) + n['ql']
+                    totals += [v for v in by_voice.values() if v > 0]
+            labels = [st['measures'][j]['time'] for st in c['read'] if j < len(st['measures']) and st['measures'][j]['time']]
+            as_len = lambda lab: Fraction(int(lab.split('/')[0]) * 4, int(lab.split('/')[1]))
+            if totals:
+                best = max(set(totals), key=lambda v: (totals.count(v), v == length, v))
+                if best != length and (totals.count(best) >= 2 or any(as_len(l) == best for l in labels)):
+                    length = best
+            t = next((l for l in labels if as_len(l) == length), None) or (cur_time if cur_time and as_len(cur_time) == length else None) \
+                or (f'{int(length)}/4' if length == int(length) else f'{int(length * 2)}/8')
+            if t != cur_time and (cur_time is None or as_len(t) != as_len(cur_time)):
+                cur_time = t
                 out.append('time: ' + t)
             if j in marks and (num > 1 or marks[j] != tempo):
                 out.append(f'tempo: {marks[j]:g}')
             out.append(f'== {num}')
+            if any(st['measures'][j].get('rep_start') for st in c['read'] if j < len(st['measures'])):
+                rep_starts.add(num)
+            if any(st['measures'][j].get('rep_end') for st in c['read'] if j < len(st['measures'])):
+                rep_ends.add(num)
             for si, role in enumerate(c['roles'][:len(c['read'])]):
                 st = c['read'][si]
                 if j >= len(st['measures']):
@@ -717,6 +830,15 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
     first = next((i for i, l in enumerate(out) if l.startswith('time: ')), None)
     if first is not None:
         out.pop(first)
+    order = performed(num, nav, rep_starts, rep_ends)
+    if nav or rep_ends:
+        found = sorted(set(nav), key=lambda x: x[1]) + [('repeat', f'{a_}-{b_}') for b_ in sorted(rep_ends) for a_ in [max([x for x in rep_starts if x <= b_] or [1])]]
+        log('  on the page: ' + ', '.join(f'{what} at {m}' for what, m in found))
+        head.insert(-1, '// found on the page: ' + ', '.join(f'{what} at {m}' for what, m in found))
+        if order and order != list(range(1, num + 1)):
+            head.insert(-1, 'play: ' + ranges(order) + '      // the order the printed measures are performed in - correct it here if it is wrong')
+        elif any(w.startswith('ds') for w, _ in nav) and not any(w == 'segno' for w, _ in nav):
+            log('  ! a D.S. is printed but its sign was not found: add a  play:  line to the score by hand')
     return '\n'.join(head + out) + '\n'
 
 

@@ -14,6 +14,7 @@ MUSIC is a score file (docs/score-format.md) or a PDF exported from notation sof
                     track per part named in --part, separated by commas).  They are only listened
                     to: the tempo and its bends, the hall and the balance are measured from them
   --tune            let a speech recognizer choose how close the microphones are (needs whisper-cli)
+  --language        latin, when a scanned score's words are Latin (English is assumed otherwise)
   --only            write just one version, e.g. --only "Baritone predominant"
 
 What was estimated for the piece is saved beside the score as NAME.preset.json and reused.
@@ -25,7 +26,7 @@ from . import render as R, score as scoremod, presets, reference, voice
 PARTS = {'tenor1': 'T1', 't1': 'T1', 'tenor2': 'T2', 't2': 'T2', 'baritone': 'BR', 'br': 'BR', 'bari': 'BR', 'bass': 'BS', 'bs': 'BS', 'solo': 'SOLO'}
 
 
-def read_music(path, log):
+def read_music(path, log, language=None):
     """A .score file as it is; a PDF through the reader that suits it: tools/pdf2score.py when the notes are
     drawn as shapes (exported from notation software), tools/scan2score.py when the pages are pictures."""
     if not path.lower().endswith('.pdf'):
@@ -44,7 +45,7 @@ def read_music(path, log):
             log(r.stdout.strip()); log(f'read {path} -> {out}')
             return out
     log('this PDF is a scan: recognizing the notes (about half a minute a page)...')
-    r = subprocess.run([sys.executable, os.path.join(tools, 'scan2score.py'), path, out])
+    r = subprocess.run([sys.executable, os.path.join(tools, 'scan2score.py'), path, out] + (['--language', language] if language else []))
     if r.returncode or not os.path.exists(out):
         raise SystemExit('Could not read the music out of this PDF.')
     log(f'read {path} -> {out}  (check it: a misread note or word is easier to fix there than to hear)')
@@ -57,11 +58,12 @@ def main():
     ap.add_argument('--accompaniment'); ap.add_argument('--balanced'); ap.add_argument('--predominant'); ap.add_argument('--muted')
     ap.add_argument('--tune', action='store_true'); ap.add_argument('--only'); ap.add_argument('--singers', type=int)
     ap.add_argument('--preset', help='a preset file to use instead of NAME.preset.json')
+    ap.add_argument('--language', help='the language of the words when a scan is read (latin, or leave out for English)')
     ap.add_argument('--fresh', action='store_true', help='ignore a saved preset and estimate again')
     a = ap.parse_args()
     log = lambda *s: print(*s, flush=True)
     t0 = time.time()
-    path = read_music(a.music, log)
+    path = read_music(a.music, log, a.language)
     sc = scoremod.load(path, warn=log)
     same = lambda p, q: [(n['beat'], n['dur'], n['midi']) for n in sc.parts[p]] == [(n['beat'], n['dur'], n['midi']) for n in sc.parts[q]]
     groups = []                                    # (name, [sections]) for every part asked for
