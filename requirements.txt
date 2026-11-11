@@ -1,4 +1,5 @@
 numpy
 scipy
 cmudict
-pymupdf  # only for tools/pdf2score.py
+pymupdf  # reading PDFs
+pillow   # reading scans (tools/scan2score.py)

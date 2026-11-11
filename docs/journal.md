@@ -1,0 +1,452 @@
+# Journal: what was measured, piece by piece
+
+This is the working record of the project: every test piece, what it showed, what was changed and
+what the change was checked against. It is long and in the order things happened. For what the
+tool does and how to run it, see the [README](../README.md); for how it works, see
+[how-it-works.md](how-it-works.md).
+
+Nobody in this project can listen to the output: every judgement here is a measurement - against
+isolated recordings of real singers, against the accompaniment tracks, or by a speech recognizer
+standing in for ears. The pieces are copyrighted arrangements with purchased rehearsal tracks, so
+they are not named and nothing of them is in the repository.
+
+Eight test pieces so far, for men's voices, each with a real reference recording.
+
+**Reading the music.** The first piece was a phone scan, read by eye; it matched a real
+baritone's isolated track on all 335 notes. The second was a vector PDF, read entirely by
+`tools/pdf2score.py`: all 474 staff-measures add up, and 197 of 199 baritone notes pass the pitch
+check against the recording.
+
+**Voices.** The voice model was fitted to the first piece's real baritone with
+`tools/realism.py` (clean tone, shorter consonants, living vowels, pitch scoops and glides).
+The second piece then showed that this did not carry over: at a faster tempo the full choir was
+far less intelligible than the solo voice. The cause was the room and the mix, not the singer -
+less hall, and section leaders further forward, fixed most of it on both pieces.
+
+Words a speech recognizer makes out (voices alone / with accompaniment):
+
+| | real recording | this engine |
+|---|---|---|
+| piece 1 (100 bpm) | 76% / 84% | 77% / 84% (one render) |
+| piece 2 (130 bpm) | - / 83% | 72-79% / 60-65% |
+
+`tools/fit.py` can also fit the voice to a recording automatically. It brought the model 2 dB
+closer to the real singer on held-out passages, but the recognizer then understood about 10
+points fewer words: it had learned to imitate the recording's room with breath noise and blurred
+vowels. Those settings are not used.
+
+**Solo tone.** `tools/tone.py` compares held vowels harmonic by harmonic with the real baritone.
+Fitting on half the piece and testing on the other half brought the error from 7.3 dB to 6.1 dB:
+a 16-point colour curve (fuller fundamental, less 1-1.5 kHz, a filled-in 4 kHz region), a
+stronger fundamental from the voice source, and slightly broader resonances. The fit also wanted
+to move the vowels themselves toward the singer's more covered, central shapes; that took solo
+word recognition from 79% to 68%, so the vowels were left alone. "s" is now a broad hiss from
+4 kHz up, as measured, instead of a narrow band.
+
+**Piano.** Fitted with `tools/fit.py` to the second piece's accompaniment track (distance on
+held-out measures 8.6 dB -> 5.7 dB): sustain pedal, a longer aftersound, a warmer soundboard,
+voiced chords. Instruments that are not in the vocal score (percussion, strings) are not rendered.
+
+**The third piece** (144 bpm, soft, a scan read by eye; the real baritone's notes match the
+transcription 99%) is where the engine is weakest so far, and the numbers say so:
+
+| piece 3 | real recording | this engine |
+|---|---|---|
+| voices alone | 63-71% | 25-37% |
+| baritone alone | 89% | 26-35% |
+
+Two things in it are new. Two different texts are sung at once for long stretches, and much of
+the text is quick drum syllables ("pum") on eighth notes. Changing the hall or the microphones
+makes no measurable difference here; the loss is in the voices themselves.
+
+What comparing the real baritone with the model on this piece showed, and what was done:
+
+- On "pum" the real singer sings about 40% of the note on the vowel and hums the rest on the
+  "m"; the model held the vowel and tacked on a 40 ms "m". Drum and bell syllables are now sung
+  that way, and the hum's tone was fitted to the singer's 13 held "pum" notes (error against the
+  recording 6.4 dB -> 2.7 dB, and it had been 11 dB too quiet).
+- The real singer's consonant clusters are shorter than the model's, and his nasals are brighter.
+  Copying either into ordinary text made a twelve-voice section *harder* to understand at speed
+  (piece 2: 75% -> 58% of words with both), so both are switched off: what is right for one
+  close-miked singer is not right for a section. The first two pieces score as before, within
+  the recognizer's noise (latest runs, voices alone: piece 1 78-84%, piece 2 59-68%).
+- A second real singer confirmed two things the scorecard had hinted at: soft singing has slower
+  attacks (125 ms against 36 ms at mezzo-forte) and relatively stronger "s". The hiss was raised
+  slightly; the attacks are not yet tied to dynamics.
+
+Following that up: one simulated singer alone is now heard saying the drum syllables verbatim,
+and scores 54-60% on this baritone part against the real singer's 89%. The rest of the loss
+happens when twelve of them sing together: the section alone drops to about 25%. Tightening the
+section's timing helped the section by itself (24% -> 36%) but made no measurable difference to the
+full choir, so it is not adopted. One timing fault was measured and fixed on the way: the puff of
+air after p, t and k came after the beat and delayed the vowel by 30-40 ms; real singers have
+the vowel at full level on the beat.
+
+The recognizer's score moves by several points between identical runs - a full-choir score can
+differ by ten points between two random sets of singers - and at low levels it cannot tell one
+setting from another. The tuner now says so and keeps the rule of thumb instead of picking noise.
+
+**The fourth piece** was a fresh test of the whole chain: three parts instead of four, in Latin,
+with a tempo change, mixed 10/8 and 6/8 bars, a repeat and a D.S. al Coda, from an 11-page scan.
+
+- *Reading it.* Written out as 87 measures in performance order; every bar added up on the first
+  pass. The practice tracks separated cleanly (the accompaniment cancels by 29 dB), which gave
+  all three parts in isolation. The first reading matched them on 93-95% of notes; the
+  mismatches pointed straight at three misread bars, and after correcting those the parts match
+  on 97%, 99% and 98%. Most of what remains is the middle note of quick triplets, which the pitch
+  tracker cannot resolve.
+- *Timing.* Both tempos were found without help (120.0, then 138.0), after the timing code was
+  generalized to fit each tempo section separately.
+- *Pronunciation.* Two questions were settled by measuring the real singers rather than by the
+  rule book: there is no breath noise before the vowel of "Hosanna" (the h is silent), and its s
+  is the softened, voiced s the chant books describe - the voice carries on under a light hiss.
+  (An English recognizer had heard the engine's version of that as "l", and for a while a full
+  unvoiced s was used instead; a recognizer that can follow Latin hears the real choir sing
+  "hozana", and the measurement agrees.)
+- *Vowels.* Against two real tenors and a real bass, the engine's "ee" was far too thin - its
+  second harmonic 17 dB weaker than theirs - and its "oo" likewise. Trained singers keep their
+  vowels closer together than speech does. Latin now has its own five vowels, fitted to the three
+  singers and taken 65% of the way there: tone error 7.9 dB -> 6.2 dB, and going further starts
+  to cost recognized words. English vowels are unchanged (an earlier attempt to move them cost
+  ten points of intelligibility).
+- *Note shape.* These singers let every held note fade at about 12 dB a second (the piece is
+  marked "bell like"); the engine sustained them. That is now a per-piece setting measured from
+  the recording: fade -1.4 -> -11.8 dB/s against the real -14.2, and the share of each note sung
+  at full voice 93% -> 80% against 77%.
+
+*Words.* Whisper barely knows Latin - the real choir scored 25% - so the yardstick for Latin is the
+multilingual model hearing the singing as Italian, with the piece's vocabulary given to it as
+context. It cannot invent the text from that: the accompaniment alone, and the choir singing
+every note on "ah", both score 0%.
+
+| piece 4 (Latin) | real recording | this engine |
+|---|---|---|
+| all voices | 62% | 57% |
+| tenor 1 / tenor 2 / bass alone | 59% / 71% / 56% | 46% / 52% / 55% |
+
+So on this piece the words come through nearly as well as the real choir's. The same yardstick
+settled the vowel question properly: speech-like vowels are understood slightly better (single
+voices 70% against 67%) and the singers' own vowels sound more like them (tone error 6.0 dB
+against 7.9 dB); the 65% setting keeps most of the tone for a few points of words. Fading notes
+cost no words.
+
+Giving the recognizer the vocabulary on the third piece narrows its gap but does not close it:
+the render goes from 26% to 48%, the real voices from 69% to 75%. That piece's problem is real.
+
+What is still clearly wrong on the Latin piece: the simulated tenors' fundamental is about 10 dB
+too strong against the second harmonic (real 1-3 dB, model 10-14), which none of the obvious
+settings fixes.
+
+**The fifth piece** (a slow carol for a soloist and four-part choir, an 8-page scan, 125 measures)
+was read entirely by `tools/scan2score.py` - the first piece with no hand transcription - and
+went from PDF to finished audio in one command, about a minute and a half.
+
+- *Notes.* All 125 measures add up as read. Against the isolated real singers, 52 of the
+  soloist's 53 notes and 138 of the baritone's 145 are right (the misses: a voice crossing, and
+  one system where the choir shares a single staff). On the pages also read by hand, the two
+  readings agree, and the automatic one settled several notes the hand reading had marked doubtful.
+- *Layout.* 22 systems of five different shapes (piano alone; solo and piano; solo, two choir
+  staves and piano; two choir staves and piano; one shared choir staff and piano) were all
+  assigned correctly. Barlines are found from what every staff of a system shares, which a note
+  stem never does.
+- *Words.* The weak part. Most syllables land on the right notes, hyphens are found on the page
+  itself, but text recognition drops small syllables and garbles some, more so where two lines of
+  text sit under one staff: about fifty words of this piece came out as non-words. They are easy
+  to see and fix in the score file, but they are not yet right unaided.
+- *Timing.* The piece breathes (ritardandos, a faster last verse). Tempo marks are picked up from
+  the page, and the tempo map now follows stretches where several entries in a row sit off the
+  pulse. On the final clock the soloist's notes all line up with the real singer; 121 of the
+  baritone's 144 do.
+- *A solo voice* is new: one singer on a close microphone, `SOLO:` in the score format.
+
+| piece 5 (words recognized) | real recording | this engine |
+|---|---|---|
+| soloist alone | 64% | 60% |
+| all voices | 58% | 34% |
+| baritone alone | 42% | 20% |
+
+The simulated soloist is understood about as well as the real one. The choir is not, and here
+part of that is the misread words it was given to sing.
+
+**The scan reader against the earlier pieces.** Three of the earlier pieces were scans that had
+been transcribed by hand and checked against recordings, so they could grade the reader. Voice
+parts only; "right" means the same note in the same order as the hand transcription.
+
+| scan | measures (hand / read) | pitches right | pitch and length right | syllables on the right note | words right (tenor 1 / baritone) |
+|---|---|---|---|---|---|
+| piece 1 (a phone scan) | 83 / 83 | 99.8% | 95.7% | 89% | 84% / 90% |
+| piece 3 | 99 / 99 | 98.5% | 96.6% | 91% | 96% / 88% |
+| piece 4 (Latin, 10/8 and 6/8 bars, triplets) | 75 / 75 | 98.4% | 96.5% | 92% | 81% / 87% |
+| piece 5 (the part read by hand) | - | 98.6% | 98.1% | - | 96% (soloist) |
+
+The printed tempo was found on every one (in piece 3 as half notes, which the reader converts).
+What the first run on these exposed, and what was done:
+
+- On a slightly tilted scan, four-staff systems were being cut in two and the choir's staves taken
+  for piano (piece 4 came out 73% right). The line that joins a system's staves is now looked for
+  with a little tolerance: measured, it scores 0.73-1.00 within a system and under 0.4 between.
+- Most of what is left in "length" is ties: a note tied across the end of a line is struck again,
+  because each system is read on its own. Where the words show it (the same pitch, first in the
+  new system, no syllable of its own) the tie is restored. Applying the same idea inside a bar
+  made things much worse - text recognition misses too many syllables to lean on - so it is not used.
+- Words were the weak part: at first only 64-76% of syllables landed on the right note. What changed that:
+  - The recognition engine records where every note stands on the page. Syllables are now matched
+    to notes by position across the whole system, instead of being spread evenly inside each bar;
+    that took the wrongly placed syllables on piece 4 from 21% to 2%.
+  - A note left with no word is looked at again by itself, close up, where its word must be.
+  - Hyphens are settled by dividing each line into dictionary words, with what was seen on the page
+    as the tie-breaker (sung syllables such as "pum" count as words, or they get glued to their
+    neighbours). Without a dictionary - Latin - a word seen twice with its hyphens lends them.
+  - A note that still has no word takes the one another part sings at that moment; a staff with
+    nothing printed under it sings the words of the staff that has them.
+  - Words printed above the top staff belong to its upper voice where that voice moves alone.
+  - Chord symbols, "poco rit.", "a tempo" and their misreadings are kept out of the lyrics.
+
+  What is left: about one syllable in ten is still missing, misread or wrongly hyphenated.
+
+**Repeats, D.S. and codas** are now unrolled. The score format has a `play:` line giving the order
+the printed measures are performed in, and the scan reader writes it: repeat barlines come from the
+recognition engine, the words ("D.S. al Coda", "to Coda", "Coda", "Fine") from text recognition
+above each system, and the segno sign from its shape (about three staff spaces tall with two
+separate dots beside it). On piece 4 it found all five things on the page - a repeat, the sign,
+"to coda", the D.S. and the coda - and wrote the correct order. The unrolled result has the same
+87 measures and 349 beats as the hand-unrolled transcription, and against the isolated real
+singers 97% of the first tenor's notes and 98% of the second tenor's are right.
+
+Two things had to be fixed to get there. A "measure" holding only the clef and key before a
+repeat sign was being counted. And the engine's reading of time signatures is unreliable (it
+gave 3/4, 5/4 and 15/8 where the page has 4/4 and 10/8), so each measure's length is now counted
+from its notes - the total most voices agree on - which reproduced the printed sequence exactly.
+
+From scan to audio in one command, measured by the recognizer: the carol's simulated soloist is
+understood at 72% (the real soloist 85%, both judged against the text as read from the scan), and
+its choir at 48% (real 73%). The Latin piece from its scan stays at 40% of words, against 57% when
+rendered from the hand transcription and 62% for the real choir - better words on the page did not
+move that number, which says the rest of that gap is not in the words read.
+
+Not yet done for scans: first and second endings; D.C. and "al Fine" are written but untested;
+different words on a repeat; about one syllable in ten is still wrong or missing; and where
+there are no practice tracks nothing checks the notes except that every measure adds up. The
+sign detector also reported two signs on piece 1 that are not there - harmless without a D.S.,
+but a reason to look at the `play:` line it writes.
+
+**The sixth piece** is unaccompanied: a trio of soloists over a four-part choir, in Latin, slow and
+soft, with chanted verses between the refrains. Its practice tracks are "one voice with the rest
+quietly", with no accompaniment to subtract; taking the right share of the balanced mix out of
+each (the share that leaves the quietest moments quietest) isolates four real voices. The scan
+reader, told nothing, recognized that there is no piano (words are printed under the lowest staff)
+and that the staves are a small group over the choir; on the first refrain 217 of the 221 notes
+of those four voices match the real singers.
+
+Only that refrain (80 seconds) is rendered so far. The whole form is not assembled automatically:
+the recognition engine could not read the first line of chant, the later verses are printed after
+the refrain with nothing but words to say where they go, and the choir's lyrics on this copy are
+partly covered by pencil marks.
+
+**Voice realism, with nine real singers to compare against.** The four new voices brought the
+number of isolated real singers to nine, and three things that had looked like quirks of one
+piece turned out to be consistent:
+
+- *Tone.* The voice's colour curve had been fitted to the first piece's baritone. Against the
+  other eight singers it was wrong in the same direction every time: 6-10 dB too much below
+  400 Hz, too little around 1.6 kHz and 2.5-3 kHz, too much at 3.5 kHz. Refitted to the median of
+  all nine, the tone error falls from 7.4 dB to 6.4 dB (better for eight singers, worse for the
+  one it used to be fitted to), and the fundamental, which had been 6-13 dB stronger than the
+  second harmonic where real voices have it 2-5 dB weaker, now sits within 3-5 dB of them.
+- *Unsteadiness.* Real voices waver quickly by 4-5 cents on a held note; the model's wavered by
+  about 2 on every piece. A quick random pitch component now gives 3.4-3.7.
+- *Entries.* How fast a phrase begins depends on how loudly it is sung: the rise to full voice
+  takes about 36 ms at mezzo-forte, 125 ms at mezzo-piano and 200 ms at piano on real singers,
+  and took 35-55 ms at any dynamic in the model. It now follows the dynamic (177-186 ms on this
+  piece, against 195-226 ms).
+
+One more is measured per piece from a recording, like the bell-like fade before: how far under
+the note a phrase begins (these singers hardly scoop: 14-21 cents; the model had 67-73).
+
+The recognizer was the check on all of it: single voices on the English pieces score 54 / 84 / 72
+/ 88% after the changes against 53 / 74 / 72 / 86% before, and the full choirs are unchanged
+within its noise.
+
+**The shape of a single note.** Every simulated note used to sit at full voice for 96% of its
+length; on this piece the real ones manage 66-70%. Slicing each held note into tenths and
+comparing levels, singer by singer, showed what the real voices do and when:
+
+| | level through the note, dB under its loudest fifth (ten slices, start to end) |
+|---|---|
+| real, soft and slow (three singers, one piece) | -8 -7 -5 -4 -2 -1 -2 -3 -5 -7 |
+| real, soft and slow (the soloist of another) | -6 -4 -3 -2 -1 -1 -1 -3 -5 -7 |
+| real, mezzo-forte and quicker (another piece) | -1 -1 -1 -1 -1 -1 -1 -3 -7 -10 |
+| the model, before | 0 -1 -1 -1 -1 -1 -1 -1 -4 -7 |
+| the model, now, on the first of these | -9 -7 -5 -3 -2 0 0 0 -4 -8 |
+
+In soft, slow singing a note grows for about two thirds of its length and eases off again. The
+first note of a phrase takes longer to arrive, the last one does not swell and tapers instead,
+and long notes taper further. No two notes are alike: the swell ranges from nothing to twice the
+usual and peaks anywhere from half way to four fifths through. None of it happens at mezzo-forte
+and above, and the same singers did not do it on the soft held notes of a quick piece. The voice
+now does all of this (`choral/voice.py`, the `swell` setting): by rule where there is no recording
+(6.5 dB at piano and softer, in slow music only), and at the depth measured from one isolated
+real voice where there is one (10.5 dB on this piece, 5.3 dB on the soft solo of the carol).
+
+Measured again afterwards: the share of each note at full voice is 72-77% on this piece (real
+66-70%) and 94% on the carol's solo (real 83%); the note-to-note spread is close (on both sides a
+tenth of the notes do not swell at all and a tenth swell nearly twice as far as the middle one);
+and the peak falls at 58-67% of the note (real 64-66%). The recognizer
+lost nothing: with the swell switched on and off for the same singers, the soft solo scores 80%
+against 79%, and two of the three upper voices on this piece 50% against 42% and 48% against 45%.
+Loud and quick pieces render exactly as before.
+
+**Comparing spectra, so that problems show themselves.** The note shapes above went unnoticed for
+five pieces because nothing was looking for them: every earlier measurement answered a question
+somebody had thought to ask. `tools/compare.py` asks none. It sets a real singer beside the model
+on the same notes and the same timing, measures both spectra note by note, and lists whatever
+differs. All eleven isolated real singers take about 20 seconds.
+
+Its first version made a mistake worth recording. It reported three differences on nearly every
+singer, and two of them were not differences between voices at all:
+
+- *"The model's sound drops 17 dB for a tenth of a second before every stop; real singers' barely
+  dips."* The real recordings have a room around the voice and the simulated singer was dry. A
+  room fills a consonant's gap; silence does not. Measured two ways that a room cannot fool -
+  with the model placed in a room matched to how each recording dies away, and by timing the
+  sound's fall and its next rise - the real singers' breaks are as long as the model's or longer
+  (before "t": 142 ms real, 116 ms model), and the levels around a syllable's start agree within
+  1-3 dB in every band below 3.6 kHz.
+- *"Real held notes wander twice as much in level and brightness."* The same room: in it the
+  model wanders as much as the singers do (level 0.23-0.72 dB real, 0.33-1.02 model).
+
+So the comparison now puts the simulated voices in a plain room chosen to make them die away
+after phrase ends as the recording does, and only then measures. Like with like, what is left on
+the eleven singers is:
+
+- *Tone above 3.5 kHz.* The model had a peak around 4 kHz that the singers do not (10 dB, 10 of
+  11 singers) and too little above 5.6 kHz while a note is held (12-16 dB, 11 of 11). It is the
+  voice, not the recordings' noise: that band stands 10-31 dB above its own level in the rests.
+  The earlier tone fit could see neither - it compared harmonic peaks only, in wider bands.
+  (Fixed: see "The highs" below.)
+- *Loudness through a note* within 2 dB of the real singers for the first three quarters of a
+  note, in the room as well: the note shaping holds. In the last fifth the model is 3-4 dB louder
+  (9 of 11): the singers let go of a note a little sooner.
+- Smaller things on some singers only: after a consonant the model's brightness arrives 20-40 ms
+  sooner than the singers' (7-8 of 11), and in two pieces the real singers grow much louder on
+  their high notes than the model does (8-14 dB against 2-4).
+
+**The highs.** That tone difference is fixed, and finding out what the real highs are made of
+decided how. In each band the spectrum of a held note either ripples at the spacing of the sung
+pitch (harmonics) or does not (noise). From 1.8 to 3.6 kHz the real voices ripple as strongly as
+the model's; above 5.6 kHz they hardly ripple at all: up there a sung note is mostly the breath in
+the tone, about 47 dB under the whole voice, and between 3.6 and 5.2 kHz it is a mix. The model
+had clean harmonics in both places - 26 dB too little of them at the top, and for tenors 20 dB
+too much around 4 kHz. Its breath could not help: passed through the row of resonances that
+shapes the vowels, noise arrives up there 70 dB down, however much of it there is. So the bright
+part of the breath now has a shape of its own (`AIR` in `choral/voice.py`: nothing below 2.5 kHz,
+full by 5 kHz), the upper resonance of the voice sits 200 Hz lower, and the harmonic tone curve
+loses its peak at 4 kHz. On the eleven singers every band from 100 Hz to 7.5 kHz is now within
+2.1 dB of the median real voice (it was +10 dB at 4 kHz and -17 dB at 7.5 kHz), and between 2 and
+5 kHz the model's harmonics stand 25-30 dB over its noise where the singers' stand 23-27 (it was
+8-10 dB cleaner). The recognizer is unmoved: eight single voices average 1.5 points lower, three
+full choirs 3 points higher, both inside its noise.
+
+**Soft entries.** One difference at the start of phrases was real. In soft music the model's
+entries after a rest reached a usable level (12 dB under the note) 100-130 ms after the beat; the
+real singers' get there in 13-42 ms, and at mezzo-forte the two agreed. The cause was a slow
+start laid on top of the new swell. Starting the whole entry earlier put the timing right but
+cost words (80% -> 67-71% on the soft solo), so instead a phrase whose first note swells now
+begins quickly and leaves the growing to the swell: 55-63 ms, the first tenth of such a note
+within 2-6 dB of the singers' instead of 4-8, and the recognizer unchanged within its noise (soft
+solo 80% -> 80%, its baritone 48 -> 45, two voices of the unaccompanied piece 48 -> 48 and
+46 -> 43, the full choir 58 -> 60).
+
+**Voices against the accompaniment.** A fault that none of the measurements above could see, and
+that was heard, not measured: in the carol the voices ran behind the accompaniment, then rushed to
+catch up. Each voice had only ever been checked against its own isolated track. Checked instead
+against the accompaniment's own note attacks, the tempo map was 150-400 ms out for most of the
+piece. It had been blended from maps fitted to two singers separately, which disagreed by a third
+of a second, and it assumed a faster last verse because a tempo mark said so; the recording keeps
+its tempo.
+
+Now the accompaniment leads (`timing.track`). The written piano attacks and every isolated voice
+are followed through the piece together: the piano says exactly where a beat falls, but an even
+pattern fits a beat further on just as well; a melody is only good to a tenth of a second, but
+fits in one place. The path through both may drift freely with the tempo, and a sudden move - a
+held chord, a breath before a new verse, a section in a tempo the score did not promise - has to
+be worth a fixed price. On the carol the soloist's notes are 100% on pitch where the new map puts
+them and the baritone's 94% (85% before, with whole passages off), and the voices are within
+60 ms of the accompaniment in 85 of 90 stretches. The program now reports both numbers on every
+run with practice tracks. It also says where the recordings do not fit the score as read: here the
+written introduction is five seconds longer than the played one, and the baritone's last five
+measures were misread from the scan - the timing there carries on in the tempo it had.
+
+**The seventh piece** (a quick waltz for four-part men's choir and piano, 15 scanned pages, English
+with transliterated Hebrew) is laid out as none before it: every voice part on a staff of its own
+above the piano, six staves to a system, and the barlines do not run from one voice's staff to
+the next. Three things had to change in the scan reader:
+
+- *Systems read in parts.* Given such a system whole, the recognition engine read two in three of
+  them as a pile of piano systems. What is on the page is known beforehand - how many staves, and
+  which two are the piano's - so a reading that does not match is now done again in parts: the
+  voices' staves alone, the piano alone, and if need be each voice by itself. All 27 six-staff
+  systems then came back with the right staves and equal numbers of measures.
+- *One system, even across a fold.* Where a crease in the paper broke the line joining voices and
+  piano, the piano had been taken for a system of its own (and its measures counted twice).
+- *Barlines on a photocopy* are grey, thin and broken: found now staff by staff with a vote, at a
+  gentler threshold. A third of the systems still come out one barline wrong.
+
+The three earlier scans grade exactly as before against their hand transcriptions (pitch and
+length right 95.8 / 96.6 / 96.9%). On the new piece there is no hand transcription to grade
+against, but the real baritone is: sung on the timing found, 95% of his notes are on the pitch
+the reader wrote, and the first, steady fit of the timing had already put 100% of them there.
+
+Timing: one tempo throughout, and here the follower rightly did nothing (the map moved by 0 ms;
+voices within 60 ms of the accompaniment in 95 of 95 stretches). It first did harm, though, and
+that led to two more repairs. The piece's verses repeat, and a verse fits the next verse's place
+nearly as well as its own: a sudden move now has to be worth several stretches of clearly better
+fit, and a followed map that agrees with the recordings less than the first, steadier one did is
+thrown away. And the isolated baritone the follower listened to was poor - 56% of his notes on
+pitch where taking the other voices out level for level gives 94%: the "part muted" track had
+been scaled by how much of the full choir it explains, which overshoots.
+
+Words: the reader gets most of them, the transliterated ones with gaps. Judged against the text
+as read, the recognizer hears 38% of the words in the rendered choir and 33% in the real one, 34%
+and 29% for the baritone alone.
+
+Against this baritone the comparison says the model is too bright between 1.7 and 4 kHz (up to
+14 dB - one singer; the tone is fitted to the median of eleven) and that the first note of a
+phrase begins too softly. The entry speed measured from the recording made that worse, not
+better, so that correction is now kept small.
+
+**How notes end.** The one difference the comparison showed on nearly every singer after the highs
+were fixed: the model's notes ended 3 dB louder than real ones. Sorted by what follows the note,
+the reason is plain. Inside a melisma a real note ends as level as the model's. Where the next
+note brings a new syllable, the real voice fades over the last third of the note - by 3-4 dB more
+than the model, more on a long note, hardly at all on a short one that already ends in a
+consonant. So each syllable's vowel now fades toward the next syllable (`taper`), timed to the end
+of the vowel, not of the note, and the consonant that follows is sung at its own level: the vowel
+comes down to meet it. On twelve singers, each compared in its own room, the last three tenths of
+a note are now within 0.7 / 1.7 / 1.8 dB of the real ones (they were 1.5 / 2.8 / 2.6 dB too loud).
+
+The fade that is measured per piece from a recording had to change with it. It used to assume the
+model's own notes fall 2 dB a second; they fall faster now, and how fast depends on the piece. So
+the model's own fade is measured too, on the same notes and in the recording's room, and the
+piece's setting is the difference.
+
+The recognizer: eight single voices average 63.6% with the taper against 63.9% without, and three
+full choirs move by +3, -1 and -7 to +13 points depending on which singers are drawn. One voice is
+clearly worse for it, a pianissimo solo (80% -> 73%); easing the taper there did not bring it
+back, and it is left as measured on the real singers.
+
+**The eighth piece** (a quick, wordy, chromatic number; a PDF exported from notation software in a
+music font the shape reader does not know) first came back as an empty score: the shape reader
+found no notes and said nothing. Now the program notices, renders the pages and reads them as a
+scan - and takes the words straight from the PDF's own text, which is exact and needs no text
+recognition on any system. Voices within 60 ms of the accompaniment in 118 of 120 stretches; the
+recognizer hears 55% of the words in the rendered choir against 57% in the real one (59% against
+62% for the baritone alone). The notes are the weak point: 87% of the baritone's match the real
+singer, the misses mostly a semitone or two off - accidentals, in a piece full of them.
+
+**Words without macOS.** Reading words off a scan used macOS's text recognition only, so on Linux
+or Windows a scan came out with notes and no words. Tesseract is now used where macOS's
+recognizer is not available (`SCAN_OCR=tesseract` forces it). On the two English scans with hand
+transcriptions it puts 81% and 72% of the syllables on the right note, against 89% and 90%.
+
+None of these numbers says the result would pass for a recording.

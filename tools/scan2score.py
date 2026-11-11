@@ -429,13 +429,36 @@ def read_systems(crops, log):
 
 # ------------------------------------------------------------------------- the words ----
 def ocr_cmd(work):
-    """macOS text recognition, compiled once from tools/ocr.swift."""
-    exe = os.path.join(work, 'ocr')
-    if not os.path.exists(exe):
+    """A text recognizer for the words under the notes: macOS's own (compiled once from tools/ocr.swift), or
+    Tesseract where that is not to be had - Linux, Windows, or a Mac without the developer tools.  Returns the
+    program to run, 'tesseract', or None.  SCAN_OCR=tesseract (or =macos) insists on one of them."""
+    want = os.environ.get('SCAN_OCR', '')
+    if want != 'tesseract':
+        exe = os.path.join(work, 'ocr')
+        if os.path.exists(exe):
+            return exe
         src = os.path.join(HERE, 'tools', 'ocr.swift')
-        if not shutil.which('swiftc') or subprocess.run(['swiftc', '-O', src, '-o', exe], capture_output=True).returncode:
+        if shutil.which('swiftc') and not subprocess.run(['swiftc', '-O', src, '-o', exe], capture_output=True).returncode:
+            return exe
+        if want == 'macos':
             return None
-    return exe
+    return 'tesseract' if shutil.which('tesseract') else None
+
+
+def _tesseract(path, sparse=True):
+    """Tesseract's words on an image -> [(x0, y0, x1, y1, text)] in the image's pixels."""
+    r = subprocess.run(['tesseract', path, 'stdout', '--psm', '11' if sparse else '6', 'tsv'], capture_output=True, text=True)
+    out = []
+    for row in r.stdout.splitlines()[1:]:
+        f = row.split('\t')
+        if len(f) >= 12 and f[11].strip():
+            try:
+                left, top, wd, ht, conf = float(f[6]), float(f[7]), float(f[8]), float(f[9]), float(f[10])
+            except ValueError:
+                continue
+            if conf >= 20:
+                out.append((left, top, left + wd, top + ht, f[11].strip()))
+    return out
 
 
 TEXT = {'pages': {}, 'page': None, 'width': None}     # words a PDF carries as text, by page, in the page image's pixels
@@ -501,6 +524,11 @@ def ocr_words(exe, img, y0, y1, work, tag, zoom=3):
     path = os.path.join(work, f'band_{tag}.png')
     canvas.save(path)
     out = []
+    if exe == 'tesseract':
+        for x0, t0, x1, t1, text in _tesseract(path):
+            out.append(((x0 + x1) / 2 / zoom, ((t0 + t1) / 2 - 120) / zoom + y0, x0 / zoom, x1 / zoom, text))
+        os.remove(path)
+        return out
     for line in subprocess.run([exe, path], capture_output=True, text=True).stdout.splitlines():
         box, _, text = line.partition('\t')
         f = [float(v) for v in box.split()]
@@ -876,7 +904,7 @@ def has_piano(crops, pages, exe, work):
 def assemble(crops, pages, work, title, tempo, language, log, marked=False):
     exe = 'pdf-text' if TEXT['pages'] else ocr_cmd(work)
     if not exe:
-        log('  ! no text recognition here (it uses macOS): the notes will have no words')
+        log('  ! no text recognition here (macOS has its own; elsewhere install Tesseract): the notes will have no words')
     piano = has_piano(crops, pages, exe, work)
     if piano is False:
         log('  no piano part: words are printed under the lowest staff')
@@ -1169,6 +1197,8 @@ def find_tempo(pages, work):
             m = re.search(r'=\s*(?:ca\.?\s*)?(\d{2,3})', text)
             if m and 30 <= int(m.group(1)) <= 240:
                 return float(m.group(1))
+        elif exe == 'tesseract':
+            text = ' '.join(w[4] for w in _tesseract(p))
         elif exe:
             text = ' '.join(l.partition('\t')[2] for l in subprocess.run([exe, p], capture_output=True, text=True).stdout.splitlines())
             m = re.search(r'=\s*(?:ca\.?\s*)?(\d{2,3})', text)
