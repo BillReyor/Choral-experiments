@@ -52,8 +52,8 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   against isolated recordings of real singers, against accompaniment tracks, and by a speech
   recognizer. Trust your ears over its reports.
 - **Men's chorus only** (TTBB, TTB, soloist or trio over the choir), with piano or unaccompanied.
-- **Reading scans is imperfect.** Typically 96-99% of the notes are right; chromatic music fares
-  worse (87% on one piece). About one syllable in ten is wrong or missing, more with Tesseract.
+- **Reading scans is imperfect.** Typically 96-99% of the notes are right. About one syllable in
+  ten is wrong or missing, more with Tesseract.
   Repeats, D.S. and codas are followed; first and second endings are not. Always look through the
   `.score` file it writes.
 - **Words:** English (by dictionary) and church Latin (by rule). Anything else is sung as if it

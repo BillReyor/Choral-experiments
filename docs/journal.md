@@ -441,12 +441,45 @@ found no notes and said nothing. Now the program notices, renders the pages and 
 scan - and takes the words straight from the PDF's own text, which is exact and needs no text
 recognition on any system. Voices within 60 ms of the accompaniment in 118 of 120 stretches; the
 recognizer hears 55% of the words in the rendered choir against 57% in the real one (59% against
-62% for the baritone alone). The notes are the weak point: 87% of the baritone's match the real
-singer, the misses mostly a semitone or two off - accidentals, in a piece full of them.
+62% for the baritone alone). 87% of the baritone's notes match the real singer by the usual
+check; the next entry shows that this is the check's limit on such music, not the reader's.
 
 **Words without macOS.** Reading words off a scan used macOS's text recognition only, so on Linux
 or Windows a scan came out with notes and no words. Tesseract is now used where macOS's
 recognizer is not available (`SCAN_OCR=tesseract` forces it). On the two English scans with hand
 transcriptions it puts 81% and 72% of the syllables on the right note, against 89% and 90%.
+
+**A second reader: Audiveris.** Would the long-established open-source reader
+[Audiveris](https://github.com/Audiveris/audiveris) (5.11) do better than the recognition engine
+used here? Both were graded the same way - the notes of the tenors' and the basses' staff as a
+sequence, against the verified hand transcriptions of three scans:
+
+| | current reader: pitch right / pitch and length right | Audiveris |
+|---|---|---|
+| piece 1, a phone scan (tenors, basses) | 97.5 / 95.0%, 99.8 / 92.6% | 62.9 / 46.3%, 91.9 / 53.0% |
+| piece 3, a scan | 96.8 / 94.1%, 99.6 / 96.1% | 72.7 / 66.8%, 71.0 / 66.3% (one page of nine crashed) |
+| piece 4, a scan | 98.5 / 95.5%, 98.5 / 97.1% | 82.4 / 69.9%, 86.4 / 72.8% |
+
+On scans it is clearly worse, and it has to be run a page at a time: in batch mode one page it
+cannot read (or crashes on) stops the whole piece from being exported. On the photocopy of the
+seventh piece it puts 66% of the baritone's notes where the real baritone sings them, the current
+reader 76% by the same strict count.
+
+On the eighth piece, a clean PDF, the two are equal - and that settled something else. Of 471
+baritone notes that both place identically and the real singer can judge, the two readers give
+the same pitch for all but five. Two independent readers agreeing on 99% of the notes means the
+reading is right; the "87% of the notes match the real baritone" reported above is the limit of
+that check on quick, wordy singing (short notes, slid pitches), not of the reader. Where both
+readers differed from the singer, he was not singing another written note of the chord either.
+
+What Audiveris does better: it understood every layout at once, including the six staves to a
+system that the current engine has to be given in parts; it invents fewer notes; and it is
+quicker (about 8 seconds a page against 30). It can read words too, but only with Tesseract's
+older language data installed, which was not tried. It is an 80 MB Java program with a licence
+to click through, against one `pip install`.
+
+So the current reader stays. The use for a second reader is as a second opinion on clean PDFs:
+where two independent readings agree, the note can be trusted without a recording to check it
+against. That is not built.
 
 None of these numbers says the result would pass for a recording.
