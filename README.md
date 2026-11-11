@@ -404,7 +404,7 @@ Loud and quick pieces render exactly as before.
 five pieces because nothing was looking for them: every earlier measurement answered a question
 somebody had thought to ask. `tools/compare.py` asks none. It sets a real singer beside the model
 on the same notes and the same timing, measures both spectra note by note, and lists whatever
-differs. All eleven isolated real singers take 19 seconds.
+differs. All eleven isolated real singers take about 20 seconds.
 
 Its first version made a mistake worth recording. It reported three differences on nearly every
 singer, and two of them were not differences between voices at all:
@@ -427,10 +427,21 @@ the eleven singers is:
   11 singers) and too little above 5.6 kHz while a note is held (12-16 dB, 11 of 11). It is the
   voice, not the recordings' noise: that band stands 10-31 dB above its own level in the rests.
   The earlier tone fit could see neither - it compared harmonic peaks only, in wider bands.
-- *Loudness through a note* within 3 dB of the real singers at every tenth, in the room as well:
-  the note shaping holds.
+- *Loudness through a note* within 2 dB of the real singers for the first three quarters of a
+  note, in the room as well: the note shaping holds. In the last fifth the model is 3-4 dB louder
+  (9 of 11): the singers let go of a note a little sooner.
 - Smaller things on some singers only: after a consonant the model's brightness arrives 20-40 ms
   sooner than the singers' (7-8 of 11), and in two pieces the real singers grow much louder on
   their high notes than the model does (8-14 dB against 2-4).
+
+**Soft entries.** One difference at the start of phrases was real. In soft music the model's
+entries after a rest reached a usable level (12 dB under the note) 100-130 ms after the beat; the
+real singers' get there in 13-42 ms, and at mezzo-forte the two agreed. The cause was a slow
+start laid on top of the new swell. Starting the whole entry earlier put the timing right but
+cost words (80% -> 67-71% on the soft solo), so instead a phrase whose first note swells now
+begins quickly and leaves the growing to the swell: 55-63 ms, the first tenth of such a note
+within 2-6 dB of the singers' instead of 4-8, and the recognizer unchanged within its noise (soft
+solo 80% -> 80%, its baritone 48 -> 45, two voices of the unaccompanied piece 48 -> 48 and
+46 -> 43, the full choir 58 -> 60).
 
 None of these numbers says the result would pass for a recording.

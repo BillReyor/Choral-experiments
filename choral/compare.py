@@ -160,6 +160,7 @@ def reverb(x, rt, wet):
 
 
 AFTER = np.array([.03, .06, .1, .15, .22, .3])      # seconds after a release at which the dying sound is read
+USUAL_ROOM = (2.2, .35)                             # the room most of the practice tracks seen so far turned out to have
 
 
 def dying(x, sc, part, T):
@@ -284,7 +285,8 @@ def findings(diff, real=None, model=None, agree=None, of=0):
         d = diff.get(key)
         if d is not None:
             for b, (_, _, band) in enumerate(GROUPS):
-                early = d[:, b] * (ON <= .04) - (d[-4:, b].mean() if heard(b) else 0) * (ON <= .04)     # before the vowel, with the band's own tone difference taken out
+                near = (ON <= .04) & ((ON >= -.04) | (key != 'on_rest'))      # before an entry there is only the room and the other parts
+                early = (d[:, b] - (d[-4:, b].mean() if heard(b) else 0)) * near     # around the start, with the band's own tone difference taken out
                 for i, j, v in _runs(early, 5.):
                     k = i + int(np.argmax(np.abs(early[i:j + 1])))
                     add(key, v, 5., f'{name}, {band}: from {1000 * ON[i]:+.0f} to {1000 * ON[j]:+.0f} ms around the start the model has up to {abs(v):.0f} dB {"more" if v > 0 else "less"} (against the note that follows)', (k, b))
@@ -304,8 +306,6 @@ def findings(diff, real=None, model=None, agree=None, of=0):
         for key, name, unit in (('wander', 'level while a note is held wanders by', 'dB'), ('shimmer', 'brightness while a note is held wanders by', 'dB')):
             if key in diff and real[key] > 0 and not .67 < model[key] / real[key] < 1.5:
                 add(key, 3 * np.log2(model[key] / real[key]), 1.75, f"{name} {real[key]:.2f} {unit} on the singer, {model[key]:.2f} on the model")
-        if 'early' in diff and abs(diff['early']) >= .06:
-            add('early', diff['early'], .06, f"phrases end {1000 * real['early']:.0f} ms before the written end on the singer, {1000 * model['early']:.0f} ms on the model")
         if 'lag' in diff and abs(diff['lag']) >= .03:
             add('lag', diff['lag'], .03, f"entries after a rest come {1000 * real['lag']:+.0f} ms from the beat on the singer, {1000 * model['lag']:+.0f} ms on the model")
     return sorted(F, reverse=True)
@@ -316,8 +316,12 @@ def report(c, name='the singer', top=10):
     d, real, model = c['diff'], c['real'], c['model']
     L = [f"{name}: {real.get('held', 0)} held notes of {real.get('notes', 0)} measured.  Everything below is model minus real, in dB."]
     room = c.get('room')
-    L.append(f'The simulated voices stand in a room matched to how the recording dies away after phrase ends ({room[0]} s, level {room[1]}).' if room and room[1] > 0
-             else 'The simulated voices are dry: ' + ('the recording dies away as fast as they do.' if room else 'too few phrase ends to match a room, so read the entries with care.'))
+    if room and c.get('room_guessed'):
+        L.append(f'This part has too few rests to hear how the recording dies away, so the simulated voices stand in the usual room of such tracks ({room[0]} s, level {room[1]}): read the entries with care.')
+    elif room and room[1] > 0:
+        L.append(f'The simulated voices stand in a room matched to how the recording dies away after phrase ends ({room[0]} s, level {room[1]}).')
+    else:
+        L.append('The simulated voices are dry' + (': the recording dies away as fast as they do.' if room else '.'))
     if 'tone' not in d:
         return L[0] + '\n  too few held notes to compare.'
     L.append('\nLargest differences')
@@ -362,10 +366,13 @@ def run(sc, part, x, sr, timing, singers=SINGERS, settings=None, pool=True):
         x = resample_poly(x, SR, sr)
     sims, T = simulate(sc, part, timing, singers, settings, pool)
     room = match_room(dying(x, sc, part, T), sims[0], sc, part, T)          # like with like: the model in the recording's room
-    if room and room[1] > 0:
+    guessed = room is None                                                  # a part with no rests has no phrase ends to listen to
+    if guessed:
+        room = USUAL_ROOM
+    if room[1] > 0:
         sims = [reverb(y, *room) for y in sims]
     c = compare(measure(x, sc, part, T), [measure(y, sc, part, T) for y in sims])
-    c['room'] = room
+    c['room'], c['room_guessed'] = room, guessed
     return c
 
 

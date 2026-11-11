@@ -70,6 +70,7 @@ TUNE.update(cons_max=.62,            # consonants may take this much of a note a
             note_decay=0.,           # dB per second each note fades (-12: bell-like) or swells (+4) after its start; per piece
             scoop=1.,                # how far below the note a phrase begins (per piece: a rehearsed trio hardly scoops)
             flutter=7.,              # quick pitch unsteadiness, in cents: gives the 4-5 cents measured on nine real singers
+            entry_swell=.7,          # how much quicker a phrase begins when its first note swells in (0 = not at all)
             swell=-1.)               # dB a long note swells in from at piano and softer (nothing at mezzo-forte and above);
                                      # -1: 6.5 dB where the music is slow, none where it is quick
 for _kv in filter(None, os.environ.get('CHORAL_FIT', '').split(',')):   # e.g. CHORAL_FIT=b1=1.8,vib=.6
@@ -502,6 +503,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     # otherwise, only in slow music (real singers did not swell into the soft held notes of a quick piece)
     sw = TUNE['swell'] if TUNE['swell'] >= 0 else 6.5 * float(np.clip((np.median(te - ts) - .5) / .3, 0, 1))
     sw = sw * np.clip((.66 - dyns) / .14, 0, 1) * np.clip((te - ts - .3) / .4, 0, 1)
+    sw0 = float(sw[0])                                 # the first note's swell, before chance has its say
     pk = np.full(n, .62)                               # where in the note the swell arrives
     if sw.any():                                       # no two notes alike: real singers range from no swell to twice the usual,
         side = copy.deepcopy(rng)                      # and reach the top of a note anywhere from half way to four fifths.
@@ -509,7 +511,9 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         sw = sw * np.clip(side.normal(1, .55, n), 0, 2.4)   # makes is the same with and without the swell.)
         pk = side.uniform(.45, .8, n)
     att = TUNE['attack'] * rng.uniform(.8, 1.25) * float(np.clip(.09 + 1.5 * (.74 - dyns[0]), .05, .5))     # length of the fade-in
-    att *= 1 - .4 * min(sw[0] / 8, 1)                  # a note that swells in starts sooner and grows longer
+    # A note that swells in starts quickly and grows slowly: the swell is the slow part.  (Real soft entries are
+    # 12 dB under the note 15-40 ms after the beat; with a slow start on top of the swell the model took 100-130.)
+    att *= 1 - TUNE['entry_swell'] * min(sw0 / 6, 1)
     voiced = np.flatnonzero(av > 0)
     if len(voiced):
         r_ = np.clip((tc - tc[voiced[0]] + .004) / att, 0, 1)
