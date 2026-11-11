@@ -423,16 +423,33 @@ So the comparison now puts the simulated voices in a plain room chosen to make t
 after phrase ends as the recording does, and only then measures. Like with like, what is left on
 the eleven singers is:
 
-- *Tone above 3.5 kHz.* The model has a peak around 4 kHz that the singers do not (10 dB, 10 of
+- *Tone above 3.5 kHz.* The model had a peak around 4 kHz that the singers do not (10 dB, 10 of
   11 singers) and too little above 5.6 kHz while a note is held (12-16 dB, 11 of 11). It is the
   voice, not the recordings' noise: that band stands 10-31 dB above its own level in the rests.
   The earlier tone fit could see neither - it compared harmonic peaks only, in wider bands.
+  (Fixed: see "The highs" below.)
 - *Loudness through a note* within 2 dB of the real singers for the first three quarters of a
   note, in the room as well: the note shaping holds. In the last fifth the model is 3-4 dB louder
   (9 of 11): the singers let go of a note a little sooner.
 - Smaller things on some singers only: after a consonant the model's brightness arrives 20-40 ms
   sooner than the singers' (7-8 of 11), and in two pieces the real singers grow much louder on
   their high notes than the model does (8-14 dB against 2-4).
+
+**The highs.** That tone difference is fixed, and finding out what the real highs are made of
+decided how. In each band the spectrum of a held note either ripples at the spacing of the sung
+pitch (harmonics) or does not (noise). From 1.8 to 3.6 kHz the real voices ripple as strongly as
+the model's; above 5.6 kHz they hardly ripple at all: up there a sung note is mostly the breath in
+the tone, about 47 dB under the whole voice, and between 3.6 and 5.2 kHz it is a mix. The model
+had clean harmonics in both places - 26 dB too little of them at the top, and for tenors 20 dB
+too much around 4 kHz. Its breath could not help: passed through the row of resonances that
+shapes the vowels, noise arrives up there 70 dB down, however much of it there is. So the bright
+part of the breath now has a shape of its own (`AIR` in `choral/voice.py`: nothing below 2.5 kHz,
+full by 5 kHz), the upper resonance of the voice sits 200 Hz lower, and the harmonic tone curve
+loses its peak at 4 kHz. On the eleven singers every band from 100 Hz to 7.5 kHz is now within
+2.1 dB of the median real voice (it was +10 dB at 4 kHz and -17 dB at 7.5 kHz), and between 2 and
+5 kHz the model's harmonics stand 25-30 dB over its noise where the singers' stand 23-27 (it was
+8-10 dB cleaner). The recognizer is unmoved: eight single voices average 1.5 points lower, three
+full choirs 3 points higher, both inside its noise.
 
 **Soft entries.** One difference at the start of phrases was real. In soft music the model's
 entries after a rest reached a usable level (12 dB under the note) 100-130 ms after the beat; the

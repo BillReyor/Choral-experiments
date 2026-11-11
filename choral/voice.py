@@ -71,6 +71,7 @@ TUNE.update(cons_max=.62,            # consonants may take this much of a note a
             scoop=1.,                # how far below the note a phrase begins (per piece: a rehearsed trio hardly scoops)
             flutter=7.,              # quick pitch unsteadiness, in cents: gives the 4-5 cents measured on nine real singers
             entry_swell=.7,          # how much quicker a phrase begins when its first note swells in (0 = not at all)
+            air=.006,                # the bright part of the breath in the tone, against the voice (see AIR)
             swell=-1.)               # dB a long note swells in from at piano and softer (nothing at mezzo-forte and above);
                                      # -1: 6.5 dB where the music is slow, none where it is quick
 for _kv in filter(None, os.environ.get('CHORAL_FIT', '').split(',')):   # e.g. CHORAL_FIT=b1=1.8,vib=.6
@@ -580,6 +581,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         inh = np.sin(np.pi * uu ** 1.7) ** 1.2 * (uu < 1) * .025 * P['breath'] * dyns[0] * rng.uniform(.5, 1.3)
         damp = np.where(tc < first - igap, 2.2, damp)
     asp = amp * P['breath'] * FIT['breath'] * (.03 + .06 * np.clip((rd - .6) / 1.5, 0, 1)) + ah * TUNE['asp_h'] * eff * P['breath'] ** .5 + inh
+    air = TUNE['air'] * amp * P['breath'] ** .5          # the bright part of the breath in the tone (see AIR)
 
     L = (M - 1) * HOP + PN + NN
     sig = np.zeros(L)
@@ -637,6 +639,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             Fg = np.stack([at(F[:, j], t_) for j in range(3)], 1)
             H = tract(FN, P['hiN'], P, Fg, at(damp, t_), at(nas, t_), at(nz, t_), at(lp, t_)) * (1j * FN / 1500)
             H *= (af[sl] / np.sqrt((np.abs(H) ** 2).mean(1) + 1e-30))[:, None]
+            H = H + at(air, t_)[:, None] * AIR[None, :]
             y = np.fft.irfft(np.fft.rfft(frames[sl] * HANN, NN, axis=1) * H, NN, axis=1)
             for j in range(len(y)):
                 sig[(a + j) * NH:(a + j) * NH + NN] += y[j]
@@ -659,6 +662,19 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     i0 = int(round(tA * SR))
     if i0 >= 0 and i0 + L <= len(out):
         out[i0:i0 + L] += (sig * P['gain']).astype(np.float32)
+
+
+def _air(f):
+    """The breath in a sung tone, above the harmonics.  Measured on eleven real singers: over 5.6 kHz a held note is
+    mostly noise (its spectrum shows hardly any ripple at the spacing of the sung pitch), about 47 dB under the whole
+    voice, and from 3.6 to 5.2 kHz it is a mix of noise and harmonics.  A row of resonances cannot carry that - their
+    response falls away far too fast - so this part of the breath is given its own shape: nothing below 2.5 kHz,
+    full by 5 kHz, then falling 15 dB an octave."""
+    s = np.clip((f - 2500) / 2500, 0, 1) ** 2 * (np.maximum(f, 5000.) / 5000) ** -2.5 * (f < 12000)
+    return s / np.sqrt((s ** 2).mean())
+
+
+AIR = _air(FN)
 
 
 def render_singer(args):
