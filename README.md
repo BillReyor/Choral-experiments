@@ -269,8 +269,33 @@ went from PDF to finished audio in one command, about a minute and a half.
 The simulated soloist is understood about as well as the real one. The choir is not, and here
 part of that is the misread words it was given to sing.
 
-Not yet done for scans: repeats, D.S. and codas are read as printed, not unrolled; the reader
-has only been run on this one piece end to end; and where there are no practice tracks nothing
+**The scan reader against the earlier pieces.** Three of the earlier pieces were scans that had
+been transcribed by hand and checked against recordings, so they could grade the reader. Voice
+parts only; "right" means the same note in the same order as the hand transcription.
+
+| scan | measures (hand / read) | pitches right | pitch and length right | words right (tenor 1 / baritone) |
+|---|---|---|---|---|
+| piece 1 (a phone scan) | 83 / 83 | 99.8% | 95.7% | 71% / 69% |
+| piece 3 | 99 / 99 | 98.5% | 96.5% | 88% / 70% |
+| piece 4 (Latin, 10/8 and 6/8 bars, triplets) | 75 / 76 | 98.7% | 96.5% | 66% / 71% |
+| piece 5 (the part read by hand) | - | 98.6% | 98.1% | 68% (soloist) |
+
+The printed tempo was found on every one (in piece 3 as half notes, which the reader converts).
+What the first run on these exposed, and what was done:
+
+- On a slightly tilted scan, four-staff systems were being cut in two and the choir's staves taken
+  for piano (piece 4 came out 73% right). The line that joins a system's staves is now looked for
+  with a little tolerance: measured, it scores 0.73-1.00 within a system and under 0.4 between.
+- Most of what is left in "length" is ties: a note tied across the end of a line is struck again,
+  because each system is read on its own. Where the words show it (the same pitch, first in the
+  new system, no syllable of its own) the tie is restored. Applying the same idea inside a bar
+  made things much worse - text recognition misses too many syllables to lean on - so it is not used.
+- Words: a staff with nothing printed under it now sings the words of the staff that has them;
+  hyphens are checked against a dictionary (English) or against the piece's own repeated words;
+  false hyphens after punctuation are dropped. That took the words from 32-86% to the figures above.
+
+Not yet done for scans: repeats, D.S. and codas are read as printed, not unrolled; words are
+still wrong or missing roughly one time in four; and where there are no practice tracks nothing
 checks the notes except that every measure adds up.
 
 None of these numbers says the result would pass for a recording.

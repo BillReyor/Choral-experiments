@@ -99,8 +99,9 @@ def group_systems(img, staves):
     for prev, cur in zip(staves, staves[1:]):
         gap0, gap1 = int(prev[1]) + 2, int(cur[0]) - 2
         x = int(min(prev[2], cur[2]))
-        band = img[gap0:gap1, max(0, x - 25):x + 25] < 140
-        joined = gap1 > gap0 and band.mean(0).max() > .9
+        dark = img[gap0:gap1, max(0, x - 42):x + 42] < 140
+        near = dark[:, :-4] | dark[:, 1:-3] | dark[:, 2:-2] | dark[:, 3:-1] | dark[:, 4:]     # the line may lean a pixel or two
+        joined = gap1 > gap0 and near.mean(0).max() > .6       # measured: 0.73-1.00 within a system, under 0.4 between
         if joined:
             groups[-1].append(cur)
         else:
@@ -386,7 +387,9 @@ def clean_word(t):
     import unicodedata
     t = ''.join(ch for ch in unicodedata.normalize('NFKD', t) if not unicodedata.combining(ch))
     t = re.sub(r"[_—–\"“”‘`]+", '', t).replace('’', "'")
-    return t.lower() if t.isupper() and len(t) <= 3 and t not in ('I', 'O') else t
+    core = re.sub(r"[^A-Za-z]", '', t)
+    odd = core[1:] != core[1:].lower() and not core.isupper()          # "uS", "nIght"
+    return t.lower() if odd or (t.isupper() and len(core) <= 3 and core not in ('I', 'O')) else t
 
 
 def syllables(words, unit, img=None):
@@ -420,7 +423,7 @@ def syllables(words, unit, img=None):
                     cols = patch.any(0)
                     runs = np.diff(np.flatnonzero(np.diff(np.r_[0, cols, 0])))[::2]
                     tall = patch.sum(0).max() if patch.size else 0
-                    if len(runs) and 2 <= runs.max() <= 1.6 * unit and tall <= .45 * unit:
+                    if len(runs) and 2 <= runs.max() <= 1.2 * unit and tall <= .45 * unit and not re.search(r"[.,;:!?]$", line[-1][1]):
                         line[-1][1] += '-'
         out.append([(x, t) for x, t in line])
     return out
@@ -516,21 +519,14 @@ def roles_for(crops):
         c['roles'] += ['RH', 'LH'] if piano and counts[i] >= 2 else []
 
 
-def assemble(crops, pages, work, title, tempo, language, log):
+def assemble(crops, pages, work, title, tempo, language, log, marked=False):
     exe = ocr_cmd(work)
     if not exe:
         log('  ! no text recognition here (it uses macOS): the notes will have no words')
     roles_for(crops)
     out, num, cur_time, length = [], 0, None, Fraction(4)
     imgs = {}
-    for c in crops:
-        if not c['read']:
-            continue
-        img = imgs.setdefault(c['page'], np.asarray(Image.open(pages[c['page'] - 1]).convert('L')))
-        counts = [len(st['measures']) for st in c['read']]
-        M = max(set(counts), key=counts.count)
-        out.append(f"// page {c['page']}, system {c['system']}")
-        # ---- the words under each vocal staff, measure by measure
+    def read_texts(c, img, M):
         texts = {}
         for si, role in enumerate(c['roles'][:len(c['read'])]):
             if role in ('RH', 'LH') or not exe or si >= len(c['staves']):
@@ -559,6 +555,69 @@ def assemble(crops, pages, work, title, tempo, language, log):
                     c['bars'] = list(np.linspace(c['x0'], c['x1'], M + 1))
             bars = c['bars']
             texts[si] = (syllables(words, unit, img), bars, unit, sorted(ys))
+        return texts
+
+    for c in crops:                                 # first the words of the whole piece ...
+        if c['read']:
+            counts = [len(st['measures']) for st in c['read']]
+            img = imgs.setdefault(c['page'], np.asarray(Image.open(pages[c['page'] - 1]).convert('L')))
+            c['texts'] = read_texts(c, img, max(set(counts), key=counts.count))
+    # ... so that the words can be checked against each other before any note gets one.
+    key = lambda t: re.sub(r"[^a-z']", '', t.lower())
+    words_ok = None
+    if not language or language == 'english':
+        try:
+            import cmudict
+            words_ok = set(cmudict.dict())
+        except Exception:
+            words_ok = None
+    seen, loose = {}, {}
+    for c in crops:
+        for si, (lines, bars, unit, ys) in list(c.get('texts', {}).items()):
+            fixed = []
+            for line in lines:
+                line = [list(w) for w in line]
+                if words_ok:                        # "save- us": two real words whose join is no word were never one word
+                    i = 0
+                    while i < len(line):
+                        j = i
+                        while j < len(line) - 1 and line[j][1].endswith('-'):
+                            j += 1
+                        if j > i:
+                            parts = [key(w[1]) for w in line[i:j + 1]]
+                            if ''.join(parts) not in words_ok and ''.join(parts).rstrip("'s") not in words_ok and all(p_ in words_ok for p_ in parts):
+                                for w in line[i:j]:
+                                    w[1] = w[1].rstrip('-')
+                        i = j + 1
+                run = []
+                for x, t in line:
+                    run.append(key(t))
+                    if not t.endswith('-'):
+                        if len(run) > 1 and all(run):
+                            seen[tuple(run)] = seen.get(tuple(run), 0) + 1
+                        run = []
+                fixed.append(line)
+            c['texts'][si] = (fixed, bars, unit, ys)
+    for c in crops:                                 # a word seen several times with its hyphens lends them where they were missed
+        for si, (lines, bars, unit, ys) in list(c.get('texts', {}).items()):
+            for line in lines:
+                for i in range(len(line)):
+                    for word, h in seen.items():
+                        n = len(word)
+                        if h >= 2 and tuple(key(w[1]) for w in line[i:i + n]) == word and (not words_ok or ''.join(word) in words_ok):
+                            for w in line[i:i + n - 1]:
+                                if not w[1].endswith('-'):
+                                    w[1] += '-'
+            c['texts'][si] = ([[tuple(w) for w in line] for line in lines], bars, unit, ys)
+    last = {}                                       # (role, voice) -> (line number in out, pitch) of the note that ended the previous bar
+    for c in crops:
+        if not c['read']:
+            continue
+        img = imgs.setdefault(c['page'], np.asarray(Image.open(pages[c['page'] - 1]).convert('L')))
+        counts = [len(st['measures']) for st in c['read']]
+        M = max(set(counts), key=counts.count)
+        out.append(f"// page {c['page']}, system {c['system']}")
+        texts = c.get('texts', {})
         for st in c['read']:
             mark_melisma(st['measures'])
         marks = {}
@@ -601,11 +660,11 @@ def assemble(crops, pages, work, title, tempo, language, log):
                     lines, bars, unit, ys = texts[si]
                     xa, xb = bars[j] + (5.5 * unit if j == 0 else .8 * unit), bars[j + 1] - .6 * unit
                     for v, line in enumerate((up, lo)):
-                        if v < len(lines) or v == 0:
+                        if lines:           # a staff with no words under it sings the words of the staff that has them
                             starts = [n for n, a_, b_ in line if n is not None and a_ == n['on'] and not n.get('tied_from')]
                             slots = [(xa + float(n['on'] / length) * (xb - xa), n) for n in starts if not n.get('melisma')] or [(xa, n) for n in starts[:1]]
                             inbar = lambda w: bars[j] - .3 * unit <= w[0] < bars[j + 1] - .3 * unit
-                            mine = [w for w in (lines[v] if v < len(lines) else []) if inbar(w)]
+                            mine = [w for w in (lines[v] if v < len(lines) else lines[0] if lines else []) if inbar(w)]   # one line of words serves both voices
                             if len(mine) < len(slots) and v < len(ys) and exe:      # a syllable is missing: look at this bar alone, larger
                                 half = min([1.3 * unit] + [.5 * abs(ys[v] - y) for y in ys if y != ys[v]])
                                 x_a, x_b = int(bars[j] - .5 * unit), int(bars[j + 1])
@@ -617,21 +676,43 @@ def assemble(crops, pages, work, title, tempo, language, log):
                             got = place(slots, mine)
                             for n in starts:
                                 got.setdefault(id(n), '_')
+                            # A tie drawn across the end of a line cannot be seen by a reader that takes one system at
+                            # a time.  The words give it away: the same pitch again, first thing in the new system, with
+                            # no syllable of its own, is the old note still sounding.
+                            if j == 0 and starts and starts[0]['on'] == 0 and got.get(id(starts[0])) == '_' and (lines[v] if v < len(lines) else lines[0] if lines else []):
+                                k_, midi_ = last.get((role, v), (None, None))
+                                if midi_ == starts[0]['midi'] and k_ is not None:
+                                    head, _, toks_ = out[k_].partition(': ')
+                                    tl_ = toks_.split()
+                                    note_, eq_, lyr_ = tl_[-1].partition('=')
+                                    if not note_.endswith('~'):
+                                        tl_[-1] = note_ + '~' + eq_ + lyr_
+                                        out[k_] = head + ': ' + ' '.join(tl_)
+                                    del got[id(starts[0])]
                             syl[v] = got
                 dyn = ('!' + st['measures'][j]['dyn'] + ' ') if st['measures'][j].get('dyn') in ('pp', 'p', 'mp', 'mf', 'f', 'ff') else ''
                 shift = 1 if (role in ('TEN', 'T1', 'T2') or role == 'ALL') and st['clef'] == 'F' else 0
                 tu, tl = tokens(up, syl[0], shift if role != 'ALL' else 1 if st['clef'] == 'F' else 0), tokens(lo, syl[1], 0 if role == 'ALL' else shift)
                 same = [x.split('=')[0] for x in tokens(up)] == [x.split('=')[0] for x in tokens(lo)]
                 if role == 'SOLO':
-                    out.append('SOLO: ' + dyn + ' '.join(tu))
+                    out.append('SOLO: ' + dyn + ' '.join(tu)); where = (len(out) - 1, len(out) - 1)
                 elif role == 'ALL':
-                    out.append('TEN: ' + dyn + ' '.join(tu)); out.append('LOW: ' + ' '.join(tl))
+                    out.append('TEN: ' + dyn + ' '.join(tu)); out.append('LOW: ' + ' '.join(tl)); where = (len(out) - 2, len(out) - 1)
                 elif role in ('TEN', 'LOW'):
                     a_, b_ = ('T1', 'T2') if role == 'TEN' else ('BR', 'BS')
                     out += [f'{role}: ' + dyn + ' '.join(tu)] if same else [f'{a_}: ' + dyn + ' '.join(tu), f'{b_}: ' + ' '.join(tl)]
+                    where = (len(out) - 1, len(out) - 1) if same else (len(out) - 2, len(out) - 1)
                 else:
-                    out.append(f'{role}: ' + dyn + ' '.join(tu))
-    head = [f'title: {title}', f'tempo: {tempo:g}', f"time: {next((l[6:] for l in out if l.startswith('time: ')), '4/4')}", 'key: 0',
+                    out.append(f'{role}: ' + dyn + ' '.join(tu)); where = (len(out) - 1, len(out) - 1)
+                for v, line in enumerate((up, lo)):          # remember how each voice left this bar
+                    n_, a_, b_ = line[-1]
+                    last[(role, v)] = (where[v], n_['midi']) if n_ is not None and b_ == length and n_['on'] + n_['ql'] >= length else (None, None)
+    first_time = next((l[6:] for l in out if l.startswith('time: ')), '4/4')
+    unit = {'2': 2., '8': 1.5 if int(first_time.split('/')[0]) % 3 == 0 else 1.}.get(first_time.split('/')[1], 1.)
+    if unit != 1 and marked:        # a metronome mark counts the beat: half notes in 2/2, dotted quarters in 6/8
+        tempo *= unit
+        out = [re.sub(r'^tempo: (\S+)$', lambda m_: 'tempo: %g' % (float(m_.group(1)) * unit), l) for l in out]
+    head = [f'title: {title}', f'tempo: {tempo:g}', f"time: {first_time}", 'key: 0',
             'transpose: TEN -12'] + ([f'language: {language}'] if language else []) + ['']
     first = next((i for i, l in enumerate(out) if l.startswith('time: ')), None)
     if first is not None:
@@ -660,9 +741,10 @@ def main():
     os.makedirs(work, exist_ok=True)
     pages = render_pages(a.pdf, work)
     crops = read_systems(cut_systems(pages, work, print), print)
-    tempo = a.tempo or find_tempo(pages, work) or 100.
+    found = None if a.tempo else find_tempo(pages, work)
+    tempo = a.tempo or found or 100.
     title = a.title or re.sub(r'[_-]+', ' ', os.path.splitext(os.path.basename(a.pdf))[0]).strip().title()
-    open(a.out, 'w').write(assemble(crops, pages, work, title, tempo, a.language, print))
+    open(a.out, 'w').write(assemble(crops, pages, work, title, tempo, a.language, print, marked=found is not None))
     print(f'wrote {a.out}: {sum(len(c["read"][0]["measures"]) for c in crops if c["read"])} measures from {len(crops)} systems, tempo {tempo:g}')
 
 
