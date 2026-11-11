@@ -6,7 +6,7 @@ measure, with the sung syllable attached to each note.
 """
 import json, os, re
 from collections import defaultdict
-from . import lyrics
+from . import lyrics, latin
 
 STEP = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
 DUR = {'w': 4., 'h': 2., 'q': 1., 'e': .5, 's': .25, 't': .125}
@@ -28,6 +28,7 @@ class Score:
         self.piano = []                                           # dicts: beat, dur, midi, hand, flags
         self.tempo = []                                           # (beat, bpm)
         self.timing = None                                        # measured beat -> second map, if any
+        self.language = 'english'
         self.marks = {'voice': [], 'piano': []}                   # (beat, mark)
         self.measures = {}                                        # number -> (start beat, length)
         self.beats = 0.
@@ -116,6 +117,8 @@ def parse(text, warn=print, base='.'):
             for system, staves in json.load(open(os.path.join(base, rest))).items():
                 for staff, toks in staves.items():
                     sc.streams[(system, staff)] = list(toks)
+        elif head == 'language':                      # 'latin': read syllables by rule instead of the English dictionary
+            sc.language = rest.lower()
         elif head == 'timing':                        # beat -> second map measured from a recording (choral.timing)
             sc.timing = json.load(open(os.path.join(base, rest)))
         elif head == 'system':                        # which system of the page the next measures are on
@@ -266,7 +269,11 @@ def _finish(sc, warn):
         for i, w in enumerate(words):
             word = ''.join(s for _, s in w)
             nxt = ''.join(s for _, s in words[i + 1]) if i + 1 < len(words) else None
-            for (n, _), syl in zip(w, lyrics.pronounce(word, len(w), sc.say, nxt, warn)):
+            if sc.language == 'latin' and word not in sc.say:
+                prons = latin.pronounce([s for _, s in w])
+            else:
+                prons = lyrics.pronounce(word, len(w), sc.say, nxt, warn)
+            for (n, _), syl in zip(w, prons):
                 n['phon'] = syl
         for n in notes:
             if n['lyric'] == '_':

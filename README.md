@@ -9,6 +9,7 @@ no samples and no recordings — and in rendering written sheet music with it.
 |---|---|
 | `choral/voice.py` | The voice engine. Each singer is simulated: vocal-fold pulses one at a time, breath noise, a moving vocal tract, and a "brain" that hunts for pitch, enters late or early, and drifts with its section. |
 | `choral/score.py`, `choral/lyrics.py` | Reader for a plain-text score format that mirrors the printed page, and the sung-text-to-phoneme step. See [docs/score-format.md](docs/score-format.md). |
+| `choral/latin.py` | Church Latin by rule, syllable by syllable, with its own five vowels fitted to real singers. |
 | `choral/piano.py`, `choral/render.py` | Piano, stage (48 singers on risers in front of a stereo pair, section leaders on close mics), hall, mix. Every section is kept on its own stem, so one part can be brought forward, left out, or heard alone. |
 | `choral/__main__.py` | The program: sheet music in, audio out (see below). |
 | `choral/presets.py` | Estimates what differs from piece to piece - tempo and its bends, hall, how close the microphones are, how loud the accompaniment sits - from practice tracks, from a speech recognizer, or from the score alone. |
@@ -44,6 +45,8 @@ python -m choral MUSIC [--part tenor1|tenor2|baritone|bass] [--accompaniment TRA
 - **MUSIC** is a score file ([docs/score-format.md](docs/score-format.md)) or a PDF exported from
   notation software, which `tools/pdf2score.py` reads directly. A scan or photo is a picture, not
   notes, and still has to be transcribed into a score file first - that step is not automated.
+- **--part** may name several parts (`--part tenor1,tenor2,bass`); in three-part music "bass" is the
+  baritones and basses together.
 - **--accompaniment** sings over a recording instead of the built-in piano. The voices are lined
   up with it automatically: from the written piano part if the score has one, otherwise from a
   practice track of one voice part.
@@ -61,6 +64,7 @@ A piece's settings are worked out once and kept beside the score as `NAME.preset
 | Tempo, the first beat, ritardandos, the held last chord | Measured: the predominant part is pitch-tracked against the score, the beat grid is sharpened on the accompaniment's note attacks, and only a drift that never returns to the pulse counts as a tempo change | The score's `tempo:` |
 | Hall (amount and length) | Matched to how the recorded voices die away after each release | A rule from how short the quick syllables are |
 | Accompaniment level | Measured from the balanced mix | A fixed default |
+| Note shape (sustained, or fading like a bell) | Measured: how fast one real singer's held notes fade | Sustained |
 | How close the microphones are | The recognizer walks a ladder from dry-and-close to wet-and-blended and keeps the most blended setting that does not cost words (`--tune`) | The same rule |
 
 On the three test pieces the track separation recovers, with no hand-tuning, what had earlier
@@ -89,7 +93,7 @@ files). Renders go to `out/`.
 
 ## Honest status
 
-Three test pieces so far, all TTBB with piano, each with a real reference recording.
+Four test pieces so far, for men's voices with piano, each with a real reference recording.
 
 **Reading the music.** The first piece was a phone scan, read by eye; it matched a real
 baritone's isolated track on all 335 notes. The second was a vector PDF, read entirely by
@@ -131,7 +135,7 @@ transcription 99%) is where the engine is weakest so far, and the numbers say so
 
 | piece 3 | real recording | this engine |
 |---|---|---|
-| voices alone | 63-71% | 25-33% |
+| voices alone | 63-71% | 25-37% |
 | baritone alone | 89% | 26-35% |
 
 Two things in it are new. Two different texts are sung at once for long stretches, and much of
@@ -147,14 +151,54 @@ What comparing the real baritone with the model on this piece showed, and what w
 - The real singer's consonant clusters are shorter than the model's, and his nasals are brighter.
   Copying either into ordinary text made a twelve-voice section *harder* to understand at speed
   (piece 2: 75% -> 58% of words with both), so both are switched off: what is right for one
-  close-miked singer is not right for a section. The first two pieces score as before
-  (piece 1: 73-75% voices alone, piece 2: 68-77%).
+  close-miked singer is not right for a section. The first two pieces score as before, within
+  the recognizer's noise (latest runs, voices alone: piece 1 78-84%, piece 2 59-68%).
 - A second real singer confirmed two things the scorecard had hinted at: soft singing has slower
   attacks (125 ms against 36 ms at mezzo-forte) and relatively stronger "s". The hiss was raised
   slightly; the attacks are not yet tied to dynamics.
 
-The recognizer's score moves by several points between identical runs, and at these low levels
-it cannot tell one setting from another - the tuner now says so and keeps the rule of thumb
-instead of picking noise.
+Following that up: one simulated singer alone is now heard saying the drum syllables verbatim,
+and scores 54-60% on this baritone part against the real singer's 89%. The rest of the loss
+happens when twelve of them sing together: the section alone drops to about 25%. Tightening the
+section's timing helped the section by itself (24% -> 36%) but made no measurable difference to the
+full choir, so it is not adopted. One timing fault was measured and fixed on the way: the puff of
+air after p, t and k came after the beat and delayed the vowel by 30-40 ms; real singers have
+the vowel at full level on the beat.
+
+The recognizer's score moves by several points between identical runs - a full-choir score can
+differ by ten points between two random sets of singers - and at low levels it cannot tell one
+setting from another. The tuner now says so and keeps the rule of thumb instead of picking noise.
+
+**The fourth piece** was a fresh test of the whole chain: three parts instead of four, in Latin,
+with a tempo change, mixed 10/8 and 6/8 bars, a repeat and a D.S. al Coda, from an 11-page scan.
+
+- *Reading it.* Written out as 87 measures in performance order; every bar added up on the first
+  pass. The practice tracks separated cleanly (the accompaniment cancels by 29 dB), which gave
+  all three parts in isolation. The first reading matched them on 93-95% of notes; the
+  mismatches pointed straight at three misread bars, and after correcting those the parts match
+  on 97%, 99% and 98%. Most of what remains is the middle note of quick triplets, which the pitch
+  tracker cannot resolve.
+- *Timing.* Both tempos were found without help (120.0, then 138.0), after the timing code was
+  generalized to fit each tempo section separately.
+- *Pronunciation.* Two questions were settled by measuring the real singers rather than by the
+  rule book: there is no breath noise before the vowel of "Hosanna" (the h is silent), and its s
+  is a hissed s.
+- *Vowels.* Against two real tenors and a real bass, the engine's "ee" was far too thin - its
+  second harmonic 17 dB weaker than theirs - and its "oo" likewise. Trained singers keep their
+  vowels closer together than speech does. Latin now has its own five vowels, fitted to the three
+  singers and taken 65% of the way there: tone error 7.9 dB -> 6.2 dB, and going further starts
+  to cost recognized words. English vowels are unchanged (an earlier attempt to move them cost
+  ten points of intelligibility).
+- *Note shape.* These singers let every held note fade at about 12 dB a second (the piece is
+  marked "bell like"); the engine sustained them. That is now a per-piece setting measured from
+  the recording: fade -1.4 -> -11.8 dB/s against the real -14.2, and the share of each note sung
+  at full voice 93% -> 80% against 77%.
+
+What is still clearly wrong on this piece: the simulated tenors' fundamental is about 10 dB too
+strong against the second harmonic (real 1-3 dB, model 10-14), which none of the obvious
+settings fixes; and the words. There is no Latin recognizer here, but an English one follows the
+real choir through the "Hosanna in excelsis" passages (89% of the words) and gets about 10% from
+the render - it hears "O sana ... in excelsis" from a single simulated singer and nothing usable
+from the full choir.
 
 None of these numbers says the result would pass for a recording.

@@ -55,14 +55,18 @@ TUNE = dict(b2=100., b3=130.,          # widths of the second and third resonanc
             glide_g=.25, glide_h=.10,  # share of a sliding vowel spent moving / on its second half
             attack=1., release=1.,     # speed of note starts from silence and of releases
             voicebar=.2,               # hum during b, d, g while the mouth is shut
-            burst=.17, fric=.15, asp_h=.2)   # p/t/k clicks, s/sh/f hiss, h and after-click air
+            burst=.17, fric=.12, asp_h=.2)   # p/t/k clicks, s/sh/f hiss, h and after-click air
 TUNE.update(cons_max=.62,            # consonants may take this much of a note at most
             vowel_min=0.,            # on quick notes, leave at least this many seconds of vowel (0 = no such rule)
             cluster=0.,              # how much each consonant shortens when several meet (0 = not at all)
             # Both rules above copy what a solo singer does, and both made a 12-voice section harder to
             # understand at speed (recognizer, piece 2), so they are off.
             hum_vowel=.4,            # drum/bell syllables: share of the note sung on the vowel before the hum
-            hum_f1=350., hum_lp=-.2, hum_av=.55)   # the hum itself, fitted to a baritone's held "pum" notes
+            hum_f1=350., hum_lp=-.2, hum_av=.55,  # the hum itself, fitted to a baritone's held "pum" notes
+            vot_lead=1.,             # share of the puff after p/t/k that comes before the beat (1 = vowel on the beat)
+            cl=1., quick_cl=1., quick_vot=1.,   # stop silences overall; and silences / puffs on quick notes
+            f1_track=.95,            # the first resonance never drops below this multiple of the sung pitch
+            note_decay=0.)           # dB per second each note fades after its start (per piece: 0 sustained, -12 bell-like)
 for _kv in filter(None, os.environ.get('CHORAL_FIT', '').split(',')):   # e.g. CHORAL_FIT=b1=1.8,vib=.6
     if '.' not in _kv.split('=')[0]:
         FIT[_kv.split('=')[0]] = float(_kv.split('=')[1])
@@ -87,6 +91,10 @@ def T(b):
 VOW = {'IY': (280, 2330, 2950), 'IH': (400, 2150, 2600), 'EH': (550, 1900, 2550), 'AE': (660, 1800, 2500),
        'AA': (690, 1250, 2600), 'AH': (610, 1350, 2550), 'AO': (570, 1000, 2550), 'UH': (440, 1180, 2400),
        'UW': (320, 1100, 2400), 'ER': (480, 1480, 1800), 'AX': (500, 1530, 2550)}
+# The five pure vowels of sung Latin.  Trained singers keep them closer together than speech does (the
+# "ee" darker, the "oo" more open).  Fitted to two tenors and a bass, then taken 65% of the way: that
+# brings the tone error from 7.9 to 6.2 dB, and any further starts to cost recognized words.
+VOW.update(LA=(690, 1193, 2735), LE=(579, 1698, 2550), LI=(373, 2027, 2797), LO=(600, 1078, 2683), LU=(403, 1242, 2525))
 DIPH = {'AY': ((700, 1300, 2600), (420, 2050, 2600)), 'AW': ((690, 1450, 2550), (450, 1100, 2400)),
         'EY': ((500, 2000, 2600), (340, 2250, 2800)), 'OW': ((530, 1050, 2500), (360, 950, 2400)),
         'OY': ((570, 1000, 2550), (400, 2050, 2600))}
@@ -119,7 +127,7 @@ CONS = {
     't': dict(stop=1, voiced=0, F=(200, 1700, 2650), cl=.050, bd=.025, noise='t', na=.9, vot=.045),
     'k': dict(stop=1, voiced=0, F=(250, 1900, 2300), cl=.055, bd=.030, noise='k', na=.8, vot=.055),
 }
-BLANK = dict(av=0., nas=0., nz=1000., damp=1., lp=0., ah=0., noise=None, na=0., burst=False, vot=0., f0d=0.)
+BLANK = dict(av=0., nas=0., nz=1000., damp=1., lp=0., ah=0., noise=None, na=0., burst=False, vot=0., f0d=0., cl=False)
 F0DIP = dict(m=-10., n=-10., ng=-10., l=-8., r=-8., w=-8., y=-8., v=-35., z=-35., dh=-35., zh=-35.)   # cents
 UNVOICED = {'p', 't', 'k', 's', 'sh', 'f', 'th', 'ch', 'h'}
 
@@ -128,11 +136,11 @@ def cons_segs(c, scale, after_s=False, final=False):
     p = CONS[c]
     if p.get('affr'):                                  # ch / j: a closure released into a hiss
         v = p['voiced']
-        return [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=TUNE['voicebar'] if v else 0., lp=1.5, damp=3., f0d=-45. * v),
+        return [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=TUNE['voicebar'] if v else 0., lp=1.5, damp=3., f0d=-45. * v, cl=True),
                 dict(BLANK, d=p['bd'] * scale, F=p['F'], av=.3 if v else 0., damp=2., noise='sh', na=p['na'], f0d=-30. * v)]
     if p.get('stop'):
         v = p['voiced']
-        out = [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=TUNE['voicebar'] if v else 0., lp=1.5, damp=3., f0d=-45. * v),   # closure
+        out = [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=TUNE['voicebar'] if v else 0., lp=1.5, damp=3., f0d=-45. * v, cl=True),   # closure
                dict(BLANK, d=p['bd'] * scale, F=p['F'], av=.45 if v else 0., lp=.3, damp=1.5,         # release
                     noise=p['noise'], na=p['na'], burst=True, vot=0. if (v or after_s) else p['vot'], f0d=-25. * v)]
         if final:   # end of a phrase: "loud-uh", "out-h"
@@ -364,8 +372,19 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         if k >= 2:
             for s in (co[i] if i >= 0 else []) + (on[i + 1] if i < n - 1 else []):
                 s['d'] *= k ** -TUNE['cluster']; s['vot'] *= k ** -TUNE['cluster']
+    for i in range(n):  # on quick notes a stop's silence and its puff of air are the first things to shrink
+        Dq = min(te[i] - ts[i], te[i + 1] - ts[i + 1]) if i < n - 1 else te[i] - ts[i]
+        q = float(np.clip((Dq - .2) / .25, 0, 1))
+        for s in co[i] + (on[i + 1] if i < n - 1 else []):
+            if s['cl']:
+                s['d'] *= TUNE['cl'] * (TUNE['quick_cl'] + (1 - TUNE['quick_cl']) * q)
+            s['vot'] *= TUNE['quick_vot'] + (1 - TUNE['quick_vot']) * q
+    for i in range(n):
+        for s in on[i]:
+            s['vot'] *= rng.uniform(.8, 1.3)
+    lead = [TUNE['vot_lead'] * on[i][-1]['vot'] if on[i] else 0. for i in range(n)]   # the puff comes before the beat
     for i in range(n):  # squeeze consonants into short notes
-        need = sum(s['d'] for s in co[i]) + (sum(s['d'] for s in on[i + 1]) if i < n - 1 else 0)
+        need = sum(s['d'] for s in co[i]) + (sum(s['d'] for s in on[i + 1]) + lead[i + 1] if i < n - 1 else 0)
         D = te[i] - ts[i]
         lim = min(TUNE['cons_max'] * D, max(.45 * D, D - TUNE['vowel_min']))   # quick notes: the vowel keeps its share
         if need > lim:
@@ -375,6 +394,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             if i < n - 1:
                 for s in on[i + 1]:
                     s['d'] *= k; s['vot'] *= k                              # ...and the puff after p/t/k shrinks with it
+                lead[i + 1] *= k
 
     segs, noises, vots = [], [], []
 
@@ -384,7 +404,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             if s['noise']:
                 noises.append((s['noise'], t, s['d'], s['na'], s['burst']))
             if s['vot'] and tv is not None:
-                vots.append((t, tv, s['vot'] * rng.uniform(.8, 1.3)))
+                vots.append((t, tv, s['vot']))
             t += s['d']
 
     def vseg(a, b, F, F2=None):
@@ -393,11 +413,12 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     kicks = []
 
     for i in range(n):
+        v0 = ts[i] - lead[i]                       # where the voice catches
         if on[i]:
-            put(ts[i] - sum(s['d'] for s in on[i]), on[i], ts[i])
+            put(v0 - sum(s['d'] for s in on[i]), on[i], v0)
             if on[i][-1]['av'] == 0:               # unvoiced consonant: the vowel starts a little sharp
                 kicks.append(ts[i])
-        vend = te[i] - sum(s['d'] for s in co[i]) - (sum(s['d'] for s in on[i + 1]) if i < n - 1 else 0)
+        vend = te[i] - sum(s['d'] for s in co[i]) - (sum(s['d'] for s in on[i + 1]) + lead[i + 1] if i < n - 1 else 0)
         if hum[i]:                                 # a short vowel, then the m or ng takes the rest of the note
             keep = float(np.clip(TUNE['hum_vowel'] * (te[i] - ts[i]), .06, .26))
             if vend - ts[i] > keep:                # the held part is a singer's hum: fuller and brighter than a spoken m
@@ -409,13 +430,13 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         if vow[i] in DIPH:
             A, B = tgt
             if lastflag[i]:      # hold the first vowel, glide, then land on the second
-                dur = vend - ts[i]
+                dur = vend - v0
                 g = float(np.clip(TUNE['glide_g'] * dur, .06, .10)); h = float(np.clip(TUNE['glide_h'] * dur, .02, .04))
-                vseg(ts[i], vend - g - h, A); vseg(vend - g - h, vend - h, A, B); vseg(vend - h, vend, B)
+                vseg(v0, vend - g - h, A); vseg(vend - g - h, vend - h, A, B); vseg(vend - h, vend, B)
             else:
-                vseg(ts[i], vend, A)
+                vseg(v0, vend, A)
         else:
-            vseg(ts[i], vend, tgt)
+            vseg(v0, vend, tgt)
         if co[i]:
             put(vend, co[i])
 
@@ -500,6 +521,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     u = np.clip((tc - ts[0]) / max(tl - ts[0], .1), 0, 1)
     eff = dy * (1 - .10 * u * u * (1.3 - sk)) * (1 + .12 * np.exp(-np.clip(tc - ts[ni], 0, None) / .10))
     eff *= 1 - .1 * (1 - cf) * np.exp(-np.clip(tc - ts[0], 0, None) / .06)
+    eff *= 10 ** (TUNE['note_decay'] * np.clip(tc - ts[ni] - .12, 0, 1.2) / 20 / TUNE['amp_exp'])   # bell-like or sustained
     eff = np.clip(eff, .05, 1.15)
     lift = 10 ** (np.clip(TUNE['lift'] * (mid - (P['comfy'] - 7)), -3, 3) / 20)        # singers get louder as they go up
     amp = av * eff ** TUNE['amp_exp'] * lift * (1 + .04 * slow(rng, M, 25))
@@ -510,7 +532,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     for j, sd in enumerate((.022, .018, .012)):                              # nobody holds their mouth perfectly still
         F[:, j] *= 1 + FIT['alive'] * sd * slow(rng, M, rng.uniform(25, 50))
     F[:, 0] *= 1 + .10 * (eff - .7) * av                                     # jaw drops with effort
-    F[:, 0] = np.maximum(F[:, 0], .95 * f0)
+    F[:, 0] = np.maximum(F[:, 0], TUNE['f1_track'] * f0)                     # high notes: the vowel opens so its resonance stays above the pitch
 
     inh = np.zeros(M)
     if inhale:
@@ -600,9 +622,11 @@ def render_phrase(ph, P, rng, out, gap=9.0):
 
 
 def render_singer(args):
-    """Worker: one singer's whole part.  args = (section, index, notes, clock)."""
-    sect, idx, notes, clock = args
+    """Worker: one singer's whole part.  args = (section, index, notes, clock[, settings])."""
+    sect, idx, notes, clock, *tune = args
     set_clock(*clock)
+    if tune and tune[0]:
+        apply_fit(tune[0])                             # this piece's settings, e.g. {'TUNE.note_decay': -10}
     P, rng = make_singer(sect, idx)
     out = np.zeros(CLOCK['n'], np.float32)
     prev_end = None

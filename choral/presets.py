@@ -2,7 +2,7 @@
 
 Three sources, best first:
   * recordings of the piece (practice tracks): tempo and every bend in it, how much hall is on the
-    voices, how loud the accompaniment sits under them;
+    voices, how loud the accompaniment sits under them, whether notes are sustained or fade like bells;
   * a speech recognizer listening to the render: how close the microphones must be for the words
     to survive this piece's tempo and text;
   * the score alone: a rule from how fast the text goes by.
@@ -110,6 +110,23 @@ def tune_for_words(stems, sc, clock, P, keep_hall=False, log=print):
     return dict(out, words=round(u, 3))
 
 
+# ------------------------------------------------------------ note shape, from a recording ----
+def note_decay(sc, part, x, sr, T):
+    """How fast one real singer's held notes fade, in dB per second (median over notes of 0.6 s and more,
+    measured from 0.2 s after the start to 0.1 s before the end).  T maps beats to seconds in x."""
+    hop, n = 64, 256
+    fr = np.lib.stride_tricks.sliding_window_view(x, n)[::hop]
+    et = (np.arange(len(fr)) * hop + n / 2) / sr
+    edb = 10 * np.log10((fr ** 2).mean(1) + 1e-10)
+    slopes = []
+    for nt in sc.parts[part]:
+        a, z = T(nt['beat']), T(nt['beat'] + nt['dur'])
+        e = edb[(et >= a + .2) & (et <= z - .1)]
+        if z - a >= .6 and len(e) > 20 and e.mean() > edb.max() - 35:
+            slopes.append(np.polyfit(np.arange(len(e)) * hop / sr, e, 1)[0])
+    return float(np.median(slopes)) if len(slopes) >= 8 else 0.
+
+
 # ----------------------------------------------------------------------- from recordings ----
 def from_recordings(sc, part, balanced, accompaniment, predominant=None, muted=None, log=print):
     """Timing, accompaniment level and the isolated tracks, from a set of practice tracks.
@@ -134,5 +151,9 @@ def from_recordings(sc, part, balanced, accompaniment, predominant=None, muted=N
         log('  ! not clean enough to trust the separated voices: keeping only the timing')
         return out, iso
     out['backing'] = round(R.loud(iso['accompaniment']) / R.loud(iso['voices']), 3)
+    if 'part' in iso:      # the engine's own notes fade about 2 dB a second; make up the difference
+        d = note_decay(sc, part, resample_poly(iso['part'].mean(1), 1, 2), R.SR // 2, lambda b: float(np.interp(b, clock[0], clock[1])))
+        out['note_decay'] = round(float(np.clip(d + 2, -14, 0)), 1)
+        log(f"held notes fade at {d:.1f} dB a second in the recording -> note decay {out['note_decay']}")
     log(f"accompaniment sits at {out['backing']:.2f} of the voices' level in the balanced mix")
     return out, iso

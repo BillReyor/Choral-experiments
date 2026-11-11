@@ -24,6 +24,7 @@ PRESET = dict(                         # what differs from piece to piece (see c
     others=.2,                         # the other parts, in a "my part predominant" version
     under=.5,                          # the accompaniment, in that version (relative to the balanced mix)
     singers=12,                        # per section
+    note_decay=0.,                     # dB per second each note fades (0 = sustained singing, -12 = bell-like)
 )
 LEAD_IN = 1.0   # seconds of room before the first beat
 NAMES = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass'}
@@ -99,14 +100,15 @@ def loud(x):
     return float(np.sqrt(np.percentile(blk, 90)) + 1e-12)
 
 
-def sing(sc, clock, singers=12, log=print):
+def sing(sc, clock, singers=12, log=print, tune=None):
     """Every singer of every section -> {section: array (3, N, 2)}: what the main microphone pair
-    hears, what goes to the hall, and the leaders' close mics."""
+    hears, what goes to the hall, and the leaders' close mics.  tune: voice settings for this piece
+    (keys as in voice.apply_fit)."""
     t0 = time.time()
     voice.set_clock(*clock)
     voice.PER_SECTION = singers
     N = voice.CLOCK['n']
-    tasks = [(sect, i, engine_notes(sc, sect), clock) for sect in voice.SECT for i in range(singers) if sc.parts[sect]]
+    tasks = [(sect, i, engine_notes(sc, sect), clock, tune) for sect in voice.SECT for i in range(singers) if sc.parts[sect]]
     stems = {sect: np.zeros((3, N, 2), np.float32) for sect in voice.SECT if sc.parts[sect]}
     geo = np.random.default_rng(99)
     with Pool(min(10, cpu_count())) as pool:
@@ -177,14 +179,15 @@ def master(x):
     return x * .93 / np.abs(x).max()
 
 
-def versions(vox, back, P, part=None):
-    """Named mixes.  vox is {section: stereo} (or {'all': stereo}); back is the accompaniment."""
+def versions(vox, back, P, parts=()):
+    """Named mixes.  vox is {section: stereo} (or {'all': stereo}); back is the accompaniment.
+    parts is a list of (name, [sections]) to single out, e.g. ('Bass', ['BR', 'BS']) in a TTB piece."""
     full = sum(vox.values()); b = P['backing'] * back
     out = {'voices only': full}
     if np.abs(back).max() > 0:
         out['balanced'] = full + b
-    if part:
-        mine = vox[part]; name = NAMES[part]
+    for name, sections in parts:
+        mine = sum(vox[s] for s in sections)
         out[f'{name} predominant'] = mine + P['others'] * (full - mine) + P['under'] * b
         out[f'{name} muted'] = full - mine + b
         out[f'{name} alone'] = mine

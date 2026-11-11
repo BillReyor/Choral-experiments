@@ -24,64 +24,101 @@ def _near(m, pitch):
     return np.abs((m - pitch + 6) % 12 - 6) < .7
 
 
-def steady_fit(notes, t, m, bpm0, res=16):
-    """One tempo and one start time that put the most of the sung sound on the pitch the score
-    expects at that moment.  Returns (share of notes on pitch, start, bpm)."""
-    S = int(max(b + d for b, d, mi in notes) * res) + 1
-    want = np.full(S + 1, np.nan)
+def nominal(sc):
+    """The score's own clock, starting at zero: (beats, seconds) through every tempo mark."""
+    pts = sorted(sc.tempo)
+    beats, secs, bpm = [0.], [0.], pts[0][1]
+    for b, new in pts + [(sc.beats, pts[-1][1])]:
+        if b > beats[-1]:
+            secs.append(secs[-1] + (b - beats[-1]) * 60 / bpm); beats.append(b)
+        bpm = new
+    return np.array(beats), np.array(secs)
+
+
+def _wanted(notes, total_beats, res):
+    want = np.full(int(total_beats * res) + 2, np.nan)
     for b, d, mi in notes:
         want[int(round(b * res)):int(round((b + d) * res))] = mi
+    return want
+
+
+def steady_fit(notes, t, m, nom, res=16):
+    """Fit the recording to the score's clock: one start time and one stretch for the whole piece,
+    then each tempo section's own start and stretch (a marked "120" and "138" are rarely played as
+    exactly that ratio).  Returns (share of notes on pitch, beats, seconds) - a piecewise-steady map."""
+    nb, ns = nom
+    want = _wanted(notes, nb[-1], res)
     v = ~np.isnan(m); tv, mv = t[v], m[v]
 
-    def frames(t0, bpm):                                     # share of voiced frames that are on the expected pitch
-        i = np.floor((tv - t0) * bpm / 60 * res).astype(int)
-        ok = (i >= 0) & (i < S)
+    def score(to_nominal, lo=-1e9, hi=1e9):            # share of voiced frames on the expected pitch
+        x = to_nominal(tv)                             # nominal seconds each frame falls at
+        b = np.interp(x, ns, nb, left=-1, right=-1)
+        i = np.clip(np.floor(b * res).astype(int), 0, len(want) - 1)
+        ok = (b >= 0) & (x >= lo) & (x < hi)
         return float(_near(mv[ok], want[i[ok]]).sum()) / max(len(tv), 1)
-    _, a0, b0 = max((frames(a, b), a, b) for b in np.arange(bpm0 * .92, bpm0 * 1.08, bpm0 * .004) for a in np.arange(-2, 25, .1))
-    _, t0, bpm = max((frames(a, b), a, b) for b in np.arange(b0 * .994, b0 * 1.006, b0 * .0002) for a in np.arange(a0 - .15, a0 + .15, .005))
-    spb = 60 / bpm; ok = tot = 0
+    _, a0, s0 = max((score(lambda x: (x - a) / s), a, s) for s in np.arange(.92, 1.08, .004) for a in np.arange(-2, 25, .1))
+    _, a0, s0 = max((score(lambda x: (x - a) / s), a, s) for s in np.arange(s0 - .006, s0 + .006, .0005) for a in np.arange(a0 - .15, a0 + .15, .005))
+    beats, secs = [], []
+    for k in range(len(nb) - 1):                       # each tempo section: its own start and stretch
+        n0, n1 = ns[k], ns[k + 1]
+        A, Sx = a0 + s0 * n0, s0
+        if len(nb) > 2 and any(nb[k] <= b < nb[k + 1] for b, d, mi in notes):
+            _, A, Sx = max((score(lambda x: n0 + (x - A_) / S_, n0, n1), A_, S_)
+                           for S_ in np.arange(s0 * .97, s0 * 1.03, s0 * .001) for A_ in np.arange(A - .4, A + .4, .01))
+        bb = np.arange(nb[k], nb[k + 1] + (1 if k == len(nb) - 2 else 0))
+        beats += list(bb); secs += list(A + Sx * (np.interp(bb, nb, ns) - n0))
+    beats, secs = np.array(beats, float), np.maximum.accumulate(np.array(secs))
+    ok = tot = 0
     for b, d, mi in notes:
-        x = m[(t >= t0 + (b + .25 * d) * spb) & (t <= t0 + (b + .85 * d) * spb)]; x = x[~np.isnan(x)]
+        t0, t1 = np.interp([b + .25 * d, b + .85 * d], beats, secs)
+        x = m[(t >= t0) & (t <= t1)]; x = x[~np.isnan(x)]
         if len(x):
             tot += 1; ok += abs((np.median(x) - mi + 6) % 12 - 6) < .7
-    return ok / max(tot, 1), float(t0), float(bpm)
+    return ok / max(tot, 1), beats, secs
 
 
-def attack_grid(x, sr, t0, bpm, beats):
-    """Sharpen a rough (start, tempo) on an accompaniment: its note attacks mark the beat far more
-    exactly than a singer does.  Looks within a tenth of a second and 0.4% of the rough answer."""
-    tt, flux = _flux(x[:int((t0 + beats * 60 / bpm + 2) * sr)], sr)
-    grid = np.arange(0, beats, .5)
-    s, a, b = max((np.interp(a + grid * 60 / b, tt, flux).mean(), a, b)
-                  for b in np.arange(bpm * .996, bpm * 1.004, bpm * .0001) for a in np.arange(t0 - .1, t0 + .1, .005))
-    return float(a), float(b)
+def attack_grid(x, sr, beats, secs, sections):
+    """Sharpen a steady map on an accompaniment: its note attacks mark the beat far more exactly
+    than a singer does.  Each tempo section may move a tenth of a second and stretch by 0.4%."""
+    tt, flux = _flux(x, sr)
+    secs = secs.copy()
+    for b0, b1 in sections:
+        sel = (beats >= b0) & ((beats < b1) | (b1 >= beats[-1] - 30))
+        if b1 - b0 < 16:
+            continue
+        g = np.arange(b0, b1, .5)
+        base = np.interp(g, beats, secs); t0 = base[0]
+        _, da, st = max((np.interp(t0 + da + (base - t0) * st, tt, flux).mean(), da, st)
+                        for st in np.arange(.996, 1.004, .0002) for da in np.arange(-.1, .1, .005))
+        secs[sel] = t0 + da + (secs[sel] - t0) * st
+    return np.maximum.accumulate(secs)
 
 
-def follow(notes, total_beats, t, m, t0, bpm, res=8):
+def follow(notes, total_beats, t, m, sbeats, ssecs, res=8):
     """Tempo map as (beats, seconds).  The recording is matched to the score slot by slot; then only
     the moments that really say something about time - a change of pitch, an entry after a rest -
     are kept as anchors, and only a drift that never returns to the steady pulse counts as a change
     of tempo (one singer running late for a bar and catching up does not)."""
     S = int(total_beats * res) + 1
-    want = np.full(S, np.nan)
-    for b, d, mi in notes:
-        want[int(round(b * res)):int(round((b + d) * res))] = mi
+    want = _wanted(notes, total_beats, res)[:S]
     dt = t[1] - t[0]; A = len(t)
-    nominal = 60 / bpm / res / dt
+    steady = lambda b: np.interp(b, sbeats, ssecs)
+    centre = (steady(np.arange(S) / res) - t[0]) / dt       # where the steady map puts each slot, in frames
+    step = np.maximum(np.diff(centre, prepend=2 * centre[0] - centre[1]), 1.)
     voiced = ~np.isnan(m)
-    ks = np.arange(max(1, int(nominal * .4)), int(nominal * 4) + 1)
-    pen = .03 * np.abs(np.log2(ks / nominal))
+    ks = np.arange(max(1, int(step.min() * .4)), int(step.max() * 4) + 1)
     D = np.full(A, np.inf); back = np.zeros((S, A), np.int16)
-    a0 = int(round((t0 - t[0]) / dt)); D[max(0, a0 - 2):a0 + 3] = 0
+    a0 = int(round(centre[0])); D[max(0, a0 - 2):a0 + 3] = 0
     idx = np.arange(A)
     for s in range(1, S):
         cost = np.where(voiced, .3, 0.) if np.isnan(want[s]) else np.where(voiced, np.where(_near(m, want[s]), 0., 1.), .6)
+        pen = .03 * np.abs(np.log2(ks / step[s]))
         best = np.full(A, np.inf); arg = np.zeros(A, np.int16)
         for k, p in zip(ks, pen):
             cand = np.full(A, np.inf); cand[k:] = D[:-k] + p
             better = cand < best
             best[better] = cand[better]; arg[better] = k
-        off = np.abs(idx - (a0 + s * nominal)) * dt
+        off = np.abs(idx - centre[s]) * dt
         D = best + cost + .02 * np.minimum(off, 1.)
         D[off > 6.] = np.inf
         back[s] = arg
@@ -89,7 +126,6 @@ def follow(notes, total_beats, t, m, t0, bpm, res=8):
     for s in range(S - 1, 0, -1):
         a -= back[s][a]; path.append(a)
     secs = t[np.array(path[::-1])]
-    steady = lambda b: t0 + b * 60 / bpm
 
     ab, ad = [], []                                           # anchors: (beat, seconds off the steady pulse)
     for i, (b, d, mi) in enumerate(notes):
@@ -106,7 +142,7 @@ def follow(notes, total_beats, t, m, t0, bpm, res=8):
         if i + 1 == len(notes) or notes[i + 1][0] > b + d + .4:
             pts[b + d] = float(np.interp(b, ab, ad))
     b, d, mi = notes[-1]                                      # the last note: measure its release directly
-    start = steady(b) + float(np.interp(b, ab, ad))
+    start = float(steady(b)) + float(np.interp(b, ab, ad))
     on = voiced & _near(m, mi) & (t > start)
     w = int(.25 / dt)
     for g in np.where(~on & (t > start + .3))[0]:
@@ -170,22 +206,24 @@ def measure(sc, part, x, sr, accompaniment=None, log=print):
     accompaniment=(array, sr) sharpens the beat grid on its note attacks."""
     t, m = yin(x, sr)
     notes = part_notes(sc, part)
-    ag, t0, bpm = steady_fit(notes, t, m, sc.tempo[0][1])
-    log(f'{part}: {100 * ag:.0f}% of its notes are on pitch with beat 1 at {t0:.2f}s, {bpm:.2f} bpm')
+    nb, ns = nominal(sc)
+    ag, sb, ss = steady_fit(notes, t, m, (nb, ns))
+    tempos = lambda: ', then '.join('%.2f bpm' % (60 * 4 / float(np.interp(b + 6, sb, ss) - np.interp(b + 2, sb, ss))) for b in nb[:-1])
+    log(f'{part}: {100 * ag:.0f}% of its notes are on pitch with beat 1 at {ss[0]:.2f}s, {tempos()}')
     if ag < .6:
         log('  ! that is too few to trust: is this the right part, and is the transcription right?')
     if accompaniment is not None:
         last = max(b for b, d, mi in notes)
-        t0, bpm = attack_grid(accompaniment[0], accompaniment[1], t0, bpm, min(last, sc.beats - 24))
-        log(f'accompaniment attacks put beat 1 at {t0:.3f}s, {bpm:.2f} bpm')
-    beats, secs = follow(notes, sc.beats, t, m, t0, bpm)
-    dev = secs - (t0 + beats * 60 / bpm)
+        ss = attack_grid(accompaniment[0], accompaniment[1], sb, ss, [(b0, min(b1, last, sc.beats - 24)) for b0, b1 in zip(nb[:-1], nb[1:])])
+        log(f'accompaniment attacks put beat 1 at {ss[0]:.3f}s, {tempos()}')
+    beats, secs = follow(notes, sc.beats, t, m, sb, ss)
+    dev = secs - np.interp(beats, sb, ss)
     moved = np.where(np.abs(dev) > .05)[0]
     if len(moved):
         b0 = beats[moved[0]]
         mnum = max(k for k in sc.measures if sc.measures[k][0] <= b0)
         log(f'tempo leaves the steady pulse at measure {mnum}; the last beat falls {dev[-1]:+.2f}s late')
-    return {'offset': round(t0, 3), 'bpm': round(bpm, 3), 'agree': round(float(ag), 3),
+    return {'offset': round(float(ss[0]), 3), 'bpm': round(60 / float(ss[1] - ss[0]), 3), 'agree': round(float(ag), 3),
             'beats': [float(b) for b in beats], 'secs': [round(float(s), 3) for s in secs]}
 
 

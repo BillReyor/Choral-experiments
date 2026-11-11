@@ -44,6 +44,10 @@ which catches most misread rhythms. A line that is absent is a bar of rest.
   the same moment.
 - **Dynamics** go between notes: `!pp !p !mp !mf !f !ff`, `!cresc`, `!dim`.
 
+Repeats, D.S. and codas are written out: number the measures in the order they are performed
+(the printed number can go in a comment). `tempo:` and `time:` may change between measures; `10/8`
+and `6/8` are counted in eighths, with the tempo still given in quarter notes per minute.
+
 ## Words
 
 Syllables are joined into words and looked up in the CMU pronouncing dictionary. For words it
@@ -52,6 +56,20 @@ does not know, or pronounces differently from how the piece sets them, add a lin
 ```
 say: heav'nly = HH EH1 V . N L IY0      // CMU phonemes, a dot between sung syllables
 ```
+
+### Latin
+
+```
+language: latin
+```
+
+near the top of the file switches from the English dictionary to church-Latin rules, applied to
+each printed syllable (`Sanc-` `tus`, `ex-` `cel-` `sis`): c and g soften before e and i, `ti`
+before a vowel is "tsee", `gn` is "ny", `ae` and `oe` are "eh", h is silent, and the five vowels
+are the engine's own Latin vowels, fitted to real singers. `say:` lines still override single
+words.
+
+### Drum and bell syllables
 
 Drum and bell syllables - *pum, rum, tum, bum, dum, pom, bom, dom, bim, bam, ding, dong, bong* -
 are sung the way choirs sing them: a short vowel, then the rest of the note hummed on the *m* or

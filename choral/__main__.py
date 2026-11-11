@@ -5,8 +5,9 @@
 
 MUSIC is a score file (docs/score-format.md) or a PDF exported from notation software.
 
-  --part            tenor1, tenor2, baritone or bass: also write that part predominant (the others
-                    quiet behind it), muted (everyone else, to sing against) and alone
+  --part            tenor1, tenor2, baritone or bass (or several, with commas): also write that
+                    part predominant (the others quiet behind it), muted (everyone else, to sing
+                    against) and alone.  In three-part music "bass" is baritones and basses together
   --accompaniment   a recording of the accompaniment to sing over, instead of the built-in piano
   --balanced, --predominant, --muted
                     practice tracks of the same piece, if you have them.  They are only listened
@@ -51,9 +52,19 @@ def main():
     t0 = time.time()
     path = read_music(a.music, log)
     sc = scoremod.load(path, warn=log)
-    part = PARTS.get((a.part or '').lower().replace(' ', ''))
-    if a.part and (not part or not sc.parts[part]):
-        raise SystemExit(f'--part must be one of tenor1, tenor2, baritone, bass (and be in the score); got "{a.part}"')
+    same = lambda p, q: [(n['beat'], n['dur'], n['midi']) for n in sc.parts[p]] == [(n['beat'], n['dur'], n['midi']) for n in sc.parts[q]]
+    groups = []                                    # (name, [sections]) for every part asked for
+    for word in filter(None, (a.part or '').lower().replace(' ', '').split(',')):
+        p = PARTS.get(word)
+        if not p or not sc.parts[p]:
+            raise SystemExit(f'--part takes tenor1, tenor2, baritone or bass (several with commas), and the part must be in the score; got "{word}"')
+        if p in ('BR', 'BS') and same('BR', 'BS'):          # three-part music: baritones and basses sing one line
+            groups.append(('Bass', ['BR', 'BS']))
+        elif p in ('T1', 'T2') and same('T1', 'T2'):
+            groups.append(('Tenor', ['T1', 'T2']))
+        else:
+            groups.append((R.NAMES[p], [p]))
+    part = groups[0][1][-1] if groups else None    # the part a --predominant track belongs to
     title = sc.title or os.path.splitext(os.path.basename(path))[0]
     log(f'{title}: {len(sc.measures)} measures, {sum(len(v) for v in sc.parts.values())} sung notes, {len(sc.piano)} piano notes')
 
@@ -83,19 +94,19 @@ def main():
     total = float(np.interp(sc.beats, *clock)) + 4.0
     if track is not None:
         total = max(total, len(track) / R.SR)
-    stems = R.sing(sc, (*clock, total), P['singers'], log)
+    stems = R.sing(sc, (*clock, total), P['singers'], log, tune={'TUNE.note_decay': P.get('note_decay', 0.)})
     if ref_voices is not None and ('hall_from' not in saved or a.fresh):
         got = presets.match_hall(stems, P, ref_voices, log)
         P.update(got, **({'hall_from': 'recording'} if got else {}))
     if a.tune:
         P.update(presets.tune_for_words(stems, sc, clock, P, keep_hall=P.get('hall_from') == 'recording', log=log))
     json.dump(P, open(pfile, 'w'), indent=1)
-    log(f"preset: leaders' mics {P['spot']}, hall {P['hall']} ({P['hall_rt']}s), accompaniment {P['backing']}  -> {pfile}")
+    log(f"preset: leaders' mics {P['spot']}, hall {P['hall']} ({P['hall_rt']}s), accompaniment {P['backing']}, note decay {P.get('note_decay', 0.)}  -> {pfile}")
 
     # ---- mix and write
     vox = R.mix_voices(stems, P) if part else {'all': R.choir(stems, P)}
     N = next(iter(vox.values())).shape[0]
-    out = R.versions(vox, R.backing(sc, N, voice.T, P, track), P, part)
+    out = R.versions(vox, R.backing(sc, N, voice.T, P, track), P, groups)
     outdir = a.out or 'out'
     os.makedirs(outdir, exist_ok=True)
     safe = re.sub(r'[^\w \-]', '', title).strip()
