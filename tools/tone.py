@@ -109,7 +109,7 @@ def main():
     ap.add_argument('score'); ap.add_argument('part'); ap.add_argument('wav')
     ap.add_argument('--offset', type=float, default=0.); ap.add_argument('--bpm', type=float); ap.add_argument('--channel', type=int)
     a = ap.parse_args()
-    sc = score.parse(open(a.score).read(), warn=lambda *x: None)
+    sc = score.load(a.score)
     spb = 60 / (a.bpm or sc.tempo[0][1])
     real = envelopes(load(a.wav, a.channel), sc, a.part, a.offset, spb)
     mine = envelopes(synth(sc, a.part, a.offset, spb), sc, a.part, a.offset, spb)

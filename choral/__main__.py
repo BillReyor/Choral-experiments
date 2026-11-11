@@ -1,0 +1,112 @@
+"""Sheet music in, a sung rendering out.
+
+    python -m choral MUSIC [--part baritone] [--accompaniment TRACK] [--out DIR]
+                           [--balanced TRACK --predominant TRACK | --muted TRACK] [--tune]
+
+MUSIC is a score file (docs/score-format.md) or a PDF exported from notation software.
+
+  --part            tenor1, tenor2, baritone or bass: also write that part predominant (the others
+                    quiet behind it), muted (everyone else, to sing against) and alone
+  --accompaniment   a recording of the accompaniment to sing over, instead of the built-in piano
+  --balanced, --predominant, --muted
+                    practice tracks of the same piece, if you have them.  They are only listened
+                    to: the tempo and its bends, the hall and the balance are measured from them
+  --tune            let a speech recognizer choose how close the microphones are (needs whisper-cli)
+  --only            write just one version, e.g. --only "Baritone predominant"
+
+What was estimated for the piece is saved beside the score as NAME.preset.json and reused.
+"""
+import argparse, json, os, re, subprocess, sys, time
+import numpy as np
+from . import render as R, score as scoremod, presets, reference, voice
+
+PARTS = {'tenor1': 'T1', 't1': 'T1', 'tenor2': 'T2', 't2': 'T2', 'baritone': 'BR', 'br': 'BR', 'bari': 'BR', 'bass': 'BS', 'bs': 'BS'}
+
+
+def read_music(path, log):
+    """A .score file as it is; a notation-software PDF through tools/pdf2score.py."""
+    if not path.lower().endswith('.pdf'):
+        return path
+    out = os.path.splitext(path)[0] + '.score'
+    tool = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools', 'pdf2score.py')
+    r = subprocess.run([sys.executable, tool, path, out], capture_output=True, text=True)
+    if r.returncode or not os.path.exists(out):
+        raise SystemExit('Could not read the notes out of this PDF.  That works for PDFs exported from notation software '
+                         '(Finale and the like), where the notes are drawn as shapes.  A scan or photo is a picture of the page '
+                         'and has to be transcribed into a score file first (docs/score-format.md).\n' + r.stderr[-400:])
+    log(r.stdout.strip())
+    log(f'read {path} -> {out}  (check it: a misread note is easier to fix there than to hear)')
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('music'); ap.add_argument('--out'); ap.add_argument('--part')
+    ap.add_argument('--accompaniment'); ap.add_argument('--balanced'); ap.add_argument('--predominant'); ap.add_argument('--muted')
+    ap.add_argument('--tune', action='store_true'); ap.add_argument('--only'); ap.add_argument('--singers', type=int)
+    ap.add_argument('--preset', help='a preset file to use instead of NAME.preset.json')
+    ap.add_argument('--fresh', action='store_true', help='ignore a saved preset and estimate again')
+    a = ap.parse_args()
+    log = lambda *s: print(*s, flush=True)
+    t0 = time.time()
+    path = read_music(a.music, log)
+    sc = scoremod.load(path, warn=log)
+    part = PARTS.get((a.part or '').lower().replace(' ', ''))
+    if a.part and (not part or not sc.parts[part]):
+        raise SystemExit(f'--part must be one of tenor1, tenor2, baritone, bass (and be in the score); got "{a.part}"')
+    title = sc.title or os.path.splitext(os.path.basename(path))[0]
+    log(f'{title}: {len(sc.measures)} measures, {sum(len(v) for v in sc.parts.values())} sung notes, {len(sc.piano)} piano notes')
+
+    # ---- the piece's preset: saved, or estimated from the score, then from whatever recordings there are
+    pfile = a.preset or os.path.splitext(path)[0] + '.preset.json'
+    P = dict(R.PRESET, **presets.from_score(sc))
+    log(f"the quick syllables last {P['quick_syllable']}s: starting from leaders' mics {P['spot']}, hall {P['hall']}")
+    saved = json.load(open(pfile)) if os.path.exists(pfile) and not a.fresh else {}
+    P.update(saved)
+    if a.singers:
+        P['singers'] = a.singers
+    L = lambda f: reference.load_audio(f) if f else None
+    track = L(a.accompaniment)
+    ref_voices = None
+    if a.balanced and (a.accompaniment or a.muted or a.predominant):
+        if not a.accompaniment:
+            raise SystemExit('to learn from practice tracks I also need the accompaniment-only track (--accompaniment)')
+        est, iso = presets.from_recordings(sc, part or 'BR', L(a.balanced), track, L(a.predominant), L(a.muted), log)
+        P.update(est)
+        ref_voices = iso['voices'] if iso['clean'] >= 15 else None
+    elif track is not None and 'timing' not in P and not sc.timing:
+        from . import timing
+        P['timing'] = timing.from_accompaniment(sc, track.mean(1), R.SR, log)
+
+    # ---- sing
+    clock = R.clock_for(sc, P.get('timing'), absolute=track is not None)
+    total = float(np.interp(sc.beats, *clock)) + 4.0
+    if track is not None:
+        total = max(total, len(track) / R.SR)
+    stems = R.sing(sc, (*clock, total), P['singers'], log)
+    if ref_voices is not None and ('hall_from' not in saved or a.fresh):
+        got = presets.match_hall(stems, P, ref_voices, log)
+        P.update(got, **({'hall_from': 'recording'} if got else {}))
+    if a.tune:
+        P.update(presets.tune_for_words(stems, sc, clock, P, keep_hall=P.get('hall_from') == 'recording', log=log))
+    json.dump(P, open(pfile, 'w'), indent=1)
+    log(f"preset: leaders' mics {P['spot']}, hall {P['hall']} ({P['hall_rt']}s), accompaniment {P['backing']}  -> {pfile}")
+
+    # ---- mix and write
+    vox = R.mix_voices(stems, P) if part else {'all': R.choir(stems, P)}
+    N = next(iter(vox.values())).shape[0]
+    out = R.versions(vox, R.backing(sc, N, voice.T, P, track), P, part)
+    outdir = a.out or 'out'
+    os.makedirs(outdir, exist_ok=True)
+    safe = re.sub(r'[^\w \-]', '', title).strip()
+    for name, x in out.items():
+        if a.only and a.only.lower() != name.lower():
+            continue
+        f = os.path.join(outdir, f'{safe} - {name}.wav')
+        R.write_wav(f, x)
+        log(f'  wrote {f}')
+    log('done in %.0fs' % (time.time() - t0))
+
+
+if __name__ == '__main__':
+    main()

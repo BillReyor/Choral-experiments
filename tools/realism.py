@@ -174,7 +174,7 @@ def main():
     ap.add_argument('--offset', type=float, default=0.); ap.add_argument('--bpm', type=float)
     ap.add_argument('--channel', type=int); ap.add_argument('--singers', default='4,2,9')
     a = ap.parse_args()
-    sc = score.parse(open(a.score).read(), warn=lambda *x: None)
+    sc = score.load(a.score)
     notes = sc.parts[a.part]
     real = measure(load(a.wav, a.channel), notes, a.offset, 60 / (a.bpm or sc.tempo[0][1]))
     mine = [measure(synth(sc, a.part, int(i)), notes, R.LEAD_IN, 60 / sc.tempo[0][1]) for i in a.singers.split(',')]

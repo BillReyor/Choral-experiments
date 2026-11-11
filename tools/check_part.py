@@ -36,7 +36,7 @@ def fit(notes, t, m, bpm0):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('score'); ap.add_argument('part'); ap.add_argument('wav')
     ap.add_argument('--channel', type=int); a = ap.parse_args()
-    sc = score.parse(open(a.score).read(), warn=lambda *x: None)
+    sc = score.load(a.score)
     sr, x = load(a.wav, a.channel)
     t, m = yin(x, sr)
     notes = [(n['beat'], n['dur'], n['midi'][0] if isinstance(n['midi'], tuple) else n['midi']) for n in sc.parts[a.part]]

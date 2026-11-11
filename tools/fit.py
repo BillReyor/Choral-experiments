@@ -101,7 +101,7 @@ def voice_apply(P):
 
 def voice_audio(job, P):
     voice_apply(P)
-    sc = score.parse(open(job['score']).read(), warn=lambda *a: None)
+    sc = score.load(job['score'])
     spb = 60 / job['bpm']
     b0, b1, t0, t1 = window(job, sc)
     voice.set_clock([0, sc.beats + 16], [job['offset'], job['offset'] + (sc.beats + 16) * spb], t1 + 3)
@@ -130,7 +130,7 @@ _TONE = {}
 def tone_error(job, P):
     import tone
     voice.apply_fit(P)
-    sc = score.parse(open(job['score']).read(), warn=lambda *a: None)
+    sc = score.load(job['score'])
     spb = 60 / job['bpm']
     key = (job['wav'], job['m0'], job['m1'])
     if key not in _TONE:
@@ -153,7 +153,7 @@ def piano_apply(P):
 
 def piano_audio(job, P):
     piano_apply(P)
-    sc = score.parse(open(job['score']).read(), warn=lambda *a: None)
+    sc = score.load(job['score'])
     spb = 60 / job['bpm']
     b0, b1, t0, t1 = window(job, sc)
     T = lambda b: job['offset'] + b * spb
@@ -175,7 +175,7 @@ def evaluate(args):
     for job in jobs:
         key = (job['wav'], job['m0'], job['m1'])
         if key not in _REF:
-            sc = score.parse(open(job['score']).read(), warn=lambda *a: None)
+            sc = score.load(job['score'])
             b0, b1, t0, t1 = window(job, sc)
             _REF[key] = logmel(load_ref(job)[int(t0 * SR):int(t1 * SR)])
         y = (voice_audio if mode == 'voice' else piano_audio)(job, P)

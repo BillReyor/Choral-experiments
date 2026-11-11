@@ -55,9 +55,17 @@ TUNE = dict(b2=100., b3=130.,          # widths of the second and third resonanc
             glide_g=.25, glide_h=.10,  # share of a sliding vowel spent moving / on its second half
             attack=1., release=1.,     # speed of note starts from silence and of releases
             voicebar=.2,               # hum during b, d, g while the mouth is shut
-            burst=.17, fric=.12, asp_h=.2)   # p/t/k clicks, s/sh/f hiss, h and after-click air
+            burst=.17, fric=.15, asp_h=.2)   # p/t/k clicks, s/sh/f hiss, h and after-click air
+TUNE.update(cons_max=.62,            # consonants may take this much of a note at most
+            vowel_min=0.,            # on quick notes, leave at least this many seconds of vowel (0 = no such rule)
+            cluster=0.,              # how much each consonant shortens when several meet (0 = not at all)
+            # Both rules above copy what a solo singer does, and both made a 12-voice section harder to
+            # understand at speed (recognizer, piece 2), so they are off.
+            hum_vowel=.4,            # drum/bell syllables: share of the note sung on the vowel before the hum
+            hum_f1=350., hum_lp=-.2, hum_av=.55)   # the hum itself, fitted to a baritone's held "pum" notes
 for _kv in filter(None, os.environ.get('CHORAL_FIT', '').split(',')):   # e.g. CHORAL_FIT=b1=1.8,vib=.6
-    FIT[_kv.split('=')[0]] = float(_kv.split('=')[1])
+    if '.' not in _kv.split('=')[0]:
+        FIT[_kv.split('=')[0]] = float(_kv.split('=')[1])
 if os.environ.get('CHORAL_NOEQ'):
     FIT['eq'] = ()
 
@@ -179,6 +187,9 @@ _fit_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice_fit.
 if os.path.exists(_fit_file) and not os.environ.get('CHORAL_NOFIT'):     # settings found by tools/fit.py
     import json
     apply_fit(json.load(open(_fit_file)))
+_dotted = {kv.split('=')[0]: float(kv.split('=')[1]) for kv in os.environ.get('CHORAL_FIT', '').split(',') if '.' in kv.split('=')[0]}
+if _dotted:                                            # e.g. CHORAL_FIT=TUNE.vowel_min=.08,VOW.AH.1=1200
+    apply_fit(_dotted)
 
 
 # ====================================================== larynx and tract ==
@@ -324,7 +335,9 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     co = [[] for _ in range(n)]
     vow = [None] * n
     head = [True] * n
-    cur_v, cur_coda = 'AA', []
+    cur_v, cur_coda, cur_hum = 'AA', [], False
+    hum = [False] * n                                  # close early and hum the coda ("pummm")
+    ncon = [[0, 0] for _ in range(n)]                  # consonants in each note's onset and coda
     for i, x in enumerate(ph):
         s = x[3]
         if s == '-':
@@ -332,26 +345,36 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             vow[i] = cur_v
         else:
             toks = s.split()
+            cur_hum = '+' in toks
+            toks = [tk for tk in toks if tk != '+']
             vi = next(j for j, tk in enumerate(toks) if tk in VOW or tk in DIPH)
             cur_v = toks[vi]
             vow[i] = cur_v
             cur_coda = toks[vi + 1:]
+            ncon[i][0] = vi
             for j, c in enumerate(toks[:vi]):
                 on[i] += cons_segs(c, P['cs'] * rng.uniform(.9, 1.1), j > 0 and toks[j - 1] == 's')
         if (i == n - 1) or ph[i + 1][3] != '-':
+            ncon[i][1] = len(cur_coda); hum[i] = cur_hum and bool(cur_coda)
             for j, c in enumerate(cur_coda):
                 co[i] += cons_segs(c, P['cs'] * rng.uniform(.9, 1.1), final=(i == n - 1 and j == len(cur_coda) - 1))
     lastflag = [(i == n - 1) or ph[i + 1][3] != '-' for i in range(n)]
+    for i in range(-1, n):  # consonants that meet between two vowels are each said more quickly than one alone
+        k = (ncon[i][1] if i >= 0 else 0) + (ncon[i + 1][0] if i < n - 1 else 0)
+        if k >= 2:
+            for s in (co[i] if i >= 0 else []) + (on[i + 1] if i < n - 1 else []):
+                s['d'] *= k ** -TUNE['cluster']; s['vot'] *= k ** -TUNE['cluster']
     for i in range(n):  # squeeze consonants into short notes
         need = sum(s['d'] for s in co[i]) + (sum(s['d'] for s in on[i + 1]) if i < n - 1 else 0)
-        lim = 0.62 * (te[i] - ts[i])
+        D = te[i] - ts[i]
+        lim = min(TUNE['cons_max'] * D, max(.45 * D, D - TUNE['vowel_min']))   # quick notes: the vowel keeps its share
         if need > lim:
             k = lim / need
             for s in co[i]:
                 s['d'] *= k
             if i < n - 1:
                 for s in on[i + 1]:
-                    s['d'] *= k
+                    s['d'] *= k; s['vot'] *= k                              # ...and the puff after p/t/k shrinks with it
 
     segs, noises, vots = [], [], []
 
@@ -375,6 +398,13 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             if on[i][-1]['av'] == 0:               # unvoiced consonant: the vowel starts a little sharp
                 kicks.append(ts[i])
         vend = te[i] - sum(s['d'] for s in co[i]) - (sum(s['d'] for s in on[i + 1]) if i < n - 1 else 0)
+        if hum[i]:                                 # a short vowel, then the m or ng takes the rest of the note
+            keep = float(np.clip(TUNE['hum_vowel'] * (te[i] - ts[i]), .06, .26))
+            if vend - ts[i] > keep:                # the held part is a singer's hum: fuller and brighter than a spoken m
+                held = dict(co[i][0], d=vend - ts[i] - keep, av=TUNE['hum_av'], lp=TUNE['hum_lp'],
+                            F=(TUNE['hum_f1'],) + tuple(co[i][0]['F'][1:]))
+                co[i].insert(0, held)
+                vend = ts[i] + keep
         tgt = vowel_F(P, vow[i])
         if vow[i] in DIPH:
             A, B = tgt

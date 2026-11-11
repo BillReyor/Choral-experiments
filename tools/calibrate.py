@@ -24,7 +24,7 @@ def ltas(x, sr):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('score'); ap.add_argument('part'); ap.add_argument('wav')
     ap.add_argument('--channel', type=int); ap.add_argument('--singers', default='2,4,9'); a = ap.parse_args()
-    sc = score.parse(open(a.score).read(), warn=lambda *x: None)
+    sc = score.load(a.score)
     w = wave.open(a.wav); sr = w.getframerate()
     x = np.frombuffer(w.readframes(w.getnframes()), '<i2').reshape(-1, w.getnchannels()) / 32768
     target = ltas(x.mean(1) if a.channel is None else x[:, a.channel], sr)

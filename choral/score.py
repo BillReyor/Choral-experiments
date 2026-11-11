@@ -4,7 +4,7 @@ The format mirrors the printed page: notes are written as they appear on the sta
 signature and accidentals-within-the-bar rules are applied here), one line per staff or voice per
 measure, with the sung syllable attached to each note.
 """
-import re
+import json, os, re
 from collections import defaultdict
 from . import lyrics
 
@@ -27,12 +27,15 @@ class Score:
         self.parts = {k: [] for k in ('T1', 'T2', 'BR', 'BS')}   # dicts: beat, dur, midi, tie, lyric, flags
         self.piano = []                                           # dicts: beat, dur, midi, hand, flags
         self.tempo = []                                           # (beat, bpm)
+        self.timing = None                                        # measured beat -> second map, if any
         self.marks = {'voice': [], 'piano': []}                   # (beat, mark)
         self.measures = {}                                        # number -> (start beat, length)
         self.beats = 0.
         self.say = {}
         self.title = ''
         self.transpose = defaultdict(int)
+        self.streams = {}          # (system, staff) -> syllables waiting for notes marked =*
+        self.system = None
 
     def dyn(self, group, beat):
         """Dynamic level at a beat: step marks, with cresc/dim ramping to the next mark."""
@@ -61,7 +64,7 @@ def _dur(code):
     return d * (2 - .5 ** len(rest))
 
 
-def parse(text, warn=print):
+def parse(text, warn=print, base='.'):
     sc = Score()
     key, meas_len, beat0, cur = 0, 4., 0., None
     lines_in_measure = {}
@@ -109,6 +112,15 @@ def parse(text, warn=print):
         elif head == 'dynamic':                       # one level for a piece that prints none
             close()
             sc.marks['voice'].append((beat0, rest)); sc.marks['piano'].append((beat0, rest))
+        elif head == 'lyricsfile':                    # syllables read from the page by text recognition
+            for system, staves in json.load(open(os.path.join(base, rest))).items():
+                for staff, toks in staves.items():
+                    sc.streams[(system, staff)] = list(toks)
+        elif head == 'timing':                        # beat -> second map measured from a recording (choral.timing)
+            sc.timing = json.load(open(os.path.join(base, rest)))
+        elif head == 'system':                        # which system of the page the next measures are on
+            close()
+            sc.system = rest
         elif head == 'transpose':
             name, semis = rest.split()
             sc.transpose[name] = int(semis)
@@ -125,10 +137,18 @@ def parse(text, warn=print):
             raise ScoreError(f'line {ln}: do not understand "{head}:"')
     close()
     sc.beats = beat0
+    for (system, staff), left in sc.streams.items():
+        if left:
+            warn(f'  ! system {system} {staff}: {len(left)} recognized syllable(s) were not used')
     if not sc.tempo:
         sc.tempo = [(0., 100.)]
     _finish(sc, warn)
     return sc
+
+
+def load(path, warn=None):
+    """Read a score file (quietly unless given a warn function)."""
+    return parse(open(path).read(), warn=warn or (lambda *a: None), base=os.path.dirname(os.path.abspath(path)))
 
 
 def _line(sc, mnum, name, toks, beat0, meas_len, keysig, warn):
@@ -148,6 +168,13 @@ def _line(sc, mnum, name, toks, beat0, meas_len, keysig, warn):
             raise ScoreError(f'measure {mnum} {name}: cannot read "{tok}"')
         d = _dur(mt['d'])
         flags = set(re.findall(r"~|\^|>|'|%gl", mt['f']))
+        lyric = mt['l']
+        if lyric == '*':                               # take the next recognized syllable for this staff
+            key = next((k for k in ((sc.system, name), (sc.system, 'TEN' if name in ('T1', 'T2') else 'LOW'))
+                        if sc.streams.get(k)), None)
+            if key is None:
+                raise ScoreError(f'measure {mnum} {name}: no syllable left in system {sc.system}')
+            lyric = sc.streams[key].pop(0)
         if mt['p'] != 'r':
             midis, tied = [], set()
             for p in mt['p'].split('+'):
@@ -170,7 +197,7 @@ def _line(sc, mnum, name, toks, beat0, meas_len, keysig, warn):
                     split = [tuple(midis)]
                 for part, ms in zip(parts, split):
                     sc.parts[part].append(dict(beat=beat0 + t, dur=d, midi=ms[0] if len(ms) == 1 else ms,
-                                               tie=all(m_ in tied for m_ in ms), lyric=mt['l'], flags=flags, m=mnum))
+                                               tie=all(m_ in tied for m_ in ms), lyric=lyric, flags=flags, m=mnum))
             else:
                 for mi in midis:
                     sc.piano.append(dict(beat=beat0 + t, dur=d, midi=mi, hand=name[:2], tie=mi in tied,

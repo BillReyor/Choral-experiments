@@ -32,7 +32,7 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument('score'); ap.add_argument('wav')
     ap.add_argument('--offset', type=float, default=0.); ap.add_argument('--bpm', type=float)
     ap.add_argument('--parts', default='T1,T2,BR,BS'); a = ap.parse_args()
-    sc = score.parse(open(a.score).read(), warn=lambda *x: None)
+    sc = score.load(a.score)
     w = wave.open(a.wav); sr = w.getframerate()
     x = np.frombuffer(w.readframes(w.getnframes()), '<i2').reshape(-1, w.getnchannels()).mean(1) / 32768
     spb = 60 / (a.bpm or sc.tempo[0][1])

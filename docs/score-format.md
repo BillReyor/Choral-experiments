@@ -53,4 +53,41 @@ does not know, or pronounces differently from how the piece sets them, add a lin
 say: heav'nly = HH EH1 V . N L IY0      // CMU phonemes, a dot between sung syllables
 ```
 
+Drum and bell syllables - *pum, rum, tum, bum, dum, pom, bom, dom, bim, bam, ding, dong, bong* -
+are sung the way choirs sing them: a short vowel, then the rest of the note hummed on the *m* or
+*ng*. Any syllable can be given that treatment with a `+` before the consonant to hold:
+
+```
+say: zum = Z AH1 + M                   // "zummm"
+```
+
+## Lyrics read from the page by text recognition
+
+For a scan, the words can come from text recognition instead of being typed. Put them in a JSON
+file - `{"p03_s1": {"TEN": ["Shen-", "an-", "doah"], "LOW": [...]}, ...}`, one list of
+syllables per staff per system - and let each note take the next one with `=*`:
+
+```
+lyricsfile: piece.lyrics.json
+system: p03_s1                         // the measures that follow are on this system
+== 9
+TEN: f4/e=* f4/e=* f4/q.=* g4/e a4/e b4/e
+```
+
+`T1:`/`T2:` lines draw from the `TEN` list and `BR:`/`BS:` from `LOW` unless the file has a list
+under their own name. The reader reports any syllables left over at the end of a system, which is
+how a miscounted melisma shows up.
+
+## Timing measured from a recording
+
+`tempo:` gives one tempo. A piece that slows down, pauses or holds its last chord can instead
+point at a beat-by-beat map made by `python -m choral.timing` from a recording of one part:
+
+```
+timing: piece.timing.json              // {"offset": 1.045, "bpm": 144.0, "beats": [...], "secs": [...]}
+```
+
+`python -m choral` measures this by itself when it is given practice tracks, and keeps it in the
+piece's preset file.
+
 `//` starts a comment.

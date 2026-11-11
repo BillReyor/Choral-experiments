@@ -22,6 +22,12 @@ FIXED = {
     'a': [['AH0']], 'to': [['T', 'UW1']], 'of': [['AH1', 'V']], 'and': [['AE1', 'N', 'D']],
     'ye': [['Y', 'IY1']], 'oh': [['OW1']], 'o': [['OW1']], 'ah': [['AA1']], 'oo': [['UW1']],
 }
+# Drum and bell syllables.  Singers do not hold the vowel on these: they close early and hum the
+# rest of the note on the m or ng ("pummm", "dinnng").  '+' marks that: everything after it is held.
+for _w, _p in {'pum': 'P AH1 + M', 'rum': 'R AH1 + M', 'tum': 'T AH1 + M', 'bum': 'B AH1 + M', 'dum': 'D AH1 + M',
+               'pom': 'P AA1 + M', 'bom': 'B AA1 + M', 'dom': 'D AA1 + M', 'bim': 'B IH1 + M', 'bam': 'B AE1 + M',
+               'ding': 'D IH1 + NG', 'dong': 'D AO1 + NG', 'bong': 'B AO1 + NG'}.items():
+    FIXED[_w] = [_p.split()]
 
 
 def _cmu():
@@ -64,7 +70,9 @@ def to_engine(syl):
     out = []
     for p in syl:
         base, stress = p.rstrip('012'), p[-1] if p[-1] in '012' else ''
-        if base in VOWELS:
+        if p == '+':
+            out.append('+')
+        elif base in VOWELS:
             out.append('AX' if base == 'AH' and stress == '0' else base)
         else:
             out.append(CONS[base])

@@ -235,3 +235,5 @@ out/
 .venv/
 models/
 .DS_Store
+*.preset.json
+*.timing.json
