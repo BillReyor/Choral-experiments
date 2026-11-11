@@ -15,7 +15,7 @@ no samples and no recordings — and in rendering written sheet music with it.
 | `choral/presets.py` | Estimates what differs from piece to piece - tempo and its bends, hall, how close the microphones are, how loud the accompaniment sits - from practice tracks, from a speech recognizer, or from the score alone. |
 | `choral/timing.py` | Finds where every beat of the score falls in a recording: one tempo and start time, sharpened on the accompaniment's note attacks, then any ritardando or held last chord. |
 | `choral/reference.py` | Takes a set of practice tracks apart (balanced, accompaniment, "part predominant" or "part muted") into voices alone, accompaniment alone and one part alone, and says how cleanly they separated. |
-| `choral/hear.py` | The speech recognizer used as a stand-in for ears. |
+| `choral/hear.py` | The speech recognizer used as a stand-in for ears: English directly; other languages through the multilingual model, told the piece's vocabulary. |
 | `tools/pdf2score.py` | Reads a vector PDF exported from Finale (Maestro font) straight into the score format: pitches from notehead positions, note values from stems, beams, flags and dots, ties, key changes, and lyrics re-joined into words. Scans still have to be read by eye. |
 | `tools/fit.py` | Fits the piano, or the voice, to a recording by rendering on the recording's own timing and comparing mel spectrograms, one setting at a time, with held-out passages as the test. |
 | `tools/listen.py` | Uses a speech recognizer as ears: transcribes a render and reports how many of the score's words came through. |
@@ -53,7 +53,7 @@ python -m choral MUSIC [--part tenor1|tenor2|baritone|bass] [--accompaniment TRA
 - **--balanced / --predominant / --muted** are practice tracks of the same piece, if you have
   them. They are only listened to (see below); nothing of them ends up in the output.
 - **--tune** lets a speech recognizer choose the microphone distance (needs `whisper-cli` and
-  `WHISPER_MODEL`).
+  `WHISPER_MODEL`; for a score that is not in English, the multilingual model in `WHISPER_MODEL_MULTI`).
 
 ### What gets estimated for each piece
 
@@ -182,7 +182,10 @@ with a tempo change, mixed 10/8 and 6/8 bars, a repeat and a D.S. al Coda, from 
   generalized to fit each tempo section separately.
 - *Pronunciation.* Two questions were settled by measuring the real singers rather than by the
   rule book: there is no breath noise before the vowel of "Hosanna" (the h is silent), and its s
-  is a hissed s.
+  is the softened, voiced s the chant books describe - the voice carries on under a light hiss.
+  (An English recognizer had heard the engine's version of that as "l", and for a while a full
+  unvoiced s was used instead; a recognizer that can follow Latin hears the real choir sing
+  "hozana", and the measurement agrees.)
 - *Vowels.* Against two real tenors and a real bass, the engine's "ee" was far too thin - its
   second harmonic 17 dB weaker than theirs - and its "oo" likewise. Trained singers keep their
   vowels closer together than speech does. Latin now has its own five vowels, fitted to the three
@@ -194,11 +197,27 @@ with a tempo change, mixed 10/8 and 6/8 bars, a repeat and a D.S. al Coda, from 
   the recording: fade -1.4 -> -11.8 dB/s against the real -14.2, and the share of each note sung
   at full voice 93% -> 80% against 77%.
 
-What is still clearly wrong on this piece: the simulated tenors' fundamental is about 10 dB too
-strong against the second harmonic (real 1-3 dB, model 10-14), which none of the obvious
-settings fixes; and the words. There is no Latin recognizer here, but an English one follows the
-real choir through the "Hosanna in excelsis" passages (89% of the words) and gets about 10% from
-the render - it hears "O sana ... in excelsis" from a single simulated singer and nothing usable
-from the full choir.
+*Words.* Whisper barely knows Latin - the real choir scored 25% - so the yardstick for Latin is the
+multilingual model hearing the singing as Italian, with the piece's vocabulary given to it as
+context. It cannot invent the text from that: the accompaniment alone, and the choir singing
+every note on "ah", both score 0%.
+
+| piece 4 (Latin) | real recording | this engine |
+|---|---|---|
+| all voices | 62% | 57% |
+| tenor 1 / tenor 2 / bass alone | 59% / 71% / 56% | 46% / 52% / 55% |
+
+So on this piece the words come through nearly as well as the real choir's. The same yardstick
+settled the vowel question properly: speech-like vowels are understood slightly better (single
+voices 70% against 67%) and the singers' own vowels sound more like them (tone error 6.0 dB
+against 7.9 dB); the 65% setting keeps most of the tone for a few points of words. Fading notes
+cost no words.
+
+Giving the recognizer the vocabulary on the third piece narrows its gap but does not close it:
+the render goes from 26% to 48%, the real voices from 69% to 75%. That piece's problem is real.
+
+What is still clearly wrong on the Latin piece: the simulated tenors' fundamental is about 10 dB
+too strong against the second harmonic (real 1-3 dB, model 10-14), which none of the obvious
+settings fixes.
 
 None of these numbers says the result would pass for a recording.

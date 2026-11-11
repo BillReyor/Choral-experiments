@@ -3,12 +3,13 @@
 Latin is far more regular than English, and the score already divides every word into its sung
 syllables, so no dictionary is needed: each printed syllable is read letter by letter with the
 handful of rules every chorister learns (c and g soften before e and i, "ti" before a vowel is
-"tsee", "gn" is "ny", h is silent, vowels are pure).  Two choices were settled by measuring real
-singers rather than by the rule book: the h of "Hosanna" is silent (no breath before the vowel),
-and an s between vowels stays a hissed s (a softened z was heard as "l").
+"tsee", "gn" is "ny", h is silent, vowels are pure).  Two points were checked against recordings of
+real singers: there is no breath before the vowel of "Hosanna" (the h is silent), and its s is
+voiced with a light hiss - the softened s the chant books describe - not a full unvoiced s.
 """
 V = {'a': 'LA', 'e': 'LE', 'i': 'LI', 'o': 'LO', 'u': 'LU', 'y': 'LI'}     # the engine's Latin vowels (voice.VOW)
 FRONT = ('e', 'i', 'y', 'ae', 'oe')
+SOFT_S = True      # an s between two vowels is softened toward z (Ho-san-na)
 
 
 def _front(rest):
@@ -58,6 +59,8 @@ def syllable(s, prev='', nxt=''):
             ph = 'k' if nxt.startswith('c') and _front(nxt[1:]) and not rest else 'k s'
         elif c == 'z':
             ph = 'd z'
+        elif c == 's' and SOFT_S and i == 0 and prev[-1:] in V and rest[:1] in V:
+            ph = 'z'                              # softened between vowels: Ho-san-na
         elif c == 'n' and (rest[:1] in ('c', 'g', 'q', 'x') or (not rest and nxt[:1] in ('c', 'g', 'q'))):
             ph = 'ng'
         elif c in V:

@@ -89,7 +89,7 @@ def match_hall(stems, P, ref_voices, log=print):
 def tune_for_words(stems, sc, clock, P, keep_hall=False, log=print):
     """Walk the ladder and keep the most blended setting whose words still come through
     (within 3 points of the clearest).  keep_hall: the hall is already known; only move the mics."""
-    if not hear.model_path():
+    if not hear.model_path(getattr(sc, 'language', 'english')):
         log('no speech recognizer here (whisper-cli + WHISPER_MODEL) - keeping the rule-of-thumb setting')
         return {}
     T = lambda b: float(np.interp(b, clock[0], clock[1]))

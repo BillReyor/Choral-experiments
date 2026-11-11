@@ -6,7 +6,8 @@ Cuts the recording into stretches of a few measures, transcribes each with whisp
 reports how many of the score's own words came through.  Run it on a real recording of the same
 piece as well: that number is the yardstick, because even real choirs are not 100% intelligible.
 
-Needs `whisper-cli` (brew install whisper-cpp) and a model file; set WHISPER_MODEL to its path.
+Needs `whisper-cli` (brew install whisper-cpp) and a model file; set WHISPER_MODEL to its path
+(WHISPER_MODEL_MULTI, the multilingual model, for a score that is not in English).
 """
 import argparse, os, sys
 import numpy as np
@@ -23,7 +24,7 @@ def main():
     ap.add_argument('--timing', choices=['render', 'absolute'], default='render',
                     help="'absolute': the audio is a real recording on the score's measured timing")
     ap.add_argument('--part', help='count only this part\'s words')
-    ap.add_argument('--model', default=os.environ.get('WHISPER_MODEL', 'models/ggml-small.en.bin'))
+    ap.add_argument('--model', help='model file (default: WHISPER_MODEL, or WHISPER_MODEL_MULTI for a score not in English)')
     a = ap.parse_args()
     sc = S.load(a.score)
     x, sr = read_wav(a.audio)
