@@ -18,8 +18,8 @@ relative to the voice's own level, neither recording level nor microphone distan
 
 A real "isolated" voice still carries a little of the other parts and of the room, some 15-25 dB under the singer.
 So nothing here looks further down than FLOOR dB under a note's own level, entries and releases are found at 12 dB
-under it, and what follows a release by more than 50 ms is shown but never listed as a difference: that is the
-hall, which a single dry simulated singer does not have.
+under it, and what follows a release is shown but never listed as a difference: that is the hall, which a single
+dry simulated singer does not have.
 """
 import numpy as np
 from scipy.signal import resample_poly
@@ -239,7 +239,7 @@ def findings(diff, real=None, model=None, agree=None, of=0):
                     add(key, v, 5., f'{name}, {band}: from {1000 * ON[i]:+.0f} to {1000 * ON[j]:+.0f} ms around the start the model has up to {abs(v):.0f} dB {"more" if v > 0 else "less"} (against the note that follows)', (k, b))
     if 'off' in diff:
         for b, band in enumerate(['overall'] + [g[2] for g in GROUPS]):
-            col = (diff['off'][:, b] - diff['off'][:3, b].mean()) * (OFF <= .05)                     # up to the release; the tail after it is the hall
+            col = (diff['off'][:, b] - diff['off'][:3, b].mean()) * (OFF <= 0)                       # up to the release; what follows is the hall
             for i, j, v in _runs(col, 5.):
                 k = i + int(np.argmax(np.abs(col[i:j + 1])))
                 add('off', v, 5., f'phrase ends, {band}: from {1000 * OFF[i]:+.0f} to {1000 * OFF[j]:+.0f} ms around the release the model has up to {abs(v):.0f} dB {"more" if v > 0 else "less"}', (k, b))
