@@ -1,44 +1,47 @@
 # Choral-experiments
 
-A workspace for experiments in synthesized choral music, concert simulation, and
-making generated singing easier to understand.
+Experiments in synthesizing a men's chorus (tenor 1, tenor 2, baritone, bass) entirely in code —
+no samples and no recordings — and in rendering written sheet music with it.
 
-## Experiment ideas
+## What is here
 
-- Synthesize a tenor–tenor–baritone–bass (TTBB) men's chorus with variation in
-  individual singers' tuning, vibrato, and timing.
-- Explore four-part voicing, piano accompaniment, stereo staging, hall reverb,
-  and audience applause.
-- Improve sung diction through better consonants, vowel shapes, and word timing.
-- Check renders for duration, loudness, pitch, and clipping, then listen to judge
-  musical quality and intelligibility.
+| Path | What it is |
+|---|---|
+| `choral/voice.py` | The voice engine. Each singer is simulated: vocal-fold pulses one at a time, breath noise, a moving vocal tract, and a "brain" that hunts for pitch, enters late or early, and drifts with its section. |
+| `choral/score.py`, `choral/lyrics.py` | Reader for a plain-text score format that mirrors the printed page, and the sung-text-to-phoneme step. See [docs/score-format.md](docs/score-format.md). |
+| `choral/piano.py`, `choral/render.py` | Piano, stage (48 singers on risers in front of a stereo pair, section leaders on close mics), hall, mix. |
+| `tools/listen.py` | Uses a speech recognizer as ears: transcribes a render and reports how many of the score's words came through. |
+| `tools/check_part.py`, `tools/check_mix.py` | Check a transcription against a recording: pitch-track one isolated part, or test every written note against a recording of all voices. |
+| `tools/calibrate.py` | Fits the engine's tone to a recording of a real singer on the same notes. |
+| `experiments/` | The stand-alone experiments that led here (a vowel-only "Shenandoah", and an original pop number in three engine generations). |
+| `scores/demo_shenandoah.score` | A short public-domain example. |
 
-## Example: “Shenandoah”
+## Rendering a score
 
-An initial experiment outside this repository explored a two-minute simulated
-concert performance of the traditional, public-domain song “Shenandoah,” with an
-original piano arrangement and 48 synthesized singers (12 per part).
+```
+pip install -r requirements.txt
+python -m choral.render scores/demo_shenandoah.score out/demo.wav --voices out/demo_voices.wav
+```
 
-The concept moves from a piano introduction and unison melody over a bass hum to
-four-part harmony in a higher key, followed by a quiet vowel ending and applause.
-The initial vowel-only vocals lacked consonants, making the words difficult to
-understand.
+The workflow for a new piece of sheet music:
 
-This is a generic men's chorus simulation, not a recreation of the Hartford Gay
-Men's Chorus or a model trained on its recordings.
+1. **Transcribe** the pages into the score format. Every line has to add up to its measure, so
+   most rhythm misreadings are caught immediately.
+2. **Check** it, if a recording exists: `tools/check_part.py` against an isolated part (two
+   mixes that differ by one voice can be subtracted to isolate it), `tools/check_mix.py` against
+   all voices.
+3. **Render**, then **listen by proxy** with `tools/listen.py`, and compare with the same tool
+   run on a real recording.
 
-## Planned vocal-clarity workflow
+## What is not here
 
-1. Set up a local speech recognizer to establish which words are understood in
-   the current render.
-2. Refine consonants and vowels word by word, aligning them with the sung notes.
-3. Tune choir diction and the accompaniment/reverb mix for clarity.
-4. Render a new version and compare recognition results with the baseline.
-5. Listen to confirm that the words are clearer and the performance still sounds
-   musical; recognition results alone do not establish singing quality.
+Audio, sheet music, and transcriptions of copyrighted arrangements are never committed
+(`.gitignore` blocks `*.wav`, `*.mp3`, `*.pdf` and `scores/private/`). Renders go to `out/`.
 
-## Current status
+## Honest status
 
-This repository currently contains documentation only. The example generator
-(`chorus.py`) and audio render are not included, and there are no installation,
-rendering, or speech-recognition commands yet.
+On the first real test piece (an 83-measure TTBB arrangement with piano), the transcription
+matched a real baritone's isolated track on every one of 335 notes. A speech recognizer makes
+out about 70% of the words in the synthesized voices, against about 76% for the real singers on
+the same piece — close, but the engine still reads as synthetic to a human listener. The piano
+is basic, and instruments that are not in the vocal score (percussion, strings) are not rendered.

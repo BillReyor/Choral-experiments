@@ -1,0 +1,239 @@
+"""Reader for the plain-text score format (see docs/score-format.md).
+
+The format mirrors the printed page: notes are written as they appear on the staff (the key
+signature and accidentals-within-the-bar rules are applied here), one line per staff or voice per
+measure, with the sung syllable attached to each note.
+"""
+import re
+from collections import defaultdict
+from . import lyrics
+
+STEP = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
+DUR = {'w': 4., 'h': 2., 'q': 1., 'e': .5, 's': .25, 't': .125}
+SHARPS, FLATS = 'fcgdaeb', 'beadgcf'
+DYN = {'pp': .42, 'p': .52, 'mp': .62, 'mf': .74, 'f': .88, 'ff': 1.0}
+VOCAL = {'TEN': ('T1', 'T2'), 'LOW': ('BR', 'BS'), 'T1': ('T1',), 'T2': ('T2',), 'BR': ('BR',), 'BS': ('BS',)}
+PIANO = ('RH', 'RH2', 'RH3', 'LH', 'LH2', 'LH3')
+TOKEN = re.compile(r"^(?P<p>r|[a-g][#bn]?-?\d(?:\+[a-g][#bn]?-?\d)*)/(?P<d>[whqest]3?\.*)"
+                   r"(?P<f>(?:~|\^|>|'|%gl)*)(?:=(?P<l>\S+))?$")
+
+
+class ScoreError(Exception):
+    pass
+
+
+class Score:
+    def __init__(self):
+        self.parts = {k: [] for k in ('T1', 'T2', 'BR', 'BS')}   # dicts: beat, dur, midi, tie, lyric, flags
+        self.piano = []                                           # dicts: beat, dur, midi, hand, flags
+        self.tempo = []                                           # (beat, bpm)
+        self.marks = {'voice': [], 'piano': []}                   # (beat, mark)
+        self.measures = {}                                        # number -> (start beat, length)
+        self.beats = 0.
+        self.say = {}
+        self.title = ''
+        self.transpose = defaultdict(int)
+
+    def dyn(self, group, beat):
+        """Dynamic level at a beat: step marks, with cresc/dim ramping to the next mark."""
+        level, ramp = DYN['mf'], None
+        marks = self.marks[group] or self.marks['voice'] or self.marks['piano']
+        for i, (b, m) in enumerate(marks):
+            if b > beat + 1e-9:
+                break
+            if m in DYN:
+                level, ramp = DYN[m], None
+            else:
+                nxt = next(((b2, m2) for b2, m2 in marks[i + 1:] if m2 in DYN), None)
+                target = DYN[nxt[1]] if nxt and nxt[0] - b <= 8.01 else level + (.14 if m == 'cresc' else -.16)
+                ramp = (b, level, (nxt[0] if nxt and nxt[0] - b <= 8.01 else b + 4.), target)
+        if ramp:
+            b0, l0, b1, l1 = ramp
+            return l0 + (l1 - l0) * min(1., max(0., (beat - b0) / max(b1 - b0, 1e-9)))
+        return level
+
+
+def _dur(code):
+    d = DUR[code[0]]
+    rest = code[1:]
+    if rest.startswith('3'):
+        d *= 2 / 3; rest = rest[1:]
+    return d * (2 - .5 ** len(rest))
+
+
+def parse(text, warn=print):
+    sc = Score()
+    key, meas_len, beat0, cur = 0, 4., 0., None
+    lines_in_measure = {}
+
+    def keysig(letter):
+        if key > 0 and letter in SHARPS[:key]:
+            return 1
+        if key < 0 and letter in FLATS[:-key]:
+            return -1
+        return 0
+
+    def close():
+        nonlocal beat0, cur
+        if cur is None:
+            return
+        sc.measures[cur] = (beat0, meas_len)
+        for name, toks in lines_in_measure.items():
+            _line(sc, cur, name, toks, beat0, meas_len, keysig, warn)
+        beat0 += meas_len
+        lines_in_measure.clear()
+        cur = None
+
+    for ln, raw in enumerate(text.splitlines(), 1):
+        line = raw.split('//')[0].strip()          # // starts a comment
+        if not line:
+            continue
+        if line.startswith('=='):
+            close()
+            cur = int(line.strip('= ').split()[0])
+            continue
+        head, _, rest = line.partition(':')
+        head, rest = head.strip(), rest.strip()
+        if head == 'title':
+            sc.title = rest
+        elif head == 'key':
+            close()
+            key = int(rest)
+        elif head == 'time':
+            close()
+            a, b = rest.split('/')
+            meas_len = int(a) * 4. / int(b)
+        elif head == 'tempo':
+            close()
+            sc.tempo.append((beat0, float(rest)))
+        elif head == 'transpose':
+            name, semis = rest.split()
+            sc.transpose[name] = int(semis)
+        elif head == 'say':
+            w, _, pron = rest.partition('=')
+            sc.say[lyrics.clean(w.strip())] = lyrics.parse_override(pron)
+        elif head in VOCAL or head in PIANO:
+            if cur is None:
+                raise ScoreError(f'line {ln}: notes before the first "== measure" line')
+            if head in lines_in_measure:
+                raise ScoreError(f'measure {cur}: two {head} lines')
+            lines_in_measure[head] = rest.split()
+        else:
+            raise ScoreError(f'line {ln}: do not understand "{head}:"')
+    close()
+    sc.beats = beat0
+    if not sc.tempo:
+        sc.tempo = [(0., 100.)]
+    _finish(sc, warn)
+    return sc
+
+
+def _line(sc, mnum, name, toks, beat0, meas_len, keysig, warn):
+    vocal = name in VOCAL
+    shift = sc.transpose[name] + (sc.transpose['TEN'] if name in ('T1', 'T2') else 0) + \
+        (sc.transpose['LOW'] if name in ('BR', 'BS') else 0)
+    acc, t = {}, 0.
+    for tok in toks:
+        if tok.startswith('!'):
+            m = {'<': 'cresc', '>': 'dim'}.get(tok[1:], tok[1:])
+            if m not in DYN and m not in ('cresc', 'dim'):
+                raise ScoreError(f'measure {mnum} {name}: unknown dynamic "{tok}"')
+            sc.marks['voice' if vocal else 'piano'].append((beat0 + t, m))
+            continue
+        mt = TOKEN.match(tok)
+        if not mt:
+            raise ScoreError(f'measure {mnum} {name}: cannot read "{tok}"')
+        d = _dur(mt['d'])
+        flags = set(re.findall(r"~|\^|>|'|%gl", mt['f']))
+        if mt['p'] != 'r':
+            midis = []
+            for p in mt['p'].split('+'):
+                letter, rest = p[0], p[1:]
+                if rest[0] in '#bn':
+                    acc[(letter, rest[1:])] = {'#': 1, 'b': -1, 'n': 0}[rest[0]]
+                    rest = rest[1:]
+                alter = acc.get((letter, rest), keysig(letter))
+                midis.append(12 * (int(rest) + 1) + STEP[letter] + alter + shift)
+            midis = sorted(set(midis), reverse=True)
+            if vocal:
+                parts = VOCAL[name]
+                if len(parts) == 2:        # a shared staff: top notes to the upper part
+                    split = [tuple(midis[:-1]) if len(midis) > 1 else (midis[0],), (midis[-1],)]
+                else:
+                    split = [tuple(midis)]
+                for part, ms in zip(parts, split):
+                    sc.parts[part].append(dict(beat=beat0 + t, dur=d, midi=ms[0] if len(ms) == 1 else ms,
+                                               tie='~' in flags, lyric=mt['l'], flags=flags, m=mnum))
+            else:
+                for mi in midis:
+                    sc.piano.append(dict(beat=beat0 + t, dur=d, midi=mi, hand=name[:2], tie='~' in flags,
+                                         flags=flags, m=mnum))
+        t += d
+    if abs(t - meas_len) > 1e-6:
+        raise ScoreError(f'measure {mnum} {name}: adds up to {t:g} beats, not {meas_len:g}')
+
+
+def _finish(sc, warn):
+    # --- ties
+    for part, notes in sc.parts.items():
+        notes.sort(key=lambda n: n['beat'])
+        out = []
+        for n in notes:
+            p = out[-1] if out else None
+            if p and p['tie'] and abs(p['beat'] + p['dur'] - n['beat']) < 1e-6 and p['midi'] == n['midi']:
+                p['dur'] += n['dur']; p['tie'] = n['tie']; p['flags'] |= n['flags'] - {'~'}
+                if n['lyric'] not in (None, '_'):
+                    warn(f'  ! measure {n["m"]} {part}: a syllable on a tied note was ignored')
+            else:
+                if p and p['tie'] and abs(p['beat'] + p['dur'] - n['beat']) < 1e-6 and n['lyric'] is None:
+                    n['lyric'] = '_'       # written as a tie but the pitch changes: treat as a slur
+                out.append(n)
+        sc.parts[part] = out
+    sc.piano.sort(key=lambda n: (n['beat'], n['midi']))
+    alive, out = {}, []
+    for n in sc.piano:
+        k = (n['hand'], n['midi'])
+        p = alive.get(k)
+        if p and p['tie'] and abs(p['beat'] + p['dur'] - n['beat']) < 1e-6:
+            p['dur'] += n['dur']; p['tie'] = n['tie']
+        else:
+            out.append(n); alive[k] = n
+    sc.piano = out
+
+    # --- lyrics: a voice without its own text sings what the others sing at the same moment
+    at = defaultdict(list)
+    for part, notes in sc.parts.items():
+        for n in notes:
+            if n['lyric'] is not None:
+                at[round(n['beat'] * 96)].append((part, n['lyric']))
+    buddy = {'T1': 'T2', 'T2': 'T1', 'BR': 'BS', 'BS': 'BR'}
+    for part, notes in sc.parts.items():
+        for n in notes:
+            if n['lyric'] is None:
+                c = at.get(round(n['beat'] * 96), [])
+                pick = next((l for p, l in c if p == buddy[part]), None) or (c[0][1] if c else None)
+                if pick is None:
+                    warn(f'  ! measure {n["m"]} {part}: no syllable for the note on beat '
+                         f'{n["beat"] - sc.measures[n["m"]][0] + 1:g}; holding the previous vowel')
+                    pick = '_'
+                n['lyric'] = pick
+
+    # --- words -> phonemes
+    for part, notes in sc.parts.items():
+        heads = [n for n in notes if n['lyric'] != '_']
+        words, cur = [], []
+        for n in heads:
+            s = lyrics.clean(n['lyric'])
+            cur.append((n, s.rstrip('-')))
+            if not s.endswith('-'):
+                words.append(cur); cur = []
+        if cur:
+            words.append(cur)
+        for i, w in enumerate(words):
+            word = ''.join(s for _, s in w)
+            nxt = ''.join(s for _, s in words[i + 1]) if i + 1 < len(words) else None
+            for (n, _), syl in zip(w, lyrics.pronounce(word, len(w), sc.say, nxt, warn)):
+                n['phon'] = syl
+        for n in notes:
+            if n['lyric'] == '_':
+                n['phon'] = '-'

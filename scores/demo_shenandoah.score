@@ -1,0 +1,33 @@
+// A short public-domain example: the opening of "Shenandoah" (traditional),
+// harmonised for TTBB for this repository.  Render it with:
+//     python -m choral.render scores/demo_shenandoah.score out/demo.wav
+title: Shenandoah (traditional) - format demo
+tempo: 66
+time: 4/4
+key: -1
+transpose: TEN -12
+say: shenandoah = SH EH2 N . AH0 N . D OW1
+
+== 1
+TEN: !mp r/h. c4/q=Oh
+LOW: r/h. c3/q
+== 2
+TEN: f4/e=Shen- f4/e=an- f4/q.=doah g4/e=I a4/e=long b4/e=to
+LOW: f3+a3/e f3+a3/e f3+a3/q. e3+b3/e f3+c4/e g3+d4/e
+RH: !p f4+a4+c5/h. e4+g4+b4/q
+LH: f2+f3/w
+== 3
+TEN: d5/q=hear c5/h=you !mf f5/q=A-
+LOW: b2+f3/q f3+a3/h f3+a3/q
+RH: f4+b4+d5/q f4+a4+c5/h.
+LH: b1+b2/q f2+f3/h.
+== 4
+TEN: e5/q.=way d5/e=you c5/e=rol- d5/e=ling c5/e=riv- a4/e=er
+LOW: a2+e3/q. b2+f3/e f3+a3/e b2+f3/e f3+a3/e f3+c4/e
+RH: e4+a4+c5/q. d4+f4+b4/e c4+f4+a4/h
+LH: a1+a2/q. b1+b2/e f2+f3/h
+== 5
+TEN: !dim a4+c5/w=Oh
+LOW: f2+c3/w
+RH: f4+a4+c5/w
+LH: f1+f2/w
