@@ -111,7 +111,7 @@ files). Renders go to `out/`.
 
 ## Honest status
 
-Five test pieces so far, for men's voices with piano, each with a real reference recording.
+Six test pieces so far, for men's voices, each with a real reference recording.
 
 **Reading the music.** The first piece was a phone scan, read by eye; it matched a real
 baritone's isolated track on all 335 notes. The second was a vector PDF, read entirely by
@@ -330,5 +330,47 @@ different words on a repeat; about one syllable in ten is still wrong or missing
 there are no practice tracks nothing checks the notes except that every measure adds up. The
 sign detector also reported two signs on piece 1 that are not there - harmless without a D.S.,
 but a reason to look at the `play:` line it writes.
+
+**The sixth piece** is unaccompanied: a trio of soloists over a four-part choir, in Latin, slow and
+soft, with chanted verses between the refrains. Its practice tracks are "one voice with the rest
+quietly", with no accompaniment to subtract; taking the right share of the balanced mix out of
+each (the share that leaves the quietest moments quietest) isolates four real voices. The scan
+reader, told nothing, recognized that there is no piano (words are printed under the lowest staff)
+and that the staves are a small group over the choir; on the first refrain 217 of the 221 notes
+of those four voices match the real singers.
+
+Only that refrain (80 seconds) is rendered so far. The whole form is not assembled automatically:
+the recognition engine could not read the first line of chant, the later verses are printed after
+the refrain with nothing but words to say where they go, and the choir's lyrics on this copy are
+partly covered by pencil marks.
+
+**Voice realism, with nine real singers to compare against.** The four new voices brought the
+number of isolated real singers to nine, and three things that had looked like quirks of one
+piece turned out to be consistent:
+
+- *Tone.* The voice's colour curve had been fitted to the first piece's baritone. Against the
+  other eight singers it was wrong in the same direction every time: 6-10 dB too much below
+  400 Hz, too little around 1.6 kHz and 2.5-3 kHz, too much at 3.5 kHz. Refitted to the median of
+  all nine, the tone error falls from 7.4 dB to 6.4 dB (better for eight singers, worse for the
+  one it used to be fitted to), and the fundamental, which had been 6-13 dB stronger than the
+  second harmonic where real voices have it 2-5 dB weaker, now sits within 3-5 dB of them.
+- *Unsteadiness.* Real voices waver quickly by 4-5 cents on a held note; the model's wavered by
+  about 2 on every piece. A quick random pitch component now gives 3.4-3.7.
+- *Entries.* How fast a phrase begins depends on how loudly it is sung: the rise to full voice
+  takes about 36 ms at mezzo-forte, 125 ms at mezzo-piano and 200 ms at piano on real singers,
+  and took 35-55 ms at any dynamic in the model. It now follows the dynamic (177-186 ms on this
+  piece, against 195-226 ms).
+
+Two more are measured per piece from a recording, like the bell-like fade before: whether held
+notes swell (here +3.6 to +3.9 dB a second; the model now +3.2 to +4.0) and how far under the
+note a phrase begins (these singers hardly scoop: 14-21 cents; the model had 67-73).
+
+The recognizer was the check on all of it: single voices on the English pieces score 54 / 84 / 72
+/ 88% after the changes against 53 / 74 / 72 / 86% before, and the full choirs are unchanged
+within its noise.
+
+Still wrong: every simulated note sits at full voice for 96% of its length where real ones manage
+72% - real singers shape each note, and the model only shapes phrases. And the model is still
+cleaner than any real voice (harmonics 39-42 dB over the noise, against 30-34 dB).
 
 None of these numbers says the result would pass for a recording.

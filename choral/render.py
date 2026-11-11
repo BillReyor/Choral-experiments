@@ -24,10 +24,14 @@ PRESET = dict(                         # what differs from piece to piece (see c
     others=.2,                         # the other parts, in a "my part predominant" version
     under=.5,                          # the accompaniment, in that version (relative to the balanced mix)
     singers=12,                        # per section
-    note_decay=0.,                     # dB per second each note fades (0 = sustained singing, -12 = bell-like)
+    note_decay=0.,                     # dB per second each note fades (-12 = bell-like) or swells (+4)
+    attack=1.,                         # how slowly phrases begin, relative to the rule for their dynamic
+    scoop=1.,                          # how far under the note phrases begin, relative to the usual
 )
 LEAD_IN = 1.0   # seconds of room before the first beat
-NAMES = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass', 'SOLO': 'Solo'}
+NAMES = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass', 'SOLO': 'Solo',
+         'TR1': 'Trio tenor 1', 'TR2': 'Trio tenor 2', 'TR3': 'Trio baritone'}
+SINGLE = ('SOLO', 'TR1', 'TR2', 'TR3')    # parts sung by one person
 SOLO_GAIN = 3.2                        # one close-miked soloist carries like a section
 
 
@@ -110,14 +114,14 @@ def sing(sc, clock, singers=12, log=print, tune=None):
     voice.PER_SECTION = singers
     N = voice.CLOCK['n']
     tasks = [(sect, i, engine_notes(sc, sect), clock, tune) for sect in voice.SECT if sc.parts[sect]
-             for i in ((1,) if sect == 'SOLO' else range(singers))]            # singer 1 is a section leader: on a close mic
+             for i in ((1,) if sect in SINGLE else range(singers))]            # singer 1 is a section leader: on a close mic
     stems = {sect: np.zeros((3, N, 2), np.float32) for sect in voice.SECT if sc.parts[sect]}
     geo = np.random.default_rng(99)
     with Pool(min(10, cpu_count())) as pool:
         for sect, x, y, star, mono in pool.imap_unordered(voice.render_singer, tasks):
             dry, send, spot = stems[sect]
-            if sect == 'SOLO':
-                mono = mono * SOLO_GAIN
+            if sect in SINGLE:
+                mono = mono * (SOLO_GAIN if sect == 'SOLO' else .75 * SOLO_GAIN)
             for c, (mx, aim) in enumerate(((-.35, 125.), (.35, 55.))):       # two cardioids, angled apart
                 d = np.hypot(x - mx, y)
                 g = (.5 + .5 * np.cos(np.arctan2(y, x - mx) - np.deg2rad(aim))) / d

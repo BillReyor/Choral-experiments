@@ -1,6 +1,6 @@
 """Realism scorecard: how does one synthesized voice differ from a real singer on the same notes?
 
-    python tools/realism.py SCORE PART REAL_SOLO.wav --offset 1.07 --bpm 100 [--channel 1] [--singer 4]
+    python tools/realism.py SCORE PART REAL_SOLO.wav --offset 1.07 --bpm 100 [--channel 1] [--timing MAP.json]
 
 Renders the same part with one simulated singer and measures both recordings the same way:
 how pitch moves between notes, how it starts, how steady it is, how each note is shaped in
@@ -19,7 +19,7 @@ SR = 22050
 HOP = 256
 
 
-def measure(x, notes, t0, spb):
+def measure(x, notes, t0, spb, clock=None):
     """notes: dicts with beat, dur, midi, phon.  Returns {metric: value}."""
     t, m = yin(x, SR)
     env_n = 256
@@ -36,7 +36,7 @@ def measure(x, notes, t0, spb):
             __import__('scipy.signal', fromlist=['butter']).butter(4, 4000, 'high', fs=SR, output='sos'), x), env_n)[::64]
     hfdb = 10 * np.log10((hf ** 2).mean(1) + 1e-10)
 
-    T = lambda b: t0 + b * spb
+    T = (lambda b: float(np.interp(b, clock[0], clock[1]))) if clock else (lambda b: t0 + b * spb)
     M = lambda nt: nt['midi'][0] if isinstance(nt['midi'], tuple) else nt['midi']
     out = {}
     trans, over, lateness, scoop, scoop_t, wob, wob_fast, tune = [], [], [], [], [], [], [], []
@@ -173,10 +173,15 @@ def main():
     ap.add_argument('score'); ap.add_argument('part'); ap.add_argument('wav')
     ap.add_argument('--offset', type=float, default=0.); ap.add_argument('--bpm', type=float)
     ap.add_argument('--channel', type=int); ap.add_argument('--singers', default='4,2,9')
+    ap.add_argument('--timing', help='a tempo map (JSON with beats and secs, from choral.timing) for a recording that does not keep one tempo')
     a = ap.parse_args()
     sc = score.load(a.score)
     notes = sc.parts[a.part]
-    real = measure(load(a.wav, a.channel), notes, a.offset, 60 / (a.bpm or sc.tempo[0][1]))
+    clock = None
+    if a.timing:
+        import json
+        tm = json.load(open(a.timing)); clock = (tm['beats'], tm['secs'])
+    real = measure(load(a.wav, a.channel), notes, a.offset, 60 / (a.bpm or sc.tempo[0][1]), clock)
     mine = [measure(synth(sc, a.part, int(i)), notes, R.LEAD_IN, 60 / sc.tempo[0][1]) for i in a.singers.split(',')]
     print(f'{"":42s}{"real":>9s}{"model":>9s}   (model = median of singers {a.singers})')
     for k in real:

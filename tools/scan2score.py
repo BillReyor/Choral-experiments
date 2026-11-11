@@ -393,6 +393,21 @@ def ocr_words(exe, img, y0, y1, work, tag, zoom=3):
     return out
 
 
+def ocr_multi(exe, img, y0, y1, work, tag, zooms):
+    """Text recognition is moody about size: the same line can come back whole at one enlargement and empty at
+    the next.  So read it at several and keep everything seen, the later (usually larger) reading winning
+    where two overlap."""
+    kept = []
+    for z in zooms:
+        for w in ocr_words(exe, img, y0, y1, work, tag, zoom=z):
+            clash = [k for k in kept if abs(k[1] - w[1]) < 14 and min(k[3], w[3]) - max(k[2], w[2]) > .3 * min(k[3] - k[2], w[3] - w[2])]
+            if not clash:
+                kept.append(w)
+            elif len(clash) == 1 and len(re.sub(r"[^A-Za-z]", '', w[4])) >= len(re.sub(r"[^A-Za-z]", '', clash[0][4])):
+                kept[kept.index(clash[0])] = w
+    return kept
+
+
 CHORD = re.compile(r'^[A-G][b#]?(m|maj|min|dim|aug|sus|add|M)?[0-9]*(sus[0-9]*|add[0-9]*)?(/[A-G][b#]?)?$')     # Ebm7, Bbadd2, Cm7/Bb
 NOT_LYRICS = re.compile(r'^(unis\.?|div\.?|cresc\.?|dim\.?|rit\.?|poco|tempo|pp|mp|mf|ff|sim\.?|[0-9]+)$', re.I)
 
@@ -650,28 +665,53 @@ def place(slots, syls):
 
 
 # ------------------------------------------------------------------- putting it together ----
-def roles_for(crops):
-    """Which staff of each system is what.  The two lowest staves are the piano whenever the piece has systems
-    of three or more staves; above them: one staff = a soloist (if the piece has solo-plus-choir systems
-    nearby) or the whole choir, two = tenors and basses, three = solo + tenors + basses, four = one per part."""
+def roles_for(crops, piano=None):
+    """Which staff of each system is what.  With a piano, its two staves are the lowest.  Above them (or all of
+    them, unaccompanied): one staff = a soloist (if the piece has solo-plus-choir systems) or the whole choir;
+    two = tenors and basses; three = solo + tenors + basses; four = one staff per part - unless their clefs go
+    treble, bass, treble, bass, which is a small group (two tenors on one staff, a baritone) over the choir."""
     counts = [len(c['read']) for c in crops]
-    piano = max(counts, default=0) >= 3
+    if piano is None:
+        piano = max(counts, default=0) >= 3
     voc = [(n - 2 if piano and n >= 2 else n) for n in counts]
+    double = any(k == 4 and [st['clef'] for st in c['read'][:4]] == ['G', 'F', 'G', 'F'] for k, c in zip(voc, crops))
     for i, c in enumerate(crops):
         k = voc[i]
         if k == 1:
             near = next((v for v in voc[i + 1:] if v >= 2), None) or next((v for v in reversed(voc[:i]) if v >= 2), None)
-            c['roles'] = ['SOLO' if near == 3 else 'ALL']
+            c['roles'] = ['SOLO' if near == 3 or double else 'ALL']
+        elif k == 4 and double:
+            c['roles'] = ['TRIO', 'TR3', 'TEN', 'LOW']
         else:
             c['roles'] = {0: [], 2: ['TEN', 'LOW'], 3: ['SOLO', 'TEN', 'LOW'], 4: ['T1', 'T2', 'BR', 'BS']}.get(k, ['TEN', 'LOW'] + ['?'] * (k - 2))
         c['roles'] += ['RH', 'LH'] if piano and counts[i] >= 2 else []
+
+
+def has_piano(crops, pages, exe, work):
+    """Are the two lowest staves a piano?  Not if words are printed under the lowest one."""
+    big = [c for c in crops if len(c['read']) >= 3][:4]
+    if not big or not exe:
+        return None
+    sung = 0
+    for c in big:
+        img = np.asarray(Image.open(pages[c['page'] - 1]).convert('L'))
+        top, bot = c['staves'][-1]
+        unit = (bot - top) / 4
+        words = ocr_words(exe, img, bot + .6 * unit, min(c['bot'], bot + 7 * unit), work, 'piano')
+        mid = ocr_words(exe, img, c['staves'][-2][1] + .6 * unit, top - 1.0 * unit, work, 'piano')
+        lyric = lambda ws: sum(1 for w in ws if re.search('[aeiou]', w[4].lower()) and len(w[4]) > 1 and not NOT_LYRICS.match(w[4]) and not CHORD.match(w[4]))
+        sung += lyric(words) >= 3 or lyric(mid) >= 3
+    return sung < len(big) / 2
 
 
 def assemble(crops, pages, work, title, tempo, language, log, marked=False):
     exe = ocr_cmd(work)
     if not exe:
         log('  ! no text recognition here (it uses macOS): the notes will have no words')
-    roles_for(crops)
+    piano = has_piano(crops, pages, exe, work)
+    if piano is False:
+        log('  no piano part: words are printed under the lowest staff')
+    roles_for(crops, piano)
     out, num, cur_time, length = [], 0, None, Fraction(4)
     imgs = {}
     def read_texts(c, img, M):
@@ -683,7 +723,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             unit = (bot - top) / 4
             nxt = c['staves'][si + 1][0] if si + 1 < len(c['staves']) else c['bot']
             tag = f"{c['page']}_{c['system']}_{si}"
-            loose = ocr_words(exe, img, bot + .6 * unit, min(nxt - 1.2 * unit, bot + 9 * unit), work, tag)
+            loose = ocr_multi(exe, img, bot + .6 * unit, min(nxt - 1.2 * unit, bot + 9 * unit), work, tag, (2, 3, 6))
             loose = [w for w in loose if re.search('[A-Za-z]', w[4]) and '(' not in w[4] and not NOT_LYRICS.match(w[4])]
             ys = []
             for w in sorted(loose, key=lambda w: w[1]):
@@ -692,7 +732,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             words = []
             for yc in ys:                # each line of text read again by itself, close up: that brings out the
                 half = min([1.3 * unit] + [.5 * abs(yc - y) for y in ys if y != yc])      # small syllables
-                tight = [w for w in ocr_words(exe, img, yc - half, yc + half, work, tag, zoom=4) if re.search('[aeiouyAEIOUY]', w[4])]
+                tight = [w for w in ocr_multi(exe, img, yc - half, yc + half, work, tag, (3, 4, 6)) if re.search('[aeiouyAEIOUY]', w[4]) or w[4] in '-–—']
                 row = [w for w in loose if abs(w[1] - yc) < 1.2 * unit]
                 words += [w[:1] + (yc,) + w[2:] for w in tight]
                 words += [w for w in row if not any(w[2] < t[3] and t[2] < w[3] for t in tight)]   # what only the first look saw
@@ -910,15 +950,15 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                                     got.pop(id(starts[0]), None); starts[0]['tied_from'] = True
                             syl[v] = got
                 dyn = ('!' + st['measures'][j]['dyn'] + ' ') if st['measures'][j].get('dyn') in ('pp', 'p', 'mp', 'mf', 'f', 'ff') else ''
-                shift = 1 if (role in ('TEN', 'T1', 'T2') or role == 'ALL') and st['clef'] == 'F' else 0
+                shift = 1 if (role in ('TEN', 'T1', 'T2', 'TRIO') or role == 'ALL') and st['clef'] == 'F' else 0
                 tu, tl = tokens(up, syl[0], shift if role != 'ALL' else 1 if st['clef'] == 'F' else 0), tokens(lo, syl[1], 0 if role == 'ALL' else shift)
                 same = [x.split('=')[0] for x in tokens(up)] == [x.split('=')[0] for x in tokens(lo)]
                 if role == 'SOLO':
                     out.append('SOLO: ' + dyn + ' '.join(tu)); where = (len(out) - 1, len(out) - 1)
                 elif role == 'ALL':
                     out.append('TEN: ' + dyn + ' '.join(tu)); out.append('LOW: ' + ' '.join(tl)); where = (len(out) - 2, len(out) - 1)
-                elif role in ('TEN', 'LOW'):
-                    a_, b_ = ('T1', 'T2') if role == 'TEN' else ('BR', 'BS')
+                elif role in ('TEN', 'LOW', 'TRIO'):
+                    a_, b_ = {'TEN': ('T1', 'T2'), 'LOW': ('BR', 'BS'), 'TRIO': ('TR1', 'TR2')}[role]
                     out += [f'{role}: ' + dyn + ' '.join(tu)] if same else [f'{a_}: ' + dyn + ' '.join(tu), f'{b_}: ' + ' '.join(tl)]
                     where = (len(out) - 1, len(out) - 1) if same else (len(out) - 2, len(out) - 1)
                 else:
@@ -932,7 +972,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         tempo *= unit
         out = [re.sub(r'^tempo: (\S+)$', lambda m_: 'tempo: %g' % (float(m_.group(1)) * unit), l) for l in out]
     head = [f'title: {title}', f'tempo: {tempo:g}', f"time: {first_time}", 'key: 0',
-            'transpose: TEN -12'] + ([f'language: {language}'] if language else []) + ['']
+            'transpose: TEN -12', 'transpose: TRIO -12'] + ([f'language: {language}'] if language else []) + ['']
     first = next((i for i, l in enumerate(out) if l.startswith('time: ')), None)
     if first is not None:
         out.pop(first)

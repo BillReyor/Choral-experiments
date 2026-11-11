@@ -26,6 +26,7 @@ LH: f2+f3/w
 | `LOW:` | the shared baritone/bass staff, same rule |
 | `T1:` `T2:` `BR:` `BS:` | one part on its own staff, or one voice of a shared staff when the rhythms differ |
 | `SOLO:` | a soloist: one singer on a close microphone, as loud as a section |
+| `TRIO:` `TR1:` `TR2:` `TR3:` | a trio of soloists: `TRIO:` is the staff its two tenors share (`transpose: TRIO -12` when printed an octave up), `TR3:` its baritone |
 | `RH:` `LH:` | piano right and left hand; `RH2:` `LH2:` for a second voice on the same staff |
 
 Every line must add up to the length of the measure — the reader refuses the file otherwise,

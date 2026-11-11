@@ -66,7 +66,9 @@ TUNE.update(cons_max=.62,            # consonants may take this much of a note a
             vot_lead=1.,             # share of the puff after p/t/k that comes before the beat (1 = vowel on the beat)
             cl=1., quick_cl=1., quick_vot=1.,   # stop silences overall; and silences / puffs on quick notes
             f1_track=.95,            # the first resonance never drops below this multiple of the sung pitch
-            note_decay=0.)           # dB per second each note fades after its start (per piece: 0 sustained, -12 bell-like)
+            note_decay=0.,           # dB per second each note fades (-12: bell-like) or swells (+4) after its start; per piece
+            scoop=1.,                # how far below the note a phrase begins (per piece: a rehearsed trio hardly scoops)
+            flutter=7.)              # quick pitch unsteadiness, in cents: gives the 4-5 cents measured on nine real singers
 for _kv in filter(None, os.environ.get('CHORAL_FIT', '').split(',')):   # e.g. CHORAL_FIT=b1=1.8,vib=.6
     if '.' not in _kv.split('=')[0]:
         FIT[_kv.split('=')[0]] = float(_kv.split('=')[1])
@@ -254,7 +256,9 @@ def tract(f, hi, P, F, damp, nas, nz, lp):
 # ============================================================ singers =====
 SECT = {'T1': dict(x=-3.3, fs=1.04, rd=.66, comfy=67.), 'T2': dict(x=-1.1, fs=1.02, rd=.72, comfy=65.),
         'BR': dict(x=1.1, fs=.99, rd=.78, comfy=62.), 'BS': dict(x=3.3, fs=.95, rd=.88, comfy=57.),
-        'SOLO': dict(x=0., fs=1., rd=.74, comfy=62.)}        # a soloist stands in front, on a microphone of their own
+        'SOLO': dict(x=0., fs=1., rd=.74, comfy=62.),        # a soloist stands in front, on a microphone of their own
+        'TR1': dict(x=-1.4, fs=1.04, rd=.66, comfy=67.), 'TR2': dict(x=0., fs=1.02, rd=.72, comfy=65.),   # a trio of soloists
+        'TR3': dict(x=1.4, fs=.99, rd=.78, comfy=62.)}
 PER_SECTION = 12
 
 
@@ -359,8 +363,10 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             vi = next(j for j, tk in enumerate(toks) if tk in VOW or tk in DIPH)
             cur_v = toks[vi]
             vow[i] = cur_v
-            cur_coda = toks[vi + 1:]
+            cur_coda = [tk for tk in toks[vi + 1:] if tk in CONS]     # two syllables run together on one note: the first vowel is sung
             ncon[i][0] = vi
+            toks = [tk for k_, tk in enumerate(toks) if k_ == vi or tk in CONS]
+            vi = next(j for j, tk in enumerate(toks) if tk in VOW or tk in DIPH)
             for j, c in enumerate(toks[:vi]):
                 on[i] += cons_segs(c, P['cs'] * rng.uniform(.9, 1.1), j > 0 and toks[j - 1] == 's')
         if (i == n - 1) or ph[i + 1][3] != '-':
@@ -487,8 +493,13 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     micro = gf(tr['f0d'], 3, mode='nearest')
     for tk in kicks:
         micro = micro + 28 * np.exp(-np.clip(tc - tk, 0, None) / .035) * (tc >= tk)
-    if not on[0]:
-        av *= np.clip((tc - (ts[0] - .005)) / (TUNE['attack'] * rng.uniform(.035, .065)), 0, 1)
+    # How a phrase begins depends on how loudly it is sung: measured on real singers, the rise from 20 dB down
+    # to full voice takes about 36 ms at mezzo-forte, 125 ms at mezzo-piano, 200 ms at piano.
+    att = TUNE['attack'] * rng.uniform(.8, 1.25) * float(np.clip(.09 + 1.5 * (.74 - dyns[0]), .05, .5))     # length of the fade-in
+    voiced = np.flatnonzero(av > 0)
+    if len(voiced):
+        r_ = np.clip((tc - tc[voiced[0]] + .004) / att, 0, 1)
+        av *= r_ * r_ * (3 - 2 * r_)
     if not co[-1]:
         av *= np.clip((tl - tc) / (TUNE['release'] * rng.uniform(.07, .13)), 0, 1)
     for i in range(1, n):                              # vowel straight into vowel: a small glottal nudge
@@ -502,7 +513,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     mid = lfilter(b_, a_, step - step[0]) + step[0]
     leap = np.diff(mids, prepend=mids[0])
     e0 = rng.normal(-1.5 * np.clip(leap, -6, 6), (3 + 2.5 * np.minimum(np.abs(leap), 7)) * (1.5 - sk))
-    e0[0] = rng.normal(-42 - 20 * (1 - cf), 18 * (1.5 - sk)) if gap > .3 else rng.normal(-10, 10 * (1.5 - sk))
+    e0[0] = TUNE['scoop'] * (rng.normal(-42 - 20 * (1 - cf), 18 * (1.5 - sk)) if gap > .3 else rng.normal(-10, 10 * (1.5 - sk)))
     vstart = ts.copy()
     for i in range(1, n):
         if not head[i] and mids[i] == mids[i - 1]:
@@ -515,7 +526,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     vdepth = P['vd'] * FIT['vib'] * np.clip((tc - vstart[ni] - P['vdel']) / .35, 0, 1) * (1 + .25 * slow(rng, M, 50)) * (.6 + .5 * dy)
     vib = gf(vdepth, 8, mode='nearest') * np.sin(2 * np.pi * np.cumsum(vrate) / CR + rng.uniform(0, 6.28))
     cents = (P['bias'] - P['flat'] * np.maximum(0, mid - P['comfy']) + consensus(P['sect'], tc)
-             + hunt + vib + micro + 4 * slow(rng, M, 60) + 3.5 * slow(rng, M, 3))
+             + hunt + vib + micro + 4 * slow(rng, M, 60) + 3.5 * slow(rng, M, 3) + TUNE['flutter'] * slow(rng, M, 7))
     f0 = 440 * 2 ** ((mid - 69) / 12 + cents / 1200)
 
     # ---- effort: phrase arc, accents, followers sneaking in, running out of air

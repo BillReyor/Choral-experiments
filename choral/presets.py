@@ -111,20 +111,93 @@ def tune_for_words(stems, sc, clock, P, keep_hall=False, log=print):
 
 
 # ------------------------------------------------------------ note shape, from a recording ----
-def note_decay(sc, part, x, sr, T):
-    """How fast one real singer's held notes fade, in dB per second (median over notes of 0.6 s and more,
-    measured from 0.2 s after the start to 0.1 s before the end).  T maps beats to seconds in x."""
+def note_shape(sc, part, x, sr, T):
+    """How one real singer shapes notes -> (fade, attack, scoop):
+    fade: dB per second a held note falls (negative) or swells (positive), median over notes of 0.6 s and more;
+    attack: seconds for an entry after silence to rise from 20 dB below its level to 3 dB below;
+    scoop: cents below the note at which an entry after silence begins.
+    T maps beats to seconds in x.  None where there is too little to measure."""
+    from .pitch import yin
     hop, n = 64, 256
     fr = np.lib.stride_tricks.sliding_window_view(x, n)[::hop]
     et = (np.arange(len(fr)) * hop + n / 2) / sr
     edb = 10 * np.log10((fr ** 2).mean(1) + 1e-10)
-    slopes = []
-    for nt in sc.parts[part]:
+    pt, pm = yin(x, sr)
+    slopes, rises, scoops = [], [], []
+    notes = sc.parts[part]
+    for i, nt in enumerate(notes):
         a, z = T(nt['beat']), T(nt['beat'] + nt['dur'])
         e = edb[(et >= a + .2) & (et <= z - .1)]
         if z - a >= .6 and len(e) > 20 and e.mean() > edb.max() - 35:
             slopes.append(np.polyfit(np.arange(len(e)) * hop / sr, e, 1)[0])
-    return float(np.median(slopes)) if len(slopes) >= 8 else 0.
+        after_rest = i == 0 or T(notes[i - 1]['beat'] + notes[i - 1]['dur']) < a - .35
+        if after_rest and z - a >= .5:
+            w = (et >= a - .25) & (et <= a + .7)
+            seg, st = edb[w], et[w]
+            level = np.median(edb[(et >= a + .3) & (et <= a + .6)]) if ((et >= a + .3) & (et <= a + .6)).any() else None
+            if level is not None and level > edb.max() - 30:
+                lo = np.flatnonzero(seg > level - 20); hi = np.flatnonzero(seg > level - 3)
+                if len(lo) and len(hi) and hi[0] > lo[0]:
+                    rises.append(st[hi[0]] - st[lo[0]])
+            mi = nt['midi'][0] if isinstance(nt['midi'], tuple) else nt['midi']
+            v0 = pm[(pt >= a - .05) & (pt <= a + .12)]; v0 = v0[~np.isnan(v0)]
+            v1 = pm[(pt >= a + .3) & (pt <= z - .05)]; v1 = v1[~np.isnan(v1)]
+            if len(v0) >= 3 and len(v1) >= 5 and abs(np.median(v1) - mi) < .7:
+                scoops.append(100 * (v0[0] - np.median(v1)))
+    med = lambda v, k: float(np.median(v)) if len(v) >= k else None
+    return med(slopes, 8), med(rises, 4), med(scoops, 4)
+
+
+def note_decay(sc, part, x, sr, T):
+    return note_shape(sc, part, x, sr, T)[0] or 0.
+
+
+def shape_settings(sc, part, x, sr, clock, log=print):
+    """Preset entries for how notes are shaped, from one isolated real voice."""
+    T = lambda b: float(np.interp(b, clock[0], clock[1]))
+    fade, attack, scoop = note_shape(sc, part, x, sr, T)
+    out = {}
+    if fade is not None:        # left alone the engine's notes fall about 1-2 dB a second; make up the difference
+        out['note_decay'] = round(float(np.clip(fade + (1 if fade > 0 else 2), -14, 5)), 1)
+    if attack is not None:      # the engine's rule for this piece's first dynamic gives one entry speed; scale it to the measured one
+        dyn0 = sc.dyn('voice', sc.parts[part][0]['beat']) if sc.parts[part] else .74
+        rule = .39 * float(np.clip(.09 + 1.5 * (.74 - dyn0), .05, .5))
+        out['attack'] = round(float(np.clip(attack / rule, .4, 3.)), 2)
+    if scoop is not None:       # the engine begins a phrase about 45 cents under the note unless told otherwise
+        out['scoop'] = round(float(np.clip(-scoop / 45, .15, 1.6)), 2)
+    log('note shape in the recording: ' + ', '.join(f'{k} {v}' for k, v in (('fade (dB/s)', None if fade is None else round(fade, 1)),
+        ('entry (ms)', None if attack is None else round(1000 * attack)), ('scoop (cents)', None if scoop is None else round(scoop))) if v is not None)
+        + '  -> ' + ', '.join(f'{k} {v}' for k, v in out.items()))
+    return out
+
+
+# ------------------------------------------------------- unaccompanied: no accompaniment track ----
+def from_voice_tracks(sc, parts, balanced, tracks, log=print):
+    """Practice tracks of unaccompanied music: a balanced mix and, per part, "that voice with the rest quietly".
+    Taking the right share of the balanced mix out of a part's track leaves the voice alone (the share is
+    the one that leaves the quietest moments quietest).  -> (preset entries, {part: isolated voice})."""
+    iso, out = {}, {}
+    for part, P in zip(parts, tracks):
+        n = min(len(P), len(balanced))
+        blocks = lambda x: np.sqrt((x[:n // 4410 * 4410] ** 2).mean(1).reshape(-1, 4410).mean(1))
+        c = min((np.percentile(blocks(P[:n] - g * balanced[:n]), 20), g) for g in np.arange(0, .6, .01))[1]
+        iso[part] = resample_poly((P[:n] - c * balanced[:n]).mean(1), 1, 2)
+        log(f'{R.NAMES.get(part, part)}: the other voices are in its track at {c:.2f} of their balanced level')
+    first = parts[0]
+    tm = timingmod.measure(sc, first, iso[first], R.SR // 2, None, log)
+    on1 = np.array(sorted(n['beat'] for n in sc.parts[first]))
+    for p2 in parts[1:]:
+        t2 = timingmod.measure(sc, p2, iso[p2], R.SR // 2, None, log)
+        if t2['agree'] < .6 or not sc.parts[p2]:
+            continue
+        on2 = np.array(sorted(n['beat'] for n in sc.parts[p2]))
+        b = np.array(tm['beats']); s1, s2 = np.array(tm['secs']), np.interp(b, t2['beats'], t2['secs'])
+        d1 = np.abs(b[:, None] - on1[None, :]).min(1); d2 = np.abs(b[:, None] - on2[None, :]).min(1)
+        w = np.convolve(np.pad(np.clip((d1 - d2) / 8 + .5, 0, 1), 4, mode='edge'), np.ones(9) / 9, 'valid')
+        tm['secs'] = [round(float(v), 3) for v in np.maximum.accumulate(s1 * (1 - w) + s2 * w)]
+    out['timing'] = tm
+    out.update(shape_settings(sc, first, iso[first], R.SR // 2, R.clock_for(sc, tm, absolute=True), log))
+    return out, iso
 
 
 # ----------------------------------------------------------------------- from recordings ----
@@ -165,9 +238,6 @@ def from_recordings(sc, part, balanced, accompaniment, predominant=None, muted=N
         w = np.convolve(np.pad(w, 4, mode='edge'), np.ones(9) / 9, 'valid')
         tm['secs'] = [round(float(v), 3) for v in np.maximum.accumulate(s1 * (1 - w) + s2 * w)]
         clock = R.clock_for(sc, tm, absolute=True)
-    if 'part' in iso:      # the engine's own notes fade about 2 dB a second; make up the difference
-        d = note_decay(sc, part, resample_poly(iso['part'].mean(1), 1, 2), R.SR // 2, lambda b: float(np.interp(b, clock[0], clock[1])))
-        out['note_decay'] = round(float(np.clip(d + 2, -14, 0)), 1)
-        log(f"held notes fade at {d:.1f} dB a second in the recording -> note decay {out['note_decay']}")
-    log(f"accompaniment sits at {out['backing']:.2f} of the voices' level in the balanced mix")
+    if 'part' in iso:
+        out.update(shape_settings(sc, part, resample_poly(iso['part'].mean(1), 1, 2), R.SR // 2, clock, log))
     return out, iso

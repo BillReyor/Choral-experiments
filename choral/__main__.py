@@ -23,7 +23,8 @@ import argparse, json, os, re, subprocess, sys, time
 import numpy as np
 from . import render as R, score as scoremod, presets, reference, voice
 
-PARTS = {'tenor1': 'T1', 't1': 'T1', 'tenor2': 'T2', 't2': 'T2', 'baritone': 'BR', 'br': 'BR', 'bari': 'BR', 'bass': 'BS', 'bs': 'BS', 'solo': 'SOLO'}
+PARTS = {'tenor1': 'T1', 't1': 'T1', 'tenor2': 'T2', 't2': 'T2', 'baritone': 'BR', 'br': 'BR', 'bari': 'BR', 'bass': 'BS', 'bs': 'BS', 'solo': 'SOLO',
+         'trio1': 'TR1', 'trio2': 'TR2', 'trio3': 'TR3'}
 
 
 def read_music(path, log, language=None):
@@ -92,7 +93,12 @@ def main():
     L = lambda f: reference.load_audio(f) if f else None
     track = L(a.accompaniment)
     ref_voices = None
-    if a.balanced and (a.accompaniment or a.muted or a.predominant):
+    if a.balanced and a.predominant and not a.accompaniment:          # unaccompanied music: voices only
+        preds = [L(f) for f in a.predominant.split(',') if f]
+        est, iso = presets.from_voice_tracks(sc, [g[1][-1] for g in groups][:len(preds)] or ['BR'], L(a.balanced), preds, log)
+        P.update(est)
+        ref_voices = L(a.balanced)
+    elif a.balanced and (a.accompaniment or a.muted or a.predominant):
         if not a.accompaniment:
             raise SystemExit('to learn from practice tracks I also need the accompaniment-only track (--accompaniment)')
         preds = [L(f) for f in (a.predominant or '').split(',') if f]
@@ -109,7 +115,7 @@ def main():
     total = float(np.interp(sc.beats, *clock)) + 4.0
     if track is not None:
         total = max(total, len(track) / R.SR)
-    stems = R.sing(sc, (*clock, total), P['singers'], log, tune={'TUNE.note_decay': P.get('note_decay', 0.)})
+    stems = R.sing(sc, (*clock, total), P['singers'], log, tune={'TUNE.note_decay': P.get('note_decay', 0.), 'TUNE.attack': P.get('attack', 1.), 'TUNE.scoop': P.get('scoop', 1.)})
     if ref_voices is not None and ('hall_from' not in saved or a.fresh):
         got = presets.match_hall(stems, P, ref_voices, log)
         P.update(got, **({'hall_from': 'recording'} if got else {}))
