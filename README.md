@@ -481,4 +481,42 @@ run with practice tracks. It also says where the recordings do not fit the score
 written introduction is five seconds longer than the played one, and the baritone's last five
 measures were misread from the scan - the timing there carries on in the tempo it had.
 
+**The seventh piece** (a quick waltz for four-part men's choir and piano, 15 scanned pages, English
+with transliterated Hebrew) is laid out as none before it: every voice part on a staff of its own
+above the piano, six staves to a system, and the barlines do not run from one voice's staff to
+the next. Three things had to change in the scan reader:
+
+- *Systems read in parts.* Given such a system whole, the recognition engine read two in three of
+  them as a pile of piano systems. What is on the page is known beforehand - how many staves, and
+  which two are the piano's - so a reading that does not match is now done again in parts: the
+  voices' staves alone, the piano alone, and if need be each voice by itself. All 27 six-staff
+  systems then came back with the right staves and equal numbers of measures.
+- *One system, even across a fold.* Where a crease in the paper broke the line joining voices and
+  piano, the piano had been taken for a system of its own (and its measures counted twice).
+- *Barlines on a photocopy* are grey, thin and broken: found now staff by staff with a vote, at a
+  gentler threshold. A third of the systems still come out one barline wrong.
+
+The three earlier scans grade exactly as before against their hand transcriptions (pitch and
+length right 95.8 / 96.6 / 96.9%). On the new piece there is no hand transcription to grade
+against, but the real baritone is: sung on the timing found, 95% of his notes are on the pitch
+the reader wrote, and the first, steady fit of the timing had already put 100% of them there.
+
+Timing: one tempo throughout, and here the follower rightly did nothing (the map moved by 0 ms;
+voices within 60 ms of the accompaniment in 95 of 95 stretches). It first did harm, though, and
+that led to two more repairs. The piece's verses repeat, and a verse fits the next verse's place
+nearly as well as its own: a sudden move now has to be worth several stretches of clearly better
+fit, and a followed map that agrees with the recordings less than the first, steadier one did is
+thrown away. And the isolated baritone the follower listened to was poor - 56% of his notes on
+pitch where taking the other voices out level for level gives 94%: the "part muted" track had
+been scaled by how much of the full choir it explains, which overshoots.
+
+Words: the reader gets most of them, the transliterated ones with gaps. Judged against the text
+as read, the recognizer hears 38% of the words in the rendered choir and 33% in the real one, 34%
+and 29% for the baritone alone.
+
+Against this baritone the comparison says the model is too bright between 1.7 and 4 kHz (up to
+14 dB - one singer; the tone is fitted to the median of eleven) and that the first note of a
+phrase begins too softly. The entry speed measured from the recording made that worse, not
+better, so that correction is now kept small.
+
 None of these numbers says the result would pass for a recording.

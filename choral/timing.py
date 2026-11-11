@@ -217,10 +217,11 @@ def _singer_fits(sc, part, x, sr, beats, secs, starts, span, lags):
     return fit, count
 
 
-def _path(E, lags, K, jump=1.5):
+def _path(E, lags, K, jump=4.):
     """The best path through (how far the map is off, how fast that is changing) -> lag per stretch.  Keeping a tempo
     is free, changing it a little costs a little, and one sudden change of place and tempo - a held chord, a new
-    section in a tempo the map did not expect - costs a fixed price, so it has to be worth it."""
+    section in a tempo the map did not expect - costs a fixed price, so it has to be worth it: several stretches
+    of clearly better fit.  (Music repeats; a verse fits the next verse's place nearly as well as its own.)"""
     W, L = E.shape
     ks = np.arange(-K, K + 1); nk = len(ks)
     D = np.repeat(E[0][:, None], nk, 1) - .002 * np.abs(ks)[None, :] - .05 * np.abs(lags)[:, None]

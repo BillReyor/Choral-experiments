@@ -88,8 +88,12 @@ def isolate(sc, clock, part, balanced, accompaniment, predominant=None, muted=No
     if muted is not None:                                   # balanced minus "part muted" = the part
         am = _gain(muted, accompaniment, q)
         rest = muted[:n] - am * accompaniment[:n]
-        g = _gain(rest, voices, slice(0, n))
-        out['part'] = voices - rest / max(g, 1e-6) if g > .5 else voices - rest
+        # The two mixes may be at different levels; the accompaniment, which is in both, says by how much.  (Scaling
+        # the others by how much of the full choir they explain overshoots - the part itself is in the full choir
+        # too - and leaves the others in the result upside down: on one piece that put only 56% of the part's
+        # notes on pitch where taking them out level for level gives 94%.)
+        k = a / am if am > 1e-6 and .5 < a / am < 2 else 1.
+        out['part'] = voices - k * rest
     elif predominant is not None:                           # predominant = part + c * others + b * accompaniment
         b = _gain(predominant, accompaniment, q)
         pv = predominant[:n] - b * accompaniment[:n]

@@ -74,7 +74,8 @@ def staves_in(img, box):
 
 
 def page_staves(img, txt):
-    """homr's staff boxes for a page -> every staff as (top, bottom, x0, x1), top to bottom."""
+    """homr's staff boxes for a page -> every staff as (top, bottom, x0, x1, kind), top to bottom; kind is 'p' for
+    the two staves of a grand staff (a piano), 'v' for a staff on its own."""
     H, W = img.shape
     staves = []
     for line in open(txt):
@@ -89,7 +90,7 @@ def page_staves(img, txt):
         if len(found) != want:                       # fall back on the box itself
             unit = (y1 - y0) / (1 if want == 1 else 3.2)
             found = [(y0, y1)] if want == 1 else [(y0, y0 + unit), (y1 - unit, y1)]
-        staves += [(a, b, x0, x1) for a, b in found]
+        staves += [(a, b, x0, x1, 'p' if label == 1 else 'v') for a, b in found]
     return sorted(staves)
 
 
@@ -122,10 +123,20 @@ def cut_systems(pages, work, log):
             continue                                  # a page with no music (cover, notes)
         img = np.asarray(Image.open(p).convert('L'))
         H, W = img.shape
-        groups = group_systems(img, page_staves(img, txt))
+        groups = []
+        for g in group_systems(img, page_staves(img, txt)):
+            # The voices' staves and the piano under them are one system even where the line that joins them at
+            # the left is broken (a fold in the paper): the piano sits about as far below the last voice as the
+            # voices sit from each other, where the next system would be much further off.
+            if groups and all(s[4] == 'p' for s in g) and len(groups[-1]) >= 2 and all(s[4] == 'v' for s in groups[-1]):
+                inner = float(np.median([b[0] - a[1] for a, b in zip(groups[-1], groups[-1][1:])]))
+                if g[0][0] - groups[-1][-1][1] < 1.8 * inner:
+                    groups[-1] = groups[-1] + g
+                    continue
+            groups.append(g)
         bounds = [(g[0][0], g[-1][1]) for g in groups]
         for si, g in enumerate(groups, 1):
-            unit = np.mean([b - a for a, b, _, _ in g])
+            unit = np.mean([s[1] - s[0] for s in g])
             top = max(0 if si == 1 else (bounds[si - 2][1] + g[0][0]) / 2, g[0][0] - 3.5 * unit)
             bot = min(H if si == len(groups) else (g[-1][1] + bounds[si][0]) / 2, g[-1][1] + 3.5 * unit)
             name = os.path.join(work, 'p%02d_s%d' % (pi, si))
@@ -133,7 +144,7 @@ def cut_systems(pages, work, log):
                 only = np.full_like(img, 255)           # the reader then sees one system at its normal size
                 only[int(top):int(bot)] = img[int(top):int(bot)]
                 Image.fromarray(only).save(name + '.png')
-            crops.append(dict(name=name, page=pi, system=si, staves=[(a, b) for a, b, _, _ in g], top=int(top), bot=int(bot),
+            crops.append(dict(name=name, page=pi, system=si, staves=[(s[0], s[1]) for s in g], kinds=[s[4] for s in g], top=int(top), bot=int(bot),
                               x0=min(s[2] for s in g), x1=max(s[3] for s in g)))
     return crops
 
@@ -354,10 +365,65 @@ def read_systems(crops, log):
     if need:
         log(f'reading {len(need)} system(s)...')
         run_homr(need)
+    sound = lambda read, n: len(read) == n and len({len(st['measures']) for st in read}) == 1
     for c in crops:
         c['read'] = read_xml(c['name'] + '.musicxml') if os.path.exists(c['name'] + '.musicxml') else []
+    # A system of many staves (each voice on its own, then the piano) is sometimes read as a pile of piano systems.
+    # What is on the page is known - how many staves, and which two are the piano's - so a reading that does not
+    # match is done again in parts: the voices' staves alone, the piano alone; and if the voices still come back
+    # wrong, each voice's staff by itself.
+    def part_image(c, i, j, tag):
+        st = c['staves']
+        top = c['top'] if i == 0 else (st[i - 1][1] + st[i][0]) / 2
+        bot = c['bot'] if j == len(st) - 1 else (st[j][1] + st[j + 1][0]) / 2
+        name = f"{c['name']}_{tag}"
+        if not os.path.exists(name + '.png'):
+            img = np.asarray(Image.open(c['name'] + '.png').convert('L'))
+            only = np.full_like(img, 255)
+            only[int(top):int(bot)] = img[int(top):int(bot)]
+            Image.fromarray(only).save(name + '.png')
+        return name
+
+    def in_parts(c, groups):
+        names = [part_image(c, i, j, tag) for i, j, tag in groups]
+        todo = [n + '.png' for n in names if not os.path.exists(n + '.musicxml')]
+        return names, todo
+
+    bad = [c for c in crops if c['read'] and len(c['staves']) >= 3 and not sound(c['read'], len(c['staves']))]
+    plans = {}
+    for c in bad:
+        k = c.get('kinds') or ['v'] * len(c['staves'])
+        nv = sum(1 for x in k if x == 'v')
+        groups = ([(0, nv - 1, 'voices')] if nv else []) + ([(nv, len(k) - 1, 'piano')] if nv < len(k) else [])
+        plans[c['name']] = (groups, *in_parts(c, groups))
+    todo = [t for g, names, td in plans.values() for t in td]
+    if todo:
+        log(f'reading {len(bad)} system(s) again in parts ({len(todo)} images)...')
+        run_homr(todo)
+    again = {}
+    for c in bad:
+        groups, names, _ = plans[c['name']]
+        reads = [read_xml(n + '.musicxml') if os.path.exists(n + '.musicxml') else [] for n in names]
+        if groups and groups[0][2] == 'voices' and not sound(reads[0], groups[0][1] + 1) and groups[0][1] >= 1:
+            single = [(i, i, f'v{i + 1}') for i in range(groups[0][1] + 1)]
+            again[c['name']] = (single, groups[1:], *in_parts(c, single))
+        else:
+            c['read'] = [st for r in reads for st in r]
+    todo = [t for v in again.values() for t in v[3]]
+    if todo:
+        log(f'reading {len(again)} system(s) staff by staff ({len(todo)} images)...')
+        run_homr(todo)
+    for c in bad:
+        if c['name'] in again:
+            single, rest, names, _ = again[c['name']]
+            reads = [(read_xml(n + '.musicxml') if os.path.exists(n + '.musicxml') else [])[:1] for n in names]
+            reads += [read_xml(part_image(c, i, j, tag) + '.musicxml') if os.path.exists(part_image(c, i, j, tag) + '.musicxml') else [] for i, j, tag in rest]
+            c['read'] = [st for r in reads for st in r]
+    for c in crops:
         if len(c['read']) != len(c['staves']):
             log(f"  ! page {c['page']} system {c['system']}: {len(c['staves'])} staves on the page but {len(c['read'])} were read")
+        elif c['read'] and len({len(st['measures']) for st in c['read']}) > 1:
+            log(f"  ! page {c['page']} system {c['system']}: the staves were read with different numbers of measures {[len(st['measures']) for st in c['read']]}")
     return crops
 
 
@@ -497,28 +563,73 @@ def _columns(img, top, bot, x0, x1, slope):
     return xs
 
 
-def barlines(img, staves, x0, x1, piano):
+def _tall(img, top, bot, x0, x1, unit, grand=False):
+    """Columns holding one dark run about a staff high (3.2 to 4.8 line spaces; any length from 3.2 up on a
+    piano's staff, where the barline runs on into the gap) somewhere within the staff's box and a little beyond it.
+    Unlike _columns this does not need the box to sit exactly on the staff's outer lines."""
+    lo, hi = max(0, int(top - .7 * unit)), min(img.shape[0], int(bot + .7 * unit))
+    dark = img[lo:hi, x0:x1] < 200                     # a photocopy's barlines are thin and grey, and broken here and there
+    dark = dark | np.roll(dark, 1, 1) | np.roll(dark, -1, 1)
+    dark[2:] = dark[2:] | (dark[1:-1] & True) | dark[:-2]         # a gap of a pixel or two does not end the line
+    cur = np.zeros(dark.shape[1], int); best = cur.copy()
+    for row in dark:
+        cur = (cur + 1) * row
+        best = np.maximum(best, cur)
+    ok = (best >= 3.2 * unit) & ((best <= 4.8 * unit) | grand)
+    xs, run = [], []
+    for c in list(np.flatnonzero(ok)) + [10 ** 9]:
+        if run and c - run[-1] > 3:
+            if len(run) <= 1.2 * unit:
+                xs.append(x0 + float(np.mean(run)))
+            run = []
+        run.append(c)
+    return xs
+
+
+def barlines(img, staves, x0, x1, piano, expect=None, grand=None):
     """The measure boundaries of one system, left and right edge included.  A barline is a thin vertical line;
     what tells it from a note stem is that it stands at the same place on every staff - and through the
-    piano's two staves it runs unbroken, gap included, which no stem does."""
+    piano's two staves it runs unbroken, gap included, which no stem does.  Two ways of looking are tried, and
+    with `expect` (the number of measures read) the one that agrees with it is believed."""
     x0, x1 = int(x0), int(x1)
     unit = float(np.mean([(b - a) / 4 for a, b in staves]))
     slope = _tilt(img, staves[0][0], unit, x0, x1)
+    ways = []
     if piano and len(staves) >= 2:
         found = _columns(img, staves[-2][0] + .3 * unit, staves[-1][1] - .3 * unit, x0, x1, slope)
-        xs = [x for x, w in found if w <= 1.2 * unit]
+        ways.append([x for x, w in found if w <= 1.2 * unit])
     else:
         per = [[x for x, w in _columns(img, a + .25 * unit, b - .25 * unit, x0, x1, slope) if w <= 1.2 * unit] for a, b in staves]
-        xs = [x for x in per[0] if all(any(abs(x - y) < .7 * unit for y in other) for other in per[1:])] if len(per) > 1 else per[0]
-    inner = []
-    for x in xs:
-        if x - x0 < 2.5 * unit or x1 - x < 1.5 * unit:
+        ways.append([x for x in per[0] if all(any(abs(x - y) < .7 * unit for y in other) for other in per[1:])] if len(per) > 1 else per[0])
+    # Staff by staff, and a vote: a barline stands at the same place on most staves (a stem rarely fills a whole
+    # staff, and never on most of them at once).  This reads a score where every voice has its own staff and the
+    # barlines do not run from one to the next, and it does not mind a staff's box being a little off.
+    grand = grand or [piano and i >= len(staves) - 2 for i in range(len(staves))]
+    per = [_tall(img, a, b, x0, x1, unit, g) for (a, b), g in zip(staves, grand)]
+    need = len(per) if len(per) <= 2 else max(2, int(np.ceil(.6 * len(per))))
+    vote = []
+    for x in sorted(x for q in per for x in q):
+        if vote and x - vote[-1] < .7 * unit:
             continue
-        if inner and x - inner[-1] < 1.5 * unit:      # a double bar is one barline
-            inner[-1] = x
-        else:
-            inner.append(x)
-    return [float(x0)] + inner + [float(x1)]
+        if sum(any(abs(x - y) < .7 * unit for y in q) for q in per) >= need:
+            vote.append(float(np.mean([y for q in per for y in q if abs(x - y) < .7 * unit])))
+    ways.append(vote)
+
+    def tidy(xs):
+        inner = []
+        for x in xs:
+            if x - x0 < 2.5 * unit or x1 - x < 1.5 * unit:
+                continue
+            if inner and x - inner[-1] < 1.5 * unit:      # a double bar is one barline
+                inner[-1] = x
+            else:
+                inner.append(x)
+        return [float(x0)] + inner + [float(x1)]
+
+    ways = [tidy(w) for w in ways]
+    if expect is not None:
+        ways.sort(key=lambda w: abs(len(w) - 1 - expect))
+    return ways[0]
 
 
 def place_x(slots, syls, unit):
@@ -673,7 +784,9 @@ def roles_for(crops, piano=None):
     counts = [len(c['read']) for c in crops]
     if piano is None:
         piano = max(counts, default=0) >= 3
-    voc = [(n - 2 if piano and n >= 2 else n) for n in counts]
+    known = [c.get('kinds') if c.get('kinds') and len(c['kinds']) == len(c['read']) and 'p' in ''.join(c['kinds']) else None for c in crops]
+    grand = [(k is not None) if any(known) else (piano and n >= 2) for k, n in zip(known, counts)]    # does this system have the piano's staves?
+    voc = [(n - 2 if g else n) for g, n in zip(grand, counts)]
     double = any(k == 4 and [st['clef'] for st in c['read'][:4]] == ['G', 'F', 'G', 'F'] for k, c in zip(voc, crops))
     for i, c in enumerate(crops):
         k = voc[i]
@@ -684,11 +797,13 @@ def roles_for(crops, piano=None):
             c['roles'] = ['TRIO', 'TR3', 'TEN', 'LOW']
         else:
             c['roles'] = {0: [], 2: ['TEN', 'LOW'], 3: ['SOLO', 'TEN', 'LOW'], 4: ['T1', 'T2', 'BR', 'BS']}.get(k, ['TEN', 'LOW'] + ['?'] * (k - 2))
-        c['roles'] += ['RH', 'LH'] if piano and counts[i] >= 2 else []
+        c['roles'] += ['RH', 'LH'] if grand[i] else []
 
 
 def has_piano(crops, pages, exe, work):
     """Are the two lowest staves a piano?  Not if words are printed under the lowest one."""
+    if any('p' in ''.join(c.get('kinds') or []) for c in crops if len(c['staves']) >= 3):
+        return True                                  # a grand staff under other staves, as the staff finder saw it
     big = [c for c in crops if len(c['read']) >= 3][:4]
     if not big or not exe:
         return None
@@ -737,7 +852,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 words += [w[:1] + (yc,) + w[2:] for w in tight]
                 words += [w for w in row if not any(w[2] < t[3] and t[2] < w[3] for t in tight)]   # what only the first look saw
             if 'bars' not in c:
-                c['bars'] = barlines(img, c['staves'], c['x0'], c['x1'], 'RH' in c['roles'])
+                c['bars'] = barlines(img, c['staves'], c['x0'], c['x1'], 'RH' in c['roles'], expect=M)
                 if len(c['bars']) != M + 1:
                     log(f"  ? page {c['page']} system {c['system']}: found {len(c['bars']) - 1} measures on the page but {M} were read; words placed by even spacing")
                     c['bars'] = list(np.linspace(c['x0'], c['x1'], M + 1))

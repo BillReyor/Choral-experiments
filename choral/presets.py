@@ -131,7 +131,13 @@ def note_shape(sc, part, x, sr, T):
         if z - a >= .6 and len(e) > 20 and e.mean() > edb.max() - 35:
             slopes.append(np.polyfit(np.arange(len(e)) * hop / sr, e, 1)[0])
         after_rest = i == 0 or T(notes[i - 1]['beat'] + notes[i - 1]['dur']) < a - .35
-        if after_rest and z - a >= .5:
+        onset = []
+        for tk in (nt.get('phon') or 'A').split():
+            if tk[:1].isupper():
+                break
+            onset.append(tk)
+        hummed = any(tk not in ('p', 't', 'k', 'b', 'd', 'g', 'q') for tk in onset)     # a hummed or hissed consonant: the rise measured would be its length
+        if after_rest and z - a >= .5 and not hummed:
             w = (et >= a - .25) & (et <= a + .7)
             seg, st = edb[w], et[w]
             level = np.median(edb[(et >= a + .3) & (et <= a + .6)]) if ((et >= a + .3) & (et <= a + .6)).any() else None
@@ -197,7 +203,8 @@ def shape_settings(sc, part, x, sr, clock, log=print):
     if attack is not None:      # the engine's rule for this piece's first dynamic gives one entry speed; scale it to the measured one
         dyn0 = sc.dyn('voice', sc.parts[part][0]['beat']) if sc.parts[part] else .74
         rule = .39 * float(np.clip(.09 + 1.5 * (.74 - dyn0), .05, .5))
-        out['attack'] = round(float(np.clip(attack / rule, .4, 3.)), 2)
+        out['attack'] = round(float(np.clip(attack / rule, .6, 1.25)), 2)    # a small correction only: on one piece this measure said
+                                                                             # "slower" where the first notes' own shape said "quicker"
     if scoop is not None:       # the engine begins a phrase about 45 cents under the note unless told otherwise
         out['scoop'] = round(float(np.clip(-scoop / 45, .15, 1.6)), 2)
     log('note shape in the recording: ' + ', '.join(f'{k} {v}' for k, v in (('fade (dB/s)', None if fade is None else round(fade, 1)),
@@ -272,14 +279,28 @@ def from_recordings(sc, part, balanced, accompaniment, predominant=None, muted=N
         if 'part' in r2 and sc.parts[p2]:
             singers[p2] = (resample_poly(r2['part'].mean(1), 1, 2), R.SR // 2)
     beats = np.arange(0, sc.beats + 1.)
-    secs = timingmod.track(sc, beats, np.interp(beats, clock[0], clock[1]), acc, singers, log)
+    first = np.interp(beats, clock[0], clock[1])
+
+    def fit(secs):          # how well a map agrees with the recordings: singers on pitch, and voices with the accompaniment
+        on = [timingmod.on_pitch(sc, p2, x2, sr2, beats, secs) for p2, (x2, sr2) in singers.items()]
+        on = [v for v in on if v == v]
+        rows = timingmod.against_accompaniment(sc, {'beats': list(beats), 'secs': list(secs)}, acc[0], acc[1]) if sc.piano else []
+        clear = [r for r in rows if r[2]]
+        return (float(np.mean(on)) if on else None), (sum(abs(r[1]) <= .06 for r in clear) / len(clear) if clear else None), rows
+
+    secs = timingmod.track(sc, beats, first, acc, singers, log)
+    before, after = fit(first), fit(secs)
+    worse = lambda b, a, slack: b is not None and a is not None and a < b - slack
+    if worse(before[0], after[0], .02) or worse(before[1], after[1], .05):
+        log('  following the recordings fitted them worse than the first, steadier timing did: keeping that')
+        secs, after = first, before
     tm = dict(tm, beats=[float(b) for b in beats], secs=[round(float(v), 3) for v in secs], led='recordings')
     out['timing'] = tm
     clock = R.clock_for(sc, tm, absolute=True)
     for p2, (x2, sr2) in singers.items():
         log(f'  {R.NAMES.get(p2, p2)}: {100 * timingmod.on_pitch(sc, p2, x2, sr2, beats, secs):.0f}% of its notes are on pitch where the timing puts them')
     if sc.piano:
-        log('  ' + timingmod.sync_report(timingmod.against_accompaniment(sc, tm, acc[0], acc[1])))
+        log('  ' + timingmod.sync_report(after[2]))
     if 'part' in iso:
         out.update(shape_settings(sc, part, resample_poly(iso['part'].mean(1), 1, 2), R.SR // 2, clock, log))
     return out, iso
