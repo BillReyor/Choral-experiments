@@ -92,12 +92,13 @@ def main():
         P['singers'] = a.singers
     L = lambda f: reference.load_audio(f) if f else None
     track = L(a.accompaniment)
-    ref_voices = None
+    ref_voices = real_voice = None
     if a.balanced and a.predominant and not a.accompaniment:          # unaccompanied music: voices only
         preds = [L(f) for f in a.predominant.split(',') if f]
         est, iso = presets.from_voice_tracks(sc, [g[1][-1] for g in groups][:len(preds)] or ['BR'], L(a.balanced), preds, log)
         P.update(est)
         ref_voices = L(a.balanced)
+        real_voice = next(((p, x, R.SR // 2) for p, x in iso.items()), None)       # one real singer alone, to compare with
     elif a.balanced and (a.accompaniment or a.muted or a.predominant):
         if not a.accompaniment:
             raise SystemExit('to learn from practice tracks I also need the accompaniment-only track (--accompaniment)')
@@ -106,6 +107,8 @@ def main():
         est, iso = presets.from_recordings(sc, part or 'BR', L(a.balanced), track, preds[0] if preds else None, L(a.muted), log, more)
         P.update(est)
         ref_voices = iso['voices'] if iso['clean'] >= 15 else None
+        if iso['clean'] >= 15 and 'part' in iso:
+            real_voice = (part or 'BR', iso['part'].mean(1), R.SR)
     elif track is not None and 'timing' not in P and not sc.timing:
         from . import timing
         P['timing'] = timing.from_accompaniment(sc, track.mean(1), R.SR, log)
@@ -115,8 +118,7 @@ def main():
     total = float(np.interp(sc.beats, *clock)) + 4.0
     if track is not None:
         total = max(total, len(track) / R.SR)
-    stems = R.sing(sc, (*clock, total), P['singers'], log, tune={'TUNE.note_decay': P.get('note_decay', 0.), 'TUNE.attack': P.get('attack', 1.), 'TUNE.scoop': P.get('scoop', 1.),
-                                                                 **({'TUNE.swell': P['swell']} if 'swell' in P else {})})
+    stems = R.sing(sc, (*clock, total), P['singers'], log, tune=R.tune_of(P))
     if ref_voices is not None and ('hall_from' not in saved or a.fresh):
         got = presets.match_hall(stems, P, ref_voices, log)
         P.update(got, **({'hall_from': 'recording'} if got else {}))
@@ -138,6 +140,17 @@ def main():
         f = os.path.join(outdir, f'{safe} - {name}.wav')
         R.write_wav(f, x)
         log(f'  wrote {f}')
+    if real_voice is not None and P.get('timing'):      # a real singer was isolated: say where the simulated one differs
+        from . import compare
+        rp, rx, rsr = real_voice
+        c = compare.run(sc, rp, rx, rsr, P['timing'], settings=R.tune_of(P))
+        if 'tone' in c['diff']:
+            f = os.path.join(outdir, f'{safe} - compared with the real {R.NAMES.get(rp, rp).lower()}.txt')
+            open(f, 'w').write(compare.report(c, f'the real {R.NAMES.get(rp, rp).lower()}', top=12) + '\n')
+            log(f'compared with the real {R.NAMES.get(rp, rp).lower()} (spectra, note by note; model minus real):')
+            for _, text in compare.findings(c['diff'], c['real'], c['model'])[:5]:
+                log('   ' + text)
+            log(f'  wrote {f}')
     log('done in %.0fs' % (time.time() - t0))
 
 

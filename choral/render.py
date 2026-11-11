@@ -31,6 +31,15 @@ PRESET = dict(                         # what differs from piece to piece (see c
     scoop=1.,                          # how far under the note phrases begin, relative to the usual
 )
 LEAD_IN = 1.0   # seconds of room before the first beat
+
+
+def tune_of(P):
+    """A preset's entries that change how the voice itself sings, as settings for the singers."""
+    t = {'TUNE.note_decay': P.get('note_decay', 0.), 'TUNE.attack': P.get('attack', 1.), 'TUNE.scoop': P.get('scoop', 1.)}
+    if 'swell' in P:
+        t['TUNE.swell'] = P['swell']
+    return t
+
 NAMES = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass', 'SOLO': 'Solo',
          'TR1': 'Trio tenor 1', 'TR2': 'Trio tenor 2', 'TR3': 'Trio baritone'}
 SINGLE = ('SOLO', 'TR1', 'TR2', 'TR3')    # parts sung by one person
