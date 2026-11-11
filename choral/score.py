@@ -14,7 +14,7 @@ SHARPS, FLATS = 'fcgdaeb', 'beadgcf'
 DYN = {'pp': .42, 'p': .52, 'mp': .62, 'mf': .74, 'f': .88, 'ff': 1.0}
 VOCAL = {'TEN': ('T1', 'T2'), 'LOW': ('BR', 'BS'), 'T1': ('T1',), 'T2': ('T2',), 'BR': ('BR',), 'BS': ('BS',)}
 PIANO = ('RH', 'RH2', 'RH3', 'LH', 'LH2', 'LH3')
-TOKEN = re.compile(r"^(?P<p>r|[a-g][#bn]?-?\d(?:\+[a-g][#bn]?-?\d)*)/(?P<d>[whqest]3?\.*)"
+TOKEN = re.compile(r"^(?P<p>r|[a-g][#bn]?-?\d~?(?:\+[a-g][#bn]?-?\d~?)*)/(?P<d>[whqest]3?\.*)"
                    r"(?P<f>(?:~|\^|>|'|%gl)*)(?:=(?P<l>\S+))?$")
 
 
@@ -106,6 +106,9 @@ def parse(text, warn=print):
         elif head == 'tempo':
             close()
             sc.tempo.append((beat0, float(rest)))
+        elif head == 'dynamic':                       # one level for a piece that prints none
+            close()
+            sc.marks['voice'].append((beat0, rest)); sc.marks['piano'].append((beat0, rest))
         elif head == 'transpose':
             name, semis = rest.split()
             sc.transpose[name] = int(semis)
@@ -146,14 +149,18 @@ def _line(sc, mnum, name, toks, beat0, meas_len, keysig, warn):
         d = _dur(mt['d'])
         flags = set(re.findall(r"~|\^|>|'|%gl", mt['f']))
         if mt['p'] != 'r':
-            midis = []
+            midis, tied = [], set()
             for p in mt['p'].split('+'):
+                one_tie = p.endswith('~')            # a tie on just this note of the chord
+                p = p.rstrip('~')
                 letter, rest = p[0], p[1:]
                 if rest[0] in '#bn':
                     acc[(letter, rest[1:])] = {'#': 1, 'b': -1, 'n': 0}[rest[0]]
                     rest = rest[1:]
                 alter = acc.get((letter, rest), keysig(letter))
                 midis.append(12 * (int(rest) + 1) + STEP[letter] + alter + shift)
+                if one_tie or '~' in flags:
+                    tied.add(midis[-1])
             midis = sorted(set(midis), reverse=True)
             if vocal:
                 parts = VOCAL[name]
@@ -163,10 +170,10 @@ def _line(sc, mnum, name, toks, beat0, meas_len, keysig, warn):
                     split = [tuple(midis)]
                 for part, ms in zip(parts, split):
                     sc.parts[part].append(dict(beat=beat0 + t, dur=d, midi=ms[0] if len(ms) == 1 else ms,
-                                               tie='~' in flags, lyric=mt['l'], flags=flags, m=mnum))
+                                               tie=all(m_ in tied for m_ in ms), lyric=mt['l'], flags=flags, m=mnum))
             else:
                 for mi in midis:
-                    sc.piano.append(dict(beat=beat0 + t, dur=d, midi=mi, hand=name[:2], tie='~' in flags,
+                    sc.piano.append(dict(beat=beat0 + t, dur=d, midi=mi, hand=name[:2], tie=mi in tied,
                                          flags=flags, m=mnum))
         t += d
     if abs(t - meas_len) > 1e-6:

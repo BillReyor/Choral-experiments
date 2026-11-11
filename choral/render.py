@@ -5,17 +5,19 @@
 Singers stand on risers in front of a stereo microphone pair; two leaders per section are also
 on close mics, which is what carries the words.  The piano is beside them in the same hall.
 """
-import argparse, sys, time, wave
+import argparse, os, sys, time, wave
 import numpy as np
 from multiprocessing import Pool, cpu_count
 from scipy.signal import fftconvolve, butter, sosfilt
 from . import voice, piano, score as scoremod
 
 SR = voice.SR
-SPOT = .6       # level of the section leaders' close mics over the choir
-HALL = .35      # hall reverb on the choir
-PRES = .4       # presence lift (2-6 kHz) on the vocal bus
-PIANO = .30     # piano level relative to the choir at full voice
+_E = lambda k, d: float(os.environ.get(k, d))
+SPOT = _E('CHORAL_SPOT', 1.8)     # level of the section leaders' close mics over the choir
+HALL = _E('CHORAL_HALL', .14)     # hall reverb on the choir (more than this smears fast text)
+HALL_RT = _E('CHORAL_RT', 1.6)    # how long the hall rings (seconds)
+PRES = _E('CHORAL_PRES', .6)      # presence lift (2-6 kHz) on the vocal bus
+PIANO = _E('CHORAL_PIANO', .22)   # piano level relative to the choir at full voice
 LEAD_IN = 1.0   # seconds of room before the first beat
 
 
@@ -50,7 +52,8 @@ def engine_notes(sc, part):
     return out
 
 
-def make_ir(seed, rt_lo=1.9, rt_hi=1.2):
+def make_ir(seed, rt_lo=None, rt_hi=None):
+    rt_lo = rt_lo or HALL_RT; rt_hi = rt_hi or HALL_RT * .63
     r = np.random.default_rng(seed)
     n = int(2.6 * SR)
     t = np.arange(n) / SR

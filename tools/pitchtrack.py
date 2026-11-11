@@ -26,7 +26,7 @@ def yin(x, sr, fmin=65., fmax=520., win=1024, hop=256, thresh=.18):
             if g > thresh or e[i, 0] < 1e-5 * win:
                 continue
             # the shortest period that is a true local dip nearly as deep as the deepest one
-            loc = np.where((seg <= g + .06) & (seg <= np.roll(seg, 1)) & (seg <= np.roll(seg, -1)))[0]
+            loc = np.where((seg <= g + .12) & (seg <= np.roll(seg, 1)) & (seg <= np.roll(seg, -1)))[0]
             t = (loc[0] if len(loc) else int(seg.argmin())) + tmin
             y0, y1, y2 = row[t - 1], row[t], row[t + 1]
             t = t + .5 * (y0 - y2) / (y0 - 2 * y1 + y2 + 1e-12)

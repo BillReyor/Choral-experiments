@@ -30,7 +30,7 @@ FN = np.fft.rfftfreq(NN, 1 / SR)
 HANN = .5 - .5 * np.cos(2 * np.pi * np.arange(2 * NH) / (2 * NH))
 
 # Diction settings, tuned by rendering and running a speech recognizer over the result
-TIGHT = .5      # ensemble timing spread (1 = loose community choir, .5 = well drilled)
+TIGHT = float(os.environ.get('CHORAL_TIGHT', .5))   # ensemble timing spread (1 = loose community choir, .5 = well drilled)
 CDUR = float(os.environ.get('CHORAL_CDUR', 0.9))   # consonant length (a real singer keeps ~84% of each note on the vowel)
 SEED = int(os.environ.get('SEED', 0))   # a different set of singers for every seed
 
@@ -46,6 +46,16 @@ FIT = dict(b1=1.0,      # width of the first resonance (wider = less boxy, but b
            # overall colour of the voice + microphone as (Hz, dB) points, applied without touching the
            # vowel resonances themselves: fuller bottom, less boxy middle, more ring
            eq=((155, 3.9), (424, -5.7), (775, -5.0), (1414, 0.9), (2449, -1.1), (3464, 5.0), (4899, 3.1), (7746, 1.3)))
+# Finer constants of the model, also fitted (tools/fit.py) rather than guessed.
+TUNE = dict(b2=100., b3=130.,          # widths of the second and third resonances (Hz)
+            rd_effort=1.25,            # how much the voice relaxes as it gets quieter
+            rd_edge=1.1,               # how breathy the very start and end of a sound are
+            amp_exp=.9,                # loudness range between soft and loud
+            lift=.2,                   # dB louder per semitone higher
+            glide_g=.25, glide_h=.10,  # share of a sliding vowel spent moving / on its second half
+            attack=1., release=1.,     # speed of note starts from silence and of releases
+            voicebar=.2,               # hum during b, d, g while the mouth is shut
+            burst=.17, fric=.12, asp_h=.2)   # p/t/k clicks, s/sh/f hiss, h and after-click air
 for _kv in filter(None, os.environ.get('CHORAL_FIT', '').split(',')):   # e.g. CHORAL_FIT=b1=1.8,vib=.6
     FIT[_kv.split('=')[0]] = float(_kv.split('=')[1])
 if os.environ.get('CHORAL_NOEQ'):
@@ -110,11 +120,11 @@ def cons_segs(c, scale, after_s=False, final=False):
     p = CONS[c]
     if p.get('affr'):                                  # ch / j: a closure released into a hiss
         v = p['voiced']
-        return [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=.2 if v else 0., lp=1.5, damp=3., f0d=-45. * v),
+        return [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=TUNE['voicebar'] if v else 0., lp=1.5, damp=3., f0d=-45. * v),
                 dict(BLANK, d=p['bd'] * scale, F=p['F'], av=.3 if v else 0., damp=2., noise='sh', na=p['na'], f0d=-30. * v)]
     if p.get('stop'):
         v = p['voiced']
-        out = [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=.2 if v else 0., lp=1.5, damp=3., f0d=-45. * v),   # closure
+        out = [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=TUNE['voicebar'] if v else 0., lp=1.5, damp=3., f0d=-45. * v),   # closure
                dict(BLANK, d=p['bd'] * scale, F=p['F'], av=.45 if v else 0., lp=.3, damp=1.5,         # release
                     noise=p['noise'], na=p['na'], burst=True, vot=0. if (v or after_s) else p['vot'], f0d=-25. * v)]
         if final:   # end of a phrase: "loud-uh", "out-h"
@@ -130,8 +140,8 @@ def nshape(typ, f, P):
         return np.exp(-((f - P['scen']) / 2300) ** 2) * (f > 2500)
     if typ == 'sh':
         return np.exp(-((f - 3100) / 1200) ** 2) + .35 * np.exp(-((f - 5600) / 1600) ** 2)
-    if typ == 'f':
-        return (.3 + np.exp(-((f - 6000) / 4000) ** 2)) * (f > 800) * (f < 11000)
+    if typ == 'f':                                     # weak and flat, not a bright hiss (or it turns into "s")
+        return (f > 1200) * (f < 9500) * (1.2 - f / 12000)
     if typ == 't':
         return np.exp(-((f - 5200) / 2400) ** 2) * (f > 1800)
     if typ == 'k':
@@ -139,6 +149,36 @@ def nshape(typ, f, P):
     if typ == 'p':
         return np.exp(-((f - 1200) / 1500) ** 2)
     raise KeyError(typ)
+
+
+def apply_fit(P):
+    """Install fitted settings, e.g. {"FIT.oq": 1.7, "VOW.AA.0": 600, "CONS.s.na": .75, "EQ.3": -2}."""
+    global CDUR
+    eq = list(FIT['eq'])
+    for k, v in P.items():
+        a = k.split('.')
+        if a[0] == 'FIT':
+            FIT[a[1]] = v
+        elif a[0] == 'EQ':
+            eq[int(a[1])] = (eq[int(a[1])][0], v)
+        elif a[0] == 'TUNE':
+            TUNE[a[1]] = v
+        elif a[0] == 'VOW':
+            t = list(VOW[a[1]]); t[int(a[2])] = v; VOW[a[1]] = tuple(t)
+        elif a[0] == 'DIPH':
+            d = [list(x) for x in DIPH[a[1]]]; d[int(a[2])][int(a[3])] = v
+            DIPH[a[1]] = tuple(tuple(x) for x in d)
+        elif a[0] == 'CONS':
+            CONS[a[1]][a[2]] = v
+        elif k == 'CDUR':
+            CDUR = v
+    FIT['eq'] = tuple(eq)
+
+
+_fit_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice_fit.json')
+if os.path.exists(_fit_file) and not os.environ.get('CHORAL_NOFIT'):     # settings found by tools/fit.py
+    import json
+    apply_fit(json.load(open(_fit_file)))
 
 
 # ====================================================== larynx and tract ==
@@ -178,7 +218,7 @@ def tract(f, hi, P, F, damp, nas, nz, lp):
     """Vocal-tract transfer function for a batch of instants (rows) on frequency grid f."""
     f2 = f * f
     V = np.repeat(hi[None, :], len(F), 0)
-    for i, b0 in enumerate((70., 100., 130.)):
+    for i, b0 in enumerate((70., TUNE['b2'], TUNE['b3'])):
         b = (b0 * P['bws'] / 2 * (damp if i else FIT['b1'] * (1 + .25 * (damp - 1) + .3 * nas)))[:, None]
         k = b * b + F[:, i:i + 1] ** 2
         V *= k / ((k - f2) + 2j * b * f)
@@ -198,7 +238,7 @@ SECT = {'T1': dict(x=-3.3, fs=1.04, rd=.66, comfy=67.), 'T2': dict(x=-1.1, fs=1.
 PER_SECTION = 12
 
 
-def make_singer(sect, idx):
+def make_singer(sect, idx, neutral=False):
     k = list(SECT).index(sect)
     rng = np.random.default_rng(7000 + 100 * k + idx + 100000 * SEED)
     c = SECT[sect]
@@ -224,6 +264,11 @@ def make_singer(sect, idx):
         gain=rng.lognormal(0, .18) * (1.5 if star else 1))
     if star:                                           # section leaders: on the beat, crisp diction
         P.update(lag=rng.normal(0, .003), cs=1.2 * CDUR, skill=max(skill, .85), sib=max(P['sib'], 1.))
+    if neutral:                                        # the section's average voice, for fitting
+        P.update(fs=c['fs'], fdev=np.ones(3), bws=1., rd0=c['rd'], breath=1., bias=0., flat=3., comfy=c['comfy'],
+                 vd=6., conf=.8, skill=.8, lag=0., cs=CDUR, sib=1., scen=6500., fry=0., gain=1., star=False, neutral=True,
+                 hi=np.array([FIT['f4'], FIT['f5'], 4650, 5600, 6600, 7700, 8800, 9900, 11000.]) * c['fs'],
+                 hibw=np.array([220 / FIT['ring'], 260 / FIT['ring'], 400, 450, 500, 600, 700, 800, 900.]))
     P['hiP'], P['hiN'] = upper(FP, P), upper(FN, P)
     one = np.ones(1)
     X = glottal(FP, 200., 1.) * tract(FP, P['hiP'], P, np.array([VOW['AA']]) * P['fs'], one, 0 * one, 1000 * one, 0 * one)
@@ -235,7 +280,7 @@ def vowel_F(P, v):
     """Nobody shapes a vowel exactly like their neighbour."""
     if v not in P['vcache']:
         r = np.random.default_rng(P['vseed'] + 7919 * sum(map(ord, v)))
-        k = 1 + r.normal(0, [.02, .025, .015])
+        k = 1 + r.normal(0, [.02, .025, .015]) * (0 if P.get('neutral') else 1)
         P['vcache'][v] = tuple(np.array(x) * k for x in DIPH[v]) if v in DIPH else np.array(VOW[v]) * k
     return P['vcache'][v]
 
@@ -335,7 +380,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             A, B = tgt
             if lastflag[i]:      # hold the first vowel, glide, then land on the second
                 dur = vend - ts[i]
-                g = float(np.clip(.25 * dur, .06, .10)); h = float(np.clip(.10 * dur, .02, .04))
+                g = float(np.clip(TUNE['glide_g'] * dur, .06, .10)); h = float(np.clip(TUNE['glide_h'] * dur, .02, .04))
                 vseg(ts[i], vend - g - h, A); vseg(vend - g - h, vend - h, A, B); vseg(vend - h, vend, B)
             else:
                 vseg(ts[i], vend, A)
@@ -391,9 +436,9 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     for tk in kicks:
         micro = micro + 28 * np.exp(-np.clip(tc - tk, 0, None) / .035) * (tc >= tk)
     if not on[0]:
-        av *= np.clip((tc - (ts[0] - .005)) / rng.uniform(.035, .065), 0, 1)
+        av *= np.clip((tc - (ts[0] - .005)) / (TUNE['attack'] * rng.uniform(.035, .065)), 0, 1)
     if not co[-1]:
-        av *= np.clip((tl - tc) / rng.uniform(.07, .13), 0, 1)
+        av *= np.clip((tl - tc) / (TUNE['release'] * rng.uniform(.07, .13)), 0, 1)
     for i in range(1, n):                              # vowel straight into vowel: a small glottal nudge
         if head[i] and not on[i] and not co[i - 1]:
             av *= 1 - .55 * np.exp(-((tc - ts[i] + .02) / .018) ** 2)
@@ -426,9 +471,10 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     eff = dy * (1 - .10 * u * u * (1.3 - sk)) * (1 + .12 * np.exp(-np.clip(tc - ts[ni], 0, None) / .10))
     eff *= 1 - .1 * (1 - cf) * np.exp(-np.clip(tc - ts[0], 0, None) / .06)
     eff = np.clip(eff, .05, 1.15)
-    lift = 10 ** (np.clip(.2 * (mid - (P['comfy'] - 7)), -3, 3) / 20)        # singers get louder as they go up
-    amp = av * eff ** .9 * lift * (1 + .04 * slow(rng, M, 25))
-    rd = np.clip(P['rd0'] + FIT['rd'] + FIT['alive'] * .07 * slow(rng, M, 45) + 1.25 * (1 - eff) + 1.1 * (1 - np.clip(av / .3, 0, 1)), .45, 2.6)
+    lift = 10 ** (np.clip(TUNE['lift'] * (mid - (P['comfy'] - 7)), -3, 3) / 20)        # singers get louder as they go up
+    amp = av * eff ** TUNE['amp_exp'] * lift * (1 + .04 * slow(rng, M, 25))
+    rd = np.clip(P['rd0'] + FIT['rd'] + FIT['alive'] * .07 * slow(rng, M, 45) + TUNE['rd_effort'] * (1 - eff)
+                 + TUNE['rd_edge'] * (1 - np.clip(av / .3, 0, 1)), .45, 2.6)
 
     F = Ft * (P['fs'] * P['fdev']) * (1 + .002 * (mid - 60))[:, None]       # larynx rises with pitch
     for j, sd in enumerate((.022, .018, .012)):                              # nobody holds their mouth perfectly still
@@ -441,7 +487,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         uu = np.clip((tc - (first - igap - idur)) / idur, 0, 1)
         inh = np.sin(np.pi * uu ** 1.7) ** 1.2 * (uu < 1) * .025 * P['breath'] * dyns[0] * rng.uniform(.5, 1.3)
         damp = np.where(tc < first - igap, 2.2, damp)
-    asp = amp * P['breath'] * FIT['breath'] * (.03 + .06 * np.clip((rd - .6) / 1.5, 0, 1)) + ah * .2 * eff * P['breath'] ** .5 + inh
+    asp = amp * P['breath'] * FIT['breath'] * (.03 + .06 * np.clip((rd - .6) / 1.5, 0, 1)) + ah * TUNE['asp_h'] * eff * P['breath'] ** .5 + inh
 
     L = (M - 1) * HOP + PN + NN
     sig = np.zeros(L)
@@ -511,12 +557,12 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         x /= x.std() + 1e-9
         tt = np.arange(m) / SR
         if burst:
-            e = np.exp(-tt / (d * .6)) * np.minimum(1, tt / .001) * .17
+            e = np.exp(-tt / (d * .6)) * np.minimum(1, tt / .001) * TUNE['burst']
         else:
-            e = np.minimum(1, tt / .02) * np.minimum(1, (m / SR - tt) / .025) * .12 * P['sib']
+            e = np.minimum(1, tt / .02) * np.minimum(1, (m / SR - tt) / .025) * TUNE['fric'] * P['sib']
         i0 = int((t0 - tA) * SR)
         if i0 >= 0 and i0 + m <= L:
-            sig[i0:i0 + m] += x * e * na * float(at(eff, t0)) ** .9
+            sig[i0:i0 + m] += x * e * na * float(at(eff, t0)) ** TUNE['amp_exp']
 
     i0 = int(round(tA * SR))
     if i0 >= 0 and i0 + L <= len(out):

@@ -37,7 +37,7 @@ which catches most misread rhythms. A line that is absent is a bar of rest.
 - **Pitch**: letter and octave as printed (`c4` is middle C). Write accidentals only where the
   page prints them: `f#4`, `bb3`, `an4` (natural). Chords join with `+`: `c4+eb4+g4`. Rest: `r`.
 - **Duration**: `w h q e s t` (whole … thirty-second), dots as dots (`q.`), `e3` for a triplet eighth.
-- **Marks** after the duration: `~` tie, `>` accent, `'` staccato, `%gl` slide into the next note
+- **Marks** after the duration: `~` tie (or after one pitch of a chord, `c4~+e4/q`, to tie only that note), `>` accent, `'` staccato, `%gl` slide into the next note
   over the last beat.
 - **Syllable** after `=`: as printed, hyphen included (`mer-`, `ry`). `=_` continues the previous
   syllable on a new pitch (a slur). A voice with no syllables sings what the other voices sing at
