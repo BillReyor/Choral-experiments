@@ -45,7 +45,7 @@ FIT = dict(b1=1.0,      # width of the first resonance (wider = less boxy, but b
            vib=0.6,     # vibrato depth (choral blend: nearly straight)
            # overall colour of the voice + microphone as (Hz, dB) points, applied without touching the
            # vowel resonances themselves: fuller bottom, less boxy middle, more ring
-           eq=((155, 3.9), (424, -5.7), (775, -5.0), (1414, 0.9), (2449, -1.1), (3464, 5.0), (4899, 3.1), (7746, 1.3)))
+           eq=((100, 3.9), (160, 3.6), (250, -0.7), (350, -3.9), (500, -5.5), (700, -5.1), (950, -3.0), (1300, 0.1), (1700, 0.2), (2200, -0.7), (2800, 1.3), (3400, 4.7), (4000, 4.2), (4700, 3.3), (5600, 2.6), (7500, 1.4)))
 # Finer constants of the model, also fitted (tools/fit.py) rather than guessed.
 TUNE = dict(b2=100., b3=130.,          # widths of the second and third resonances (Hz)
             rd_effort=1.25,            # how much the voice relaxes as it gets quieter
@@ -136,8 +136,8 @@ def cons_segs(c, scale, after_s=False, final=False):
 
 
 def nshape(typ, f, P):
-    if typ == 's':
-        return np.exp(-((f - P['scen']) / 2300) ** 2) * (f > 2500)
+    if typ == 's':                                     # broad: a real "s" runs from about 4 kHz to past 10 kHz
+        return np.clip((f - 2500) / 2500, 0, 1) ** 1.5 * (.6 + .4 * np.exp(-((f - P['scen']) / 3000) ** 2))
     if typ == 'sh':
         return np.exp(-((f - 3100) / 1200) ** 2) + .35 * np.exp(-((f - 5600) / 1600) ** 2)
     if typ == 'f':                                     # weak and flat, not a bright hiss (or it turns into "s")

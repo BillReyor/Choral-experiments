@@ -15,6 +15,7 @@ no samples and no recordings — and in rendering written sheet music with it.
 | `tools/listen.py` | Uses a speech recognizer as ears: transcribes a render and reports how many of the score's words came through. |
 | `tools/check_part.py`, `tools/check_mix.py` | Check a transcription against a recording: pitch-track one isolated part, or test every written note against a recording of all voices. |
 | `tools/calibrate.py` | Fits the engine's tone to a recording of a real singer on the same notes. |
+| `tools/tone.py` | Tone, harmonic by harmonic: on every held vowel, compares the strength of each harmonic in a real solo recording and in the model. Only harmonic peaks count, so room reverb does not. |
 | `tools/realism.py` | Scorecard: renders one simulated singer on a part and measures it beside a real singer's isolated recording of the same part — pitch glides and scoops, attacks, how notes are held, harmonics versus noise, consonant strength. |
 | `experiments/` | The stand-alone experiments that led here (a vowel-only "Shenandoah", and an original pop number in three engine generations). |
 | `scores/demo_shenandoah.score` | A short public-domain example. |
@@ -67,6 +68,14 @@ Words a speech recognizer makes out (voices alone / with accompaniment):
 closer to the real singer on held-out passages, but the recognizer then understood about 10
 points fewer words: it had learned to imitate the recording's room with breath noise and blurred
 vowels. Those settings are not used.
+
+**Solo tone.** `tools/tone.py` compares held vowels harmonic by harmonic with the real baritone.
+Fitting on half the piece and testing on the other half brought the error from 7.3 dB to 6.1 dB:
+a 16-point colour curve (fuller fundamental, less 1-1.5 kHz, a filled-in 4 kHz region), a
+stronger fundamental from the voice source, and slightly broader resonances. The fit also wanted
+to move the vowels themselves toward the singer's more covered, central shapes; that took solo
+word recognition from 79% to 68%, so the vowels were left alone. "s" is now a broad hiss from
+4 kHz up, as measured, instead of a narrow band.
 
 **Piano.** Fitted with `tools/fit.py` to the second piece's accompaniment track (distance on
 held-out measures 8.6 dB -> 5.7 dB): sustain pedal, a longer aftersound, a warmer soundboard,

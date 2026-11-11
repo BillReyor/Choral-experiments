@@ -15,6 +15,7 @@ import numpy as np
 from multiprocessing import Pool
 from scipy.signal import resample_poly, fftconvolve
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from choral import score, voice, piano, render as R
 
 SR, NFFT, HOP, NMEL = 22050, 1024, 256, 48
@@ -114,6 +115,30 @@ def voice_audio(job, P):
     return reverb(y, P.get('REV.rt', .6), P.get('REV.wet', .25))[int(t0 * SR):int(t1 * SR)]
 
 
+# ------------------------------------------------------------------- tone --
+def tone_start():
+    """Only the settings that colour a held vowel: resonances, their widths, the voice source, the EQ."""
+    P = voice_start()
+    keep = lambda k: (k.startswith(('VOW.', 'EQ.')) or (k.startswith('DIPH.') and k.split('.')[2] == '0')
+                      or k in ('FIT.oq', 'FIT.rd', 'FIT.ring', 'FIT.f4', 'FIT.f5', 'FIT.b1', 'TUNE.b2', 'TUNE.b3', 'TUNE.rd_effort'))
+    return {k: v for k, v in P.items() if keep(k)}
+
+
+_TONE = {}
+
+
+def tone_error(job, P):
+    import tone
+    voice.apply_fit(P)
+    sc = score.parse(open(job['score']).read(), warn=lambda *a: None)
+    spb = 60 / job['bpm']
+    key = (job['wav'], job['m0'], job['m1'])
+    if key not in _TONE:
+        _TONE[key] = tone.envelopes(tone.load(job['wav'], job.get('channel')), sc, job['part'], job['offset'], spb, job['m0'], job['m1'])
+    mine = tone.envelopes(tone.synth(sc, job['part'], job['offset'], spb, job['m0'], job['m1']), sc, job['part'], job['offset'], spb, job['m0'], job['m1'])
+    return tone.error(tone.compare(_TONE[key], mine))
+
+
 # ------------------------------------------------------------------ piano --
 def piano_start():
     P = {f'P.{k}': v for k, v in piano.FIT.items() if not isinstance(v, tuple)}
@@ -145,6 +170,8 @@ _REF = {}
 def evaluate(args):
     mode, jobs, P = args
     tot = []
+    if mode == 'tone':
+        return float(np.mean([tone_error(job, P) for job in jobs]))
     for job in jobs:
         key = (job['wav'], job['m0'], job['m1'])
         if key not in _REF:
@@ -169,12 +196,12 @@ def candidates(k, v):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('mode', choices=['voice', 'piano']); ap.add_argument('jobs'); ap.add_argument('out')
+    ap.add_argument('mode', choices=['voice', 'tone', 'piano']); ap.add_argument('jobs'); ap.add_argument('out')
     ap.add_argument('--sweeps', type=int, default=2); ap.add_argument('--start')
     a = ap.parse_args()
     jobs = json.load(open(a.jobs))
     train = [j for j in jobs if not j.get('test')]; test = [j for j in jobs if j.get('test')]
-    P = voice_start() if a.mode == 'voice' else piano_start()
+    P = {'voice': voice_start, 'tone': tone_start, 'piano': piano_start}[a.mode]()
     start = dict(P)
     if a.start:
         P.update(json.load(open(a.start)))
