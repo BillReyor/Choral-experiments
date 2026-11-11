@@ -1,4 +1,4 @@
-# Choral-experiments
+# Palare-Piano
 
 Experiments in synthesizing a men's chorus (tenor 1, tenor 2, baritone, bass) entirely in code —
 no samples and no recordings — and in rendering written sheet music with it.
@@ -273,12 +273,12 @@ part of that is the misread words it was given to sing.
 been transcribed by hand and checked against recordings, so they could grade the reader. Voice
 parts only; "right" means the same note in the same order as the hand transcription.
 
-| scan | measures (hand / read) | pitches right | pitch and length right | words right (tenor 1 / baritone) |
-|---|---|---|---|---|
-| piece 1 (a phone scan) | 83 / 83 | 99.8% | 95.7% | 71% / 69% |
-| piece 3 | 99 / 99 | 98.5% | 96.5% | 88% / 70% |
-| piece 4 (Latin, 10/8 and 6/8 bars, triplets) | 75 / 75 | 98.7% | 96.5% | 66% / 71% |
-| piece 5 (the part read by hand) | - | 98.6% | 98.1% | 68% (soloist) |
+| scan | measures (hand / read) | pitches right | pitch and length right | syllables on the right note | words right (tenor 1 / baritone) |
+|---|---|---|---|---|---|
+| piece 1 (a phone scan) | 83 / 83 | 99.8% | 95.7% | 89% | 84% / 90% |
+| piece 3 | 99 / 99 | 98.5% | 96.6% | 91% | 96% / 88% |
+| piece 4 (Latin, 10/8 and 6/8 bars, triplets) | 75 / 75 | 98.4% | 96.5% | 92% | 81% / 87% |
+| piece 5 (the part read by hand) | - | 98.6% | 98.1% | - | 96% (soloist) |
 
 The printed tempo was found on every one (in piece 3 as half notes, which the reader converts).
 What the first run on these exposed, and what was done:
@@ -290,9 +290,20 @@ What the first run on these exposed, and what was done:
   because each system is read on its own. Where the words show it (the same pitch, first in the
   new system, no syllable of its own) the tie is restored. Applying the same idea inside a bar
   made things much worse - text recognition misses too many syllables to lean on - so it is not used.
-- Words: a staff with nothing printed under it now sings the words of the staff that has them;
-  hyphens are checked against a dictionary (English) or against the piece's own repeated words;
-  false hyphens after punctuation are dropped. That took the words from 32-86% to the figures above.
+- Words were the weak part: at first only 64-76% of syllables landed on the right note. What changed that:
+  - The recognition engine records where every note stands on the page. Syllables are now matched
+    to notes by position across the whole system, instead of being spread evenly inside each bar;
+    that took the wrongly placed syllables on piece 4 from 21% to 2%.
+  - A note left with no word is looked at again by itself, close up, where its word must be.
+  - Hyphens are settled by dividing each line into dictionary words, with what was seen on the page
+    as the tie-breaker (sung syllables such as "pum" count as words, or they get glued to their
+    neighbours). Without a dictionary - Latin - a word seen twice with its hyphens lends them.
+  - A note that still has no word takes the one another part sings at that moment; a staff with
+    nothing printed under it sings the words of the staff that has them.
+  - Words printed above the top staff belong to its upper voice where that voice moves alone.
+  - Chord symbols, "poco rit.", "a tempo" and their misreadings are kept out of the lyrics.
+
+  What is left: about one syllable in ten is still missing, misread or wrongly hyphenated.
 
 **Repeats, D.S. and codas** are now unrolled. The score format has a `play:` line giving the order
 the printed measures are performed in, and the scan reader writes it: repeat barlines come from the
@@ -308,12 +319,14 @@ repeat sign was being counted. And the engine's reading of time signatures is un
 gave 3/4, 5/4 and 15/8 where the page has 4/4 and 10/8), so each measure's length is now counted
 from its notes - the total most voices agree on - which reproduced the printed sequence exactly.
 
-From scan to audio in one command, the Latin piece now comes out with 40% of its words recognized
-by the multilingual recognizer, against 57% when rendered from the hand transcription and 62% for
-the real choir. The notes are not the difference; the misread words are.
+From scan to audio in one command, measured by the recognizer: the carol's simulated soloist is
+understood at 72% (the real soloist 85%, both judged against the text as read from the scan), and
+its choir at 48% (real 73%). The Latin piece from its scan stays at 40% of words, against 57% when
+rendered from the hand transcription and 62% for the real choir - better words on the page did not
+move that number, which says the rest of that gap is not in the words read.
 
 Not yet done for scans: first and second endings; D.C. and "al Fine" are written but untested;
-different words on a repeat; words are still wrong or missing roughly one time in four; and where
+different words on a repeat; about one syllable in ten is still wrong or missing; and where
 there are no practice tracks nothing checks the notes except that every measure adds up. The
 sign detector also reported two signs on piece 1 that are not there - harmless without a D.S.,
 but a reason to look at the `play:` line it writes.
