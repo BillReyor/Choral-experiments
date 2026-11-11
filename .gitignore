@@ -234,3 +234,4 @@ scores/private/
 out/
 .venv/
 models/
+.DS_Store
