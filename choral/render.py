@@ -27,7 +27,8 @@ PRESET = dict(                         # what differs from piece to piece (see c
     note_decay=0.,                     # dB per second each note fades (0 = sustained singing, -12 = bell-like)
 )
 LEAD_IN = 1.0   # seconds of room before the first beat
-NAMES = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass'}
+NAMES = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass', 'SOLO': 'Solo'}
+SOLO_GAIN = 3.2                        # one close-miked soloist carries like a section
 
 
 def clock_for(sc, timing=None, absolute=False):
@@ -108,12 +109,15 @@ def sing(sc, clock, singers=12, log=print, tune=None):
     voice.set_clock(*clock)
     voice.PER_SECTION = singers
     N = voice.CLOCK['n']
-    tasks = [(sect, i, engine_notes(sc, sect), clock, tune) for sect in voice.SECT for i in range(singers) if sc.parts[sect]]
+    tasks = [(sect, i, engine_notes(sc, sect), clock, tune) for sect in voice.SECT if sc.parts[sect]
+             for i in ((1,) if sect == 'SOLO' else range(singers))]            # singer 1 is a section leader: on a close mic
     stems = {sect: np.zeros((3, N, 2), np.float32) for sect in voice.SECT if sc.parts[sect]}
     geo = np.random.default_rng(99)
     with Pool(min(10, cpu_count())) as pool:
         for sect, x, y, star, mono in pool.imap_unordered(voice.render_singer, tasks):
             dry, send, spot = stems[sect]
+            if sect == 'SOLO':
+                mono = mono * SOLO_GAIN
             for c, (mx, aim) in enumerate(((-.35, 125.), (.35, 55.))):       # two cardioids, angled apart
                 d = np.hypot(x - mx, y)
                 g = (.5 + .5 * np.cos(np.arctan2(y, x - mx) - np.deg2rad(aim))) / d

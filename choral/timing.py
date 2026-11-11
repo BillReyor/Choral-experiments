@@ -133,10 +133,18 @@ def follow(notes, total_beats, t, m, sbeats, ssecs, res=8):
         if prev is None or prev[0] + prev[1] < b - .01 or prev[2] != mi:
             ab.append(b); ad.append(secs[int(round(b * res))] - steady(b))
     ab, ad = np.array(ab), np.array(ad)
+    raw = ad.copy()
     ad = np.median(np.lib.stride_tricks.sliding_window_view(np.pad(ad, 1, mode='edge'), 3), axis=1)
     on_grid = np.where(np.abs(ad) < .07)[0]
     if len(on_grid):
         ad[:on_grid[-1] + 1] = 0.
+    # Music that breathes (a ritardando and "a tempo" in mid-piece) does return to the pulse: where five
+    # anchors in a row agree that the singer is away from it, that is the tempo, not one late entry.
+    if len(raw) >= 5:
+        med5 = np.median(np.lib.stride_tricks.sliding_window_view(np.pad(raw, 2, mode='edge'), 5), axis=1)
+        lo5 = np.min(np.abs(np.lib.stride_tricks.sliding_window_view(np.pad(raw, 2, mode='edge'), 5)), axis=1)
+        sway = (lo5 > .12) & (np.abs(med5) > .15)
+        ad = np.where(sway & (ad == 0), med5, ad)
     pts = dict(zip(ab, ad))
     for i, (b, d, mi) in enumerate(notes):                    # a note before a rest ends in the tempo it began in
         if i + 1 == len(notes) or notes[i + 1][0] > b + d + .4:

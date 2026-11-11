@@ -253,7 +253,8 @@ def tract(f, hi, P, F, damp, nas, nz, lp):
 
 # ============================================================ singers =====
 SECT = {'T1': dict(x=-3.3, fs=1.04, rd=.66, comfy=67.), 'T2': dict(x=-1.1, fs=1.02, rd=.72, comfy=65.),
-        'BR': dict(x=1.1, fs=.99, rd=.78, comfy=62.), 'BS': dict(x=3.3, fs=.95, rd=.88, comfy=57.)}
+        'BR': dict(x=1.1, fs=.99, rd=.78, comfy=62.), 'BS': dict(x=3.3, fs=.95, rd=.88, comfy=57.),
+        'SOLO': dict(x=0., fs=1., rd=.74, comfy=62.)}        # a soloist stands in front, on a microphone of their own
 PER_SECTION = 12
 
 

@@ -12,7 +12,7 @@ STEP = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
 DUR = {'w': 4., 'h': 2., 'q': 1., 'e': .5, 's': .25, 't': .125}
 SHARPS, FLATS = 'fcgdaeb', 'beadgcf'
 DYN = {'pp': .42, 'p': .52, 'mp': .62, 'mf': .74, 'f': .88, 'ff': 1.0}
-VOCAL = {'TEN': ('T1', 'T2'), 'LOW': ('BR', 'BS'), 'T1': ('T1',), 'T2': ('T2',), 'BR': ('BR',), 'BS': ('BS',)}
+VOCAL = {'TEN': ('T1', 'T2'), 'LOW': ('BR', 'BS'), 'T1': ('T1',), 'T2': ('T2',), 'BR': ('BR',), 'BS': ('BS',), 'SOLO': ('SOLO',)}
 PIANO = ('RH', 'RH2', 'RH3', 'LH', 'LH2', 'LH3')
 TOKEN = re.compile(r"^(?P<p>r|[a-g][#bn]?-?\d~?(?:\+[a-g][#bn]?-?\d~?)*)/(?P<d>[whqest]3?\.*)"
                    r"(?P<f>(?:~|\^|>|'|%gl)*)(?:=(?P<l>\S+))?$")
@@ -24,7 +24,7 @@ class ScoreError(Exception):
 
 class Score:
     def __init__(self):
-        self.parts = {k: [] for k in ('T1', 'T2', 'BR', 'BS')}   # dicts: beat, dur, midi, tie, lyric, flags
+        self.parts = {k: [] for k in ('T1', 'T2', 'BR', 'BS', 'SOLO')}   # dicts: beat, dur, midi, tie, lyric, flags
         self.piano = []                                           # dicts: beat, dur, midi, hand, flags
         self.tempo = []                                           # (beat, bpm)
         self.timing = None                                        # measured beat -> second map, if any
@@ -248,7 +248,7 @@ def _finish(sc, warn):
         for n in notes:
             if n['lyric'] is None:
                 c = at.get(round(n['beat'] * 96), [])
-                pick = next((l for p, l in c if p == buddy[part]), None) or (c[0][1] if c else None)
+                pick = next((l for p, l in c if p == buddy.get(part)), None) or (c[0][1] if c else None)
                 if pick is None:
                     warn(f'  ! measure {n["m"]} {part}: no syllable for the note on beat '
                          f'{n["beat"] - sc.measures[n["m"]][0] + 1:g}; holding the previous vowel')

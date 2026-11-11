@@ -237,3 +237,4 @@ models/
 .DS_Store
 *.preset.json
 *.timing.json
+.venv-omr/

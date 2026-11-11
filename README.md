@@ -16,6 +16,7 @@ no samples and no recordings — and in rendering written sheet music with it.
 | `choral/timing.py` | Finds where every beat of the score falls in a recording: one tempo and start time, sharpened on the accompaniment's note attacks, then any ritardando or held last chord. |
 | `choral/reference.py` | Takes a set of practice tracks apart (balanced, accompaniment, "part predominant" or "part muted") into voices alone, accompaniment alone and one part alone, and says how cleanly they separated. |
 | `choral/hear.py` | The speech recognizer used as a stand-in for ears: English directly; other languages through the multilingual model, told the piece's vocabulary. |
+| `tools/scan2score.py` | Reads a *scanned* score: cuts each page into systems, has the open-source recognition engine `homr` read the notes, decides which staves are voices and which the piano, splits two voices sharing a staff into their parts, finds the barlines, and takes the words (and tempo marks) from the page by text recognition. |
 | `tools/pdf2score.py` | Reads a vector PDF exported from Finale (Maestro font) straight into the score format: pitches from notehead positions, note values from stems, beams, flags and dots, ties, key changes, and lyrics re-joined into words. Scans still have to be read by eye. |
 | `tools/fit.py` | Fits the piano, or the voice, to a recording by rendering on the recording's own timing and comparing mel spectrograms, one setting at a time, with held-out passages as the test. |
 | `tools/listen.py` | Uses a speech recognizer as ears: transcribes a render and reports how many of the score's words came through. |
@@ -42,11 +43,14 @@ python -m choral MUSIC [--part tenor1|tenor2|baritone|bass] [--accompaniment TRA
                        [--balanced TRACK --predominant TRACK | --muted TRACK] [--tune] [--out DIR]
 ```
 
-- **MUSIC** is a score file ([docs/score-format.md](docs/score-format.md)) or a PDF exported from
-  notation software, which `tools/pdf2score.py` reads directly. A scan or photo is a picture, not
-  notes, and still has to be transcribed into a score file first - that step is not automated.
-- **--part** may name several parts (`--part tenor1,tenor2,bass`); in three-part music "bass" is the
-  baritones and basses together.
+- **MUSIC** is a score file ([docs/score-format.md](docs/score-format.md)) or a PDF. A PDF exported
+  from notation software is read directly (`tools/pdf2score.py`); a scanned PDF is recognized
+  (`tools/scan2score.py`, about half a minute a page). Either way the program writes a `.score`
+  file beside the PDF and sings from that, so a misread note or word can be corrected by hand
+  and the next run uses the correction.
+- **--part** may name several parts (`--part tenor1,tenor2,bass`, or `solo`); in three-part music
+  "bass" is the baritones and basses together. `--predominant` may list one practice track per
+  part named, and timing is then taken from whichever of them is singing.
 - **--accompaniment** sings over a recording instead of the built-in piano. The voices are lined
   up with it automatically: from the written piano part if the score has one, otherwise from a
   practice track of one voice part.
@@ -54,6 +58,20 @@ python -m choral MUSIC [--part tenor1|tenor2|baritone|bass] [--accompaniment TRA
   them. They are only listened to (see below); nothing of them ends up in the output.
 - **--tune** lets a speech recognizer choose the microphone distance (needs `whisper-cli` and
   `WHISPER_MODEL`; for a score that is not in English, the multilingual model in `WHISPER_MODEL_MULTI`).
+
+### Reading scans
+
+Scans need a music-recognition engine. This project uses [homr](https://github.com/liebharc/homr)
+(AGPL-licensed, so it is installed beside the project and called as a separate program, not
+copied in):
+
+```
+python3.12 -m venv .venv-omr && .venv-omr/bin/pip install "homr[cpu]"
+```
+
+It needs Python 3.11-3.14 and downloads its models the first time it runs. Words are read with
+macOS's built-in text recognition (`tools/ocr.swift`, compiled on first use); without it the
+notes come out with no words. What is and is not reliable yet is in the status section below.
 
 ### What gets estimated for each piece
 
@@ -93,7 +111,7 @@ files). Renders go to `out/`.
 
 ## Honest status
 
-Four test pieces so far, for men's voices with piano, each with a real reference recording.
+Five test pieces so far, for men's voices with piano, each with a real reference recording.
 
 **Reading the music.** The first piece was a phone scan, read by eye; it matched a real
 baritone's isolated track on all 335 notes. The second was a vector PDF, read entirely by
@@ -219,5 +237,40 @@ the render goes from 26% to 48%, the real voices from 69% to 75%. That piece's p
 What is still clearly wrong on the Latin piece: the simulated tenors' fundamental is about 10 dB
 too strong against the second harmonic (real 1-3 dB, model 10-14), which none of the obvious
 settings fixes.
+
+**The fifth piece** (a slow carol for a soloist and four-part choir, an 8-page scan, 125 measures)
+was read entirely by `tools/scan2score.py` - the first piece with no hand transcription - and
+went from PDF to finished audio in one command, about a minute and a half.
+
+- *Notes.* All 125 measures add up as read. Against the isolated real singers, 52 of the
+  soloist's 53 notes and 138 of the baritone's 145 are right (the misses: a voice crossing, and
+  one system where the choir shares a single staff). On the pages also read by hand, the two
+  readings agree, and the automatic one settled several notes the hand reading had marked doubtful.
+- *Layout.* 22 systems of five different shapes (piano alone; solo and piano; solo, two choir
+  staves and piano; two choir staves and piano; one shared choir staff and piano) were all
+  assigned correctly. Barlines are found from what every staff of a system shares, which a note
+  stem never does.
+- *Words.* The weak part. Most syllables land on the right notes, hyphens are found on the page
+  itself, but text recognition drops small syllables and garbles some, more so where two lines of
+  text sit under one staff: about fifty words of this piece came out as non-words. They are easy
+  to see and fix in the score file, but they are not yet right unaided.
+- *Timing.* The piece breathes (ritardandos, a faster last verse). Tempo marks are picked up from
+  the page, and the tempo map now follows stretches where several entries in a row sit off the
+  pulse. On the final clock the soloist's notes all line up with the real singer; 121 of the
+  baritone's 144 do.
+- *A solo voice* is new: one singer on a close microphone, `SOLO:` in the score format.
+
+| piece 5 (words recognized) | real recording | this engine |
+|---|---|---|
+| soloist alone | 64% | 60% |
+| all voices | 58% | 34% |
+| baritone alone | 42% | 20% |
+
+The simulated soloist is understood about as well as the real one. The choir is not, and here
+part of that is the misread words it was given to sing.
+
+Not yet done for scans: repeats, D.S. and codas are read as printed, not unrolled; the reader
+has only been run on this one piece end to end; and where there are no practice tracks nothing
+checks the notes except that every measure adds up.
 
 None of these numbers says the result would pass for a recording.

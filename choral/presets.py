@@ -128,7 +128,7 @@ def note_decay(sc, part, x, sr, T):
 
 
 # ----------------------------------------------------------------------- from recordings ----
-def from_recordings(sc, part, balanced, accompaniment, predominant=None, muted=None, log=print):
+def from_recordings(sc, part, balanced, accompaniment, predominant=None, muted=None, log=print, more=None):
     """Timing, accompaniment level and the isolated tracks, from a set of practice tracks.
     Returns (preset entries, isolated tracks)."""
     rough = reference.isolate(sc, None, part, balanced, accompaniment, predominant, muted, log=lambda *a: None)
@@ -151,6 +151,20 @@ def from_recordings(sc, part, balanced, accompaniment, predominant=None, muted=N
         log('  ! not clean enough to trust the separated voices: keeping only the timing')
         return out, iso
     out['backing'] = round(R.loud(iso['accompaniment']) / R.loud(iso['voices']), 3)
+    for p2, pred2 in (more or {}).items():      # other parts' practice tracks: each knows the timing where it sings
+        r2 = reference.isolate(sc, None, p2, balanced, accompaniment, pred2, None, log=lambda *a: None)
+        if 'part' not in r2 or not sc.parts[p2]:
+            continue
+        t2 = timingmod.measure(sc, p2, resample_poly(r2['part'].mean(1), 1, 2), R.SR // 2, acc, log)
+        if t2['agree'] < .6:
+            continue
+        on1 = np.array(sorted(n['beat'] for n in sc.parts[part])); on2 = np.array(sorted(n['beat'] for n in sc.parts[p2]))
+        b = np.array(tm['beats']); s1, s2 = np.array(tm['secs']), np.interp(b, t2['beats'], t2['secs'])
+        d1 = np.abs(b[:, None] - on1[None, :]).min(1); d2 = np.abs(b[:, None] - on2[None, :]).min(1)
+        w = np.clip((d1 - d2) / 8 + .5, 0, 1)                    # lean on whichever part is singing nearby
+        w = np.convolve(np.pad(w, 4, mode='edge'), np.ones(9) / 9, 'valid')
+        tm['secs'] = [round(float(v), 3) for v in np.maximum.accumulate(s1 * (1 - w) + s2 * w)]
+        clock = R.clock_for(sc, tm, absolute=True)
     if 'part' in iso:      # the engine's own notes fade about 2 dB a second; make up the difference
         d = note_decay(sc, part, resample_poly(iso['part'].mean(1), 1, 2), R.SR // 2, lambda b: float(np.interp(b, clock[0], clock[1])))
         out['note_decay'] = round(float(np.clip(d + 2, -14, 0)), 1)

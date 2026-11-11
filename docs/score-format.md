@@ -25,6 +25,7 @@ LH: f2+f3/w
 | `TEN:` | the shared tenor staff. One note = both tenor parts; two notes = first tenor on top; three = first tenors split the top two |
 | `LOW:` | the shared baritone/bass staff, same rule |
 | `T1:` `T2:` `BR:` `BS:` | one part on its own staff, or one voice of a shared staff when the rhythms differ |
+| `SOLO:` | a soloist: one singer on a close microphone, as loud as a section |
 | `RH:` `LH:` | piano right and left hand; `RH2:` `LH2:` for a second voice on the same staff |
 
 Every line must add up to the length of the measure — the reader refuses the file otherwise,

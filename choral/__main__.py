@@ -10,7 +10,8 @@ MUSIC is a score file (docs/score-format.md) or a PDF exported from notation sof
                     against) and alone.  In three-part music "bass" is baritones and basses together
   --accompaniment   a recording of the accompaniment to sing over, instead of the built-in piano
   --balanced, --predominant, --muted
-                    practice tracks of the same piece, if you have them.  They are only listened
+                    practice tracks of the same piece, if you have them (--predominant may list one
+                    track per part named in --part, separated by commas).  They are only listened
                     to: the tempo and its bends, the hall and the balance are measured from them
   --tune            let a speech recognizer choose how close the microphones are (needs whisper-cli)
   --only            write just one version, e.g. --only "Baritone predominant"
@@ -21,22 +22,32 @@ import argparse, json, os, re, subprocess, sys, time
 import numpy as np
 from . import render as R, score as scoremod, presets, reference, voice
 
-PARTS = {'tenor1': 'T1', 't1': 'T1', 'tenor2': 'T2', 't2': 'T2', 'baritone': 'BR', 'br': 'BR', 'bari': 'BR', 'bass': 'BS', 'bs': 'BS'}
+PARTS = {'tenor1': 'T1', 't1': 'T1', 'tenor2': 'T2', 't2': 'T2', 'baritone': 'BR', 'br': 'BR', 'bari': 'BR', 'bass': 'BS', 'bs': 'BS', 'solo': 'SOLO'}
 
 
 def read_music(path, log):
-    """A .score file as it is; a notation-software PDF through tools/pdf2score.py."""
+    """A .score file as it is; a PDF through the reader that suits it: tools/pdf2score.py when the notes are
+    drawn as shapes (exported from notation software), tools/scan2score.py when the pages are pictures."""
     if not path.lower().endswith('.pdf'):
         return path
     out = os.path.splitext(path)[0] + '.score'
-    tool = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools', 'pdf2score.py')
-    r = subprocess.run([sys.executable, tool, path, out], capture_output=True, text=True)
+    if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(path):
+        log(f'using {out}, read from this PDF earlier (delete it to read the PDF again)')
+        return out
+    tools = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools')
+    import pymupdf
+    doc = pymupdf.open(path)
+    drawn = sum(len(p.get_drawings()) for p in doc) / max(len(doc), 1)
+    if drawn > 200:                                  # vector: hundreds of shapes a page
+        r = subprocess.run([sys.executable, os.path.join(tools, 'pdf2score.py'), path, out], capture_output=True, text=True)
+        if r.returncode == 0 and os.path.exists(out):
+            log(r.stdout.strip()); log(f'read {path} -> {out}')
+            return out
+    log('this PDF is a scan: recognizing the notes (about half a minute a page)...')
+    r = subprocess.run([sys.executable, os.path.join(tools, 'scan2score.py'), path, out])
     if r.returncode or not os.path.exists(out):
-        raise SystemExit('Could not read the notes out of this PDF.  That works for PDFs exported from notation software '
-                         '(Finale and the like), where the notes are drawn as shapes.  A scan or photo is a picture of the page '
-                         'and has to be transcribed into a score file first (docs/score-format.md).\n' + r.stderr[-400:])
-    log(r.stdout.strip())
-    log(f'read {path} -> {out}  (check it: a misread note is easier to fix there than to hear)')
+        raise SystemExit('Could not read the music out of this PDF.')
+    log(f'read {path} -> {out}  (check it: a misread note or word is easier to fix there than to hear)')
     return out
 
 
@@ -57,7 +68,7 @@ def main():
     for word in filter(None, (a.part or '').lower().replace(' ', '').split(',')):
         p = PARTS.get(word)
         if not p or not sc.parts[p]:
-            raise SystemExit(f'--part takes tenor1, tenor2, baritone or bass (several with commas), and the part must be in the score; got "{word}"')
+            raise SystemExit(f'--part takes tenor1, tenor2, baritone, bass or solo (several with commas), and the part must be in the score; got "{word}"')
         if p in ('BR', 'BS') and same('BR', 'BS'):          # three-part music: baritones and basses sing one line
             groups.append(('Bass', ['BR', 'BS']))
         elif p in ('T1', 'T2') and same('T1', 'T2'):
@@ -82,7 +93,9 @@ def main():
     if a.balanced and (a.accompaniment or a.muted or a.predominant):
         if not a.accompaniment:
             raise SystemExit('to learn from practice tracks I also need the accompaniment-only track (--accompaniment)')
-        est, iso = presets.from_recordings(sc, part or 'BR', L(a.balanced), track, L(a.predominant), L(a.muted), log)
+        preds = [L(f) for f in (a.predominant or '').split(',') if f]
+        more = {g[1][-1]: x for g, x in zip(groups[1:], preds[1:])}
+        est, iso = presets.from_recordings(sc, part or 'BR', L(a.balanced), track, preds[0] if preds else None, L(a.muted), log, more)
         P.update(est)
         ref_voices = iso['voices'] if iso['clean'] >= 15 else None
     elif track is not None and 'timing' not in P and not sc.timing:
