@@ -519,4 +519,24 @@ Against this baritone the comparison says the model is too bright between 1.7 an
 phrase begins too softly. The entry speed measured from the recording made that worse, not
 better, so that correction is now kept small.
 
+**How notes end.** The one difference the comparison showed on nearly every singer after the highs
+were fixed: the model's notes ended 3 dB louder than real ones. Sorted by what follows the note,
+the reason is plain. Inside a melisma a real note ends as level as the model's. Where the next
+note brings a new syllable, the real voice fades over the last third of the note - by 3-4 dB more
+than the model, more on a long note, hardly at all on a short one that already ends in a
+consonant. So each syllable's vowel now fades toward the next syllable (`taper`), timed to the end
+of the vowel, not of the note, and the consonant that follows is sung at its own level: the vowel
+comes down to meet it. On twelve singers, each compared in its own room, the last three tenths of
+a note are now within 0.7 / 1.7 / 1.8 dB of the real ones (they were 1.5 / 2.8 / 2.6 dB too loud).
+
+The fade that is measured per piece from a recording had to change with it. It used to assume the
+model's own notes fall 2 dB a second; they fall faster now, and how fast depends on the piece. So
+the model's own fade is measured too, on the same notes and in the recording's room, and the
+piece's setting is the difference.
+
+The recognizer: eight single voices average 63.6% with the taper against 63.9% without, and three
+full choirs move by +3, -1 and -7 to +13 points depending on which singers are drawn. One voice is
+clearly worse for it, a pianissimo solo (80% -> 73%); easing the taper there did not bring it
+back, and it is left as measured on the real singers.
+
 None of these numbers says the result would pass for a recording.

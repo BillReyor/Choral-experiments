@@ -197,8 +197,19 @@ def shape_settings(sc, part, x, sr, clock, log=print):
     out = {}
     if swell is not None:       # soft, held notes: how far each one swells in
         out['swell'] = round(swell, 1)
-    if fade is not None:        # left alone the engine's notes fall about 1-2 dB a second; make up the difference
-        fade_ = float(np.clip(fade + (1 if fade > 0 else 2), -14, 5))
+    if fade is not None:        # the engine's own notes fall too (each syllable's vowel fades toward the next): make up the difference
+        from . import voice
+        beats_, secs_ = clock[0], clock[1]
+        full = (beats_, secs_, float(np.interp(sc.beats, beats_, secs_)) + 4)
+        mine = voice.render_singer((part, 4, R.engine_notes(sc, part), full, {'TUNE.note_decay': 0.}))[4].astype(float)
+        mine = resample_poly(mine, sr, voice.SR)
+        if sr == 22050:         # like with like: the recording has a room around the voice, which holds a fading note up
+            from . import compare
+            room = compare.match_room(compare.dying(x, sc, part, T), mine, sc, part, T) or compare.USUAL_ROOM
+            if room[1] > 0:
+                mine = compare.reverb(mine, *room)
+        own = note_shape(sc, part, mine, sr, T)[0]
+        fade_ = float(np.clip(fade - (own if own is not None else -2.), -14, 5))
         out['note_decay'] = round(min(fade_, 0.) if swell is not None else fade_, 1)    # a swell is a shape of its own now, not a slope
     if attack is not None:      # the engine's rule for this piece's first dynamic gives one entry speed; scale it to the measured one
         dyn0 = sc.dyn('voice', sc.parts[part][0]['beat']) if sc.parts[part] else .74

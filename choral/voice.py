@@ -72,6 +72,7 @@ TUNE.update(cons_max=.62,            # consonants may take this much of a note a
             flutter=7.,              # quick pitch unsteadiness, in cents: gives the 4-5 cents measured on nine real singers
             entry_swell=.7,          # how much quicker a phrase begins when its first note swells in (0 = not at all)
             air=.006,                # the bright part of the breath in the tone, against the voice (see AIR)
+            taper=1.5,               # how far a syllable's vowel fades toward the next syllable (0 = not at all; 1.5 matches twelve singers heard in their rooms)
             swell=-1.)               # dB a long note swells in from at piano and softer (nothing at mezzo-forte and above);
                                      # -1: 6.5 dB where the music is slow, none where it is quick
 for _kv in filter(None, os.environ.get('CHORAL_FIT', '').split(',')):   # e.g. CHORAL_FIT=b1=1.8,vib=.6
@@ -423,6 +424,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         segs.append(dict(BLANK, t0=a, t1=b, F=F, F2=F2, av=1.))
 
     kicks = []
+    vends = np.array(te, float)                        # where each note's vowel ends (before its coda and the next onset)
 
     for i in range(n):
         v0 = ts[i] - lead[i]                       # where the voice catches
@@ -438,6 +440,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
                             F=(TUNE['hum_f1'],) + tuple(co[i][0]['F'][1:]))
                 co[i].insert(0, held)
                 vend = ts[i] + keep
+        vends[i] = vend
         tgt = vowel_F(P, vow[i])
         if vow[i] in DIPH:
             A, B = tgt
@@ -490,6 +493,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     Ft = Ft[idx[np.clip(np.searchsorted(idx, np.arange(M)), 0, len(idx) - 1)]]
     Ft = gf(Ft, P['fsig'], axis=0, mode='nearest')
     av = gf(tr['av'], 2.5, mode='nearest')
+    vowelness = gf((tr['av'] > .95).astype(float), 4, mode='nearest')      # 1 on a vowel, 0 through a consonant
     nas = gf(tr['nas'], 2.5, mode='nearest')           # closures switch on and off abruptly
     nz = gf(tr['nz'], 2.5, mode='nearest')
     damp = gf(tr['damp'], 2.5, mode='nearest')
@@ -565,6 +569,20 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     ease = d_n * (.3 + .35 * np.clip((te - ts - 1.3)[ni], 0, 1)) * np.clip((u_n - p_n - .03) / (.92 - p_n), 0, 1)
     shape_db = np.where(ni == 0, -1.15 * d_n * (1 - np.clip(u_n / np.minimum(p_n + .08, .85), 0, 1)) - (ease if n == 1 else 0),
                         np.where(ni == n - 1, -.35 * d_n * u_n, -d_n * (1 - np.clip(u_n / p_n, 0, 1)) - ease))
+    # A syllable's vowel fades toward the next syllable.  Real singers are 3-4 dB softer than a level voice over
+    # the last third of a note that ends its syllable - more on a long note, hardly at all on a short one - and
+    # not at all inside a melisma, where the vowel simply carries on.  (Twelve singers, in their rooms.)  The
+    # consonant that follows is sung at its own level: it is the vowel that fades down to meet it.
+    tap = np.zeros(n)
+    for i in range(n - 1):
+        if lastflag[i]:
+            d_ = te[i] - ts[i]
+            vary = .75 + .5 * ((np.sin(ts[i] * 91.7 + P['idx'] * 7.3) * 43758.5453) % 1.)     # no two alike, with no dice thrown
+            tap[i] = TUNE['taper'] * vary * (1.5 + 2.2 * np.clip((d_ - .45) / .6, 0, 1) + 1.5 * np.clip((d_ - 1.2) / 1., 0, 1))
+            tap[i] = max(tap[i] - sw[i] * (.3 + .35 * float(np.clip(d_ - 1.3, 0, 1))), 0.)   # a note that swells already eases off by this much
+            tap[i] *= float(np.clip(.6 + (dyns[i] - .42) / .25, .6, 1.))     # at pianissimo a little less: there is not much left to fade
+    u_v = np.clip((tc - ts[ni]) / np.maximum(vends - ts, .05)[ni], 0, 1)      # how far through the note's vowel
+    shape_db = shape_db - tap[ni] * np.clip((u_v - .6) / .34, 0, 1) * vowelness
     amp = av * eff ** TUNE['amp_exp'] * lift * (1 + .04 * slow(rng, M, 25)) * 10 ** (gf(shape_db, 6, mode='nearest') / 20)
     rd = np.clip(P['rd0'] + FIT['rd'] + FIT['alive'] * .07 * slow(rng, M, 45) + TUNE['rd_effort'] * (1 - eff)
                  + TUNE['rd_edge'] * (1 - np.clip(av / .3, 0, 1)), .45, 2.6)
