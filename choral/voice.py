@@ -31,7 +31,7 @@ HANN = .5 - .5 * np.cos(2 * np.pi * np.arange(2 * NH) / (2 * NH))
 
 # Diction settings, tuned by rendering and running a speech recognizer over the result
 TIGHT = .5      # ensemble timing spread (1 = loose community choir, .5 = well drilled)
-CDUR = 1.3      # consonant length: choral diction exaggerates consonants
+CDUR = float(os.environ.get('CHORAL_CDUR', 0.9))   # consonant length (a real singer keeps ~84% of each note on the vowel)
 SEED = int(os.environ.get('SEED', 0))   # a different set of singers for every seed
 
 # Tone settings.  tools/calibrate.py fits these to a recording of a real singer.
@@ -39,7 +39,9 @@ FIT = dict(b1=1.0,      # width of the first resonance (wider = less boxy, but b
            oq=1.3,      # how long the vocal folds stay open each cycle (higher = stronger fundamental)
            rd=0.0,      # overall tension of the voice (lower = brighter, more pressed)
            f4=3000., f5=3500., ring=2.6,   # the 'singer's formant' cluster and how sharply it rings
-           breath=1.0,  # amount of air in the tone
+           breath=0.1,  # amount of air in the tone
+           jit=0.5,     # cycle-to-cycle irregularity of the vocal folds
+           alive=1.8,   # how much the mouth and larynx keep moving while a note is held
            vib=0.6,     # vibrato depth (choral blend: nearly straight)
            # overall colour of the voice + microphone as (Hz, dB) points, applied without touching the
            # vowel resonances themselves: fuller bottom, less boxy middle, more ring
@@ -62,12 +64,14 @@ def T(b):
 
 
 # =========================================================== phonemes =====
-VOW = {'IY': (280, 2250, 2900), 'IH': (400, 1950, 2560), 'EH': (550, 1770, 2500), 'AE': (680, 1650, 2480),
-       'AA': (720, 1120, 2550), 'AH': (630, 1200, 2450), 'AO': (570, 850, 2450), 'UH': (440, 1020, 2300),
-       'UW': (320, 870, 2300), 'ER': (480, 1350, 1700), 'AX': (500, 1400, 2500)}
-DIPH = {'AY': ((720, 1150, 2550), (420, 1900, 2550)), 'AW': ((700, 1350, 2500), (450, 950, 2350)),
-        'EY': ((500, 1850, 2550), (340, 2150, 2750)), 'OW': ((530, 930, 2400), (360, 820, 2300)),
-        'OY': ((570, 850, 2450), (400, 1900, 2550))}
+# Vowel targets (first three resonances, Hz).  The second resonance is set where a trained singer
+# was measured to place it: further forward than textbook speech values, especially on back vowels.
+VOW = {'IY': (280, 2330, 2950), 'IH': (400, 2150, 2600), 'EH': (550, 1900, 2550), 'AE': (660, 1800, 2500),
+       'AA': (690, 1250, 2600), 'AH': (610, 1350, 2550), 'AO': (570, 1000, 2550), 'UH': (440, 1180, 2400),
+       'UW': (320, 1100, 2400), 'ER': (480, 1480, 1800), 'AX': (500, 1530, 2550)}
+DIPH = {'AY': ((700, 1300, 2600), (420, 2050, 2600)), 'AW': ((690, 1450, 2550), (450, 1100, 2400)),
+        'EY': ((500, 2000, 2600), (340, 2250, 2800)), 'OW': ((530, 1050, 2500), (360, 950, 2400)),
+        'OY': ((570, 1000, 2550), (400, 2050, 2600))}
 # av = voicing level, nas = nose open, nz = nasal anti-resonance, damp = how muffled the upper
 # resonances are, ah = glottal aspiration, noise = turbulence made at the lips/teeth/tongue
 CONS = {
@@ -75,14 +79,14 @@ CONS = {
     'n': dict(F=(250, 1500, 2600), d=.075, av=.60, nas=1., nz=1500., damp=2.5, lp=.5),
     'ng': dict(F=(250, 2100, 2600), d=.080, av=.55, nas=1., nz=2800., damp=2.5, lp=.5),
     'l': dict(F=(360, 1100, 2700), d=.060, av=.75, damp=1.4),
-    'r': dict(F=(380, 1350, 1650), d=.100, av=.75, damp=1.2),
+    'r': dict(F=(380, 1350, 1650), d=.085, av=.75, damp=1.2),
     'w': dict(F=(300, 650, 2200), d=.060, av=.65, damp=1.3),
     'y': dict(F=(270, 2200, 3000), d=.055, av=.65, damp=1.2),
     'v': dict(F=(300, 1100, 2300), d=.060, av=.40, damp=2., noise='f', na=.15),
     'z': dict(F=(300, 1600, 2600), d=.070, av=.35, damp=2., noise='s', na=.5),
     'dh': dict(F=(300, 1500, 2550), d=.045, av=.40, damp=2., noise='f', na=.06),
-    's': dict(F=(300, 1700, 2600), d=.095, noise='s', na=1.0),
-    'sh': dict(F=(300, 1900, 2500), d=.095, noise='sh', na=.9),
+    's': dict(F=(300, 1700, 2600), d=.130, noise='s', na=1.0),
+    'sh': dict(F=(300, 1900, 2500), d=.120, noise='sh', na=.9),
     'f': dict(F=(300, 1100, 2300), d=.080, noise='f', na=.45),
     'h': dict(F=None, d=.070, ah=1.),
     'q': dict(F=None, d=.035),                      # glottal stop: a clean break before a vowel
@@ -97,24 +101,26 @@ CONS = {
     't': dict(stop=1, voiced=0, F=(200, 1700, 2650), cl=.050, bd=.025, noise='t', na=.9, vot=.045),
     'k': dict(stop=1, voiced=0, F=(250, 1900, 2300), cl=.055, bd=.030, noise='k', na=.8, vot=.055),
 }
-BLANK = dict(av=0., nas=0., nz=1000., damp=1., lp=0., ah=0., noise=None, na=0., burst=False, vot=0.)
+BLANK = dict(av=0., nas=0., nz=1000., damp=1., lp=0., ah=0., noise=None, na=0., burst=False, vot=0., f0d=0.)
+F0DIP = dict(m=-10., n=-10., ng=-10., l=-8., r=-8., w=-8., y=-8., v=-35., z=-35., dh=-35., zh=-35.)   # cents
+UNVOICED = {'p', 't', 'k', 's', 'sh', 'f', 'th', 'ch', 'h'}
 
 
 def cons_segs(c, scale, after_s=False, final=False):
     p = CONS[c]
     if p.get('affr'):                                  # ch / j: a closure released into a hiss
         v = p['voiced']
-        return [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=.2 if v else 0., lp=1.5, damp=3.),
-                dict(BLANK, d=p['bd'] * scale, F=p['F'], av=.3 if v else 0., damp=2., noise='sh', na=p['na'])]
+        return [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=.2 if v else 0., lp=1.5, damp=3., f0d=-45. * v),
+                dict(BLANK, d=p['bd'] * scale, F=p['F'], av=.3 if v else 0., damp=2., noise='sh', na=p['na'], f0d=-30. * v)]
     if p.get('stop'):
         v = p['voiced']
-        out = [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=.2 if v else 0., lp=1.5, damp=3.),         # closure
+        out = [dict(BLANK, d=p['cl'] * scale, F=p['F'], av=.2 if v else 0., lp=1.5, damp=3., f0d=-45. * v),   # closure
                dict(BLANK, d=p['bd'] * scale, F=p['F'], av=.45 if v else 0., lp=.3, damp=1.5,         # release
-                    noise=p['noise'], na=p['na'], burst=True, vot=0. if (v or after_s) else p['vot'])]
+                    noise=p['noise'], na=p['na'], burst=True, vot=0. if (v or after_s) else p['vot'], f0d=-25. * v)]
         if final:   # end of a phrase: "loud-uh", "out-h"
             out.append(dict(BLANK, d=.045, F=(480, 1450, 2500), av=.35) if v else dict(BLANK, d=.05, F=None, ah=.7))
         return out
-    s = dict(BLANK, d=p['d'] * scale, F=p['F'])
+    s = dict(BLANK, d=p['d'] * scale, F=p['F'], f0d=F0DIP.get(c, 0.))
     s.update({k: p[k] for k in ('av', 'nas', 'nz', 'damp', 'lp', 'ah', 'noise', 'na') if k in p})
     return [s]
 
@@ -210,8 +216,8 @@ def make_singer(sect, idx):
         rd0=c['rd'] * rng.uniform(.8, 1.3) - (.15 if star else 0), breath=rng.uniform(.5, 1.6),
         bias=rng.normal(0, 6), flat=rng.uniform(1.5, 5), comfy=c['comfy'] + rng.normal(0, 1.5),
         vr=rng.uniform(4.8, 6.4), vd=rng.uniform(4, 12) if rng.random() < .55 else rng.uniform(12, 30),
-        vdel=rng.uniform(.2, .5), wn=2 * np.pi * rng.uniform(5.5, 8.0), zeta=rng.uniform(.7, .95),
-        jit=rng.uniform(.003, .008), shim=rng.uniform(.02, .05),
+        vdel=rng.uniform(.2, .5), wn=2 * np.pi * rng.uniform(9.5, 12.5), zeta=rng.uniform(.42, .6),
+        jit=rng.uniform(.0007, .0016), shim=rng.uniform(.008, .02),
         lag=(.035 * (1 - conf) ** 1.5 - .008 + rng.normal(0, .006)) * TIGHT,
         cs=rng.uniform(.85, 1.2) * CDUR, sib=rng.uniform(.6, 1.5), scen=rng.normal(6500, 700), fsig=rng.uniform(4, 7),
         fry=rng.uniform(0, .5) * (1.4 if sect in ('BR', 'BS') else .8),
@@ -316,16 +322,20 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     def vseg(a, b, F, F2=None):
         segs.append(dict(BLANK, t0=a, t1=b, F=F, F2=F2, av=1.))
 
+    kicks = []
+
     for i in range(n):
         if on[i]:
             put(ts[i] - sum(s['d'] for s in on[i]), on[i], ts[i])
+            if on[i][-1]['av'] == 0:               # unvoiced consonant: the vowel starts a little sharp
+                kicks.append(ts[i])
         vend = te[i] - sum(s['d'] for s in co[i]) - (sum(s['d'] for s in on[i + 1]) if i < n - 1 else 0)
         tgt = vowel_F(P, vow[i])
         if vow[i] in DIPH:
             A, B = tgt
             if lastflag[i]:      # hold the first vowel, glide, then land on the second
                 dur = vend - ts[i]
-                g = float(np.clip(.32 * dur, .07, .15)); h = float(np.clip(.12 * dur, .025, .06))
+                g = float(np.clip(.25 * dur, .06, .10)); h = float(np.clip(.10 * dur, .02, .04))
                 vseg(ts[i], vend - g - h, A); vseg(vend - g - h, vend - h, A, B); vseg(vend - h, vend, B)
             else:
                 vseg(ts[i], vend, A)
@@ -351,7 +361,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         return int(np.clip(round((t - tA) * CR), 0, M - 1))
 
     Ft = np.full((M, 3), np.nan)
-    tr = {k: np.full(M, BLANK[k]) for k in ('av', 'nas', 'nz', 'damp', 'lp', 'ah')}
+    tr = {k: np.full(M, BLANK[k]) for k in ('av', 'nas', 'nz', 'damp', 'lp', 'ah', 'f0d')}
     for s in segs:
         i0 = ix(s['t0']); i1 = max(ix(s['t1']), i0 + 1)
         if s['F'] is not None:
@@ -377,8 +387,11 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     damp = gf(tr['damp'], 2.5, mode='nearest')
     lp = gf(tr['lp'], 2.5, mode='nearest')
     ah = gf(tr['ah'], 3, mode='nearest')
+    micro = gf(tr['f0d'], 3, mode='nearest')
+    for tk in kicks:
+        micro = micro + 28 * np.exp(-np.clip(tc - tk, 0, None) / .035) * (tc >= tk)
     if not on[0]:
-        av *= np.clip((tc - (ts[0] - .005)) / rng.uniform(.02, .045), 0, 1)
+        av *= np.clip((tc - (ts[0] - .005)) / rng.uniform(.035, .065), 0, 1)
     if not co[-1]:
         av *= np.clip((tl - tc) / rng.uniform(.07, .13), 0, 1)
     for i in range(1, n):                              # vowel straight into vowel: a small glottal nudge
@@ -386,36 +399,40 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             av *= 1 - .55 * np.exp(-((tc - ts[i] + .02) / .018) ** 2)
 
     # ---- pitch: glide between notes, hunt for the note, drift, vibrato
-    ni = np.clip(np.searchsorted(ts - .045, tc, side='right') - 1, 0, n - 1)
+    ni = np.clip(np.searchsorted(ts - .012, tc, side='right') - 1, 0, n - 1)
     b_, a_ = bilinear([P['wn'] ** 2], [1, 2 * P['zeta'] * P['wn'], P['wn'] ** 2], fs=CR)
     step = mids[ni]
     mid = lfilter(b_, a_, step - step[0]) + step[0]
     leap = np.diff(mids, prepend=mids[0])
     e0 = rng.normal(-1.5 * np.clip(leap, -6, 6), (3 + 2.5 * np.minimum(np.abs(leap), 7)) * (1.5 - sk))
-    e0[0] = rng.normal(-8 - 22 * (1 - cf), 20 * (1.5 - sk)) if gap > .3 else rng.normal(-4, 10 * (1.5 - sk))
+    e0[0] = rng.normal(-42 - 20 * (1 - cf), 18 * (1.5 - sk)) if gap > .3 else rng.normal(-10, 10 * (1.5 - sk))
     vstart = ts.copy()
     for i in range(1, n):
         if not head[i] and mids[i] == mids[i - 1]:
             vstart[i] = vstart[i - 1]; e0[i] = 0
     tau = rng.uniform(.09, .22, n) / (.5 + sk)
+    tau[0] = rng.uniform(.045, .085)
     hunt = gf(e0[ni] * np.exp(-np.clip(tc - ts[ni], 0, None) / tau[ni]), 4, mode='nearest')
     dy = gf(dyns[ni], 12, mode='nearest')
     vrate = P['vr'] * (1 + .07 * slow(rng, M, 40))
     vdepth = P['vd'] * FIT['vib'] * np.clip((tc - vstart[ni] - P['vdel']) / .35, 0, 1) * (1 + .25 * slow(rng, M, 50)) * (.6 + .5 * dy)
     vib = gf(vdepth, 8, mode='nearest') * np.sin(2 * np.pi * np.cumsum(vrate) / CR + rng.uniform(0, 6.28))
     cents = (P['bias'] - P['flat'] * np.maximum(0, mid - P['comfy']) + consensus(P['sect'], tc)
-             + hunt + vib + 4 * slow(rng, M, 60) + 3 * slow(rng, M, 3))
+             + hunt + vib + micro + 4 * slow(rng, M, 60) + 3.5 * slow(rng, M, 3))
     f0 = 440 * 2 ** ((mid - 69) / 12 + cents / 1200)
 
     # ---- effort: phrase arc, accents, followers sneaking in, running out of air
     u = np.clip((tc - ts[0]) / max(tl - ts[0], .1), 0, 1)
     eff = dy * (1 - .10 * u * u * (1.3 - sk)) * (1 + .12 * np.exp(-np.clip(tc - ts[ni], 0, None) / .10))
-    eff *= 1 - .45 * (1 - cf) * np.exp(-np.clip(tc - ts[0], 0, None) / .15)
+    eff *= 1 - .1 * (1 - cf) * np.exp(-np.clip(tc - ts[0], 0, None) / .06)
     eff = np.clip(eff, .05, 1.15)
-    amp = av * eff ** 1.2 * (1 + .04 * slow(rng, M, 25))
-    rd = np.clip(P['rd0'] + FIT['rd'] + 1.25 * (1 - eff) + 1.1 * (1 - np.clip(av / .3, 0, 1)), .45, 2.6)
+    lift = 10 ** (np.clip(.2 * (mid - (P['comfy'] - 7)), -3, 3) / 20)        # singers get louder as they go up
+    amp = av * eff ** .9 * lift * (1 + .04 * slow(rng, M, 25))
+    rd = np.clip(P['rd0'] + FIT['rd'] + FIT['alive'] * .07 * slow(rng, M, 45) + 1.25 * (1 - eff) + 1.1 * (1 - np.clip(av / .3, 0, 1)), .45, 2.6)
 
     F = Ft * (P['fs'] * P['fdev']) * (1 + .002 * (mid - 60))[:, None]       # larynx rises with pitch
+    for j, sd in enumerate((.022, .018, .012)):                              # nobody holds their mouth perfectly still
+        F[:, j] *= 1 + FIT['alive'] * sd * slow(rng, M, rng.uniform(25, 50))
     F[:, 0] *= 1 + .10 * (eff - .7) * av                                     # jaw drops with effort
     F[:, 0] = np.maximum(F[:, 0], .95 * f0)
 
@@ -439,7 +456,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     tg, ag = tg[ag > 2e-4], ag[ag > 2e-4]
     if len(tg):
         f0g = at(f0, tg)
-        tg = tg + rng.normal(0, P['jit'] * .7, len(tg)) / f0g
+        tg = tg + rng.normal(0, P['jit'] * FIT['jit'] * .7, len(tg)) / f0g
         ag = ag * (1 + rng.normal(0, P['shim'], len(tg)))
         rdg = at(rd, tg)
         if not on[0] and len(tg) > 8 and dyns[0] > .6 and rng.random() < P['fry']:           # creaky attack
@@ -457,7 +474,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             X = glottal(FP, f0g[sl][:, None], rdg[sl][:, None]) * tract(
                 FP, P['hiP'], P, Fg, at(damp, t_), at(nas, t_), at(nz, t_), at(lp, t_))
             pred = np.sqrt(2 * (np.abs(X) ** 2).sum(1) / PN * f0g[sl] / SR) + 1e-30
-            X *= (ag[sl] / (pred ** .85 * P['r0'] ** .15))[:, None]
+            X *= (ag[sl] / (pred ** .95 * P['r0'] ** .05))[:, None]
             X *= np.exp(-2j * np.pi * FP[None, :] * ((pos[sl] - ip[sl] + PN // 4) / SR)[:, None])
             x = np.fft.irfft(X, PN, axis=1)
             for j, i0 in enumerate(ip[sl] - PN // 4):
@@ -494,12 +511,12 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         x /= x.std() + 1e-9
         tt = np.arange(m) / SR
         if burst:
-            e = np.exp(-tt / (d * .6)) * np.minimum(1, tt / .001) * .3
+            e = np.exp(-tt / (d * .6)) * np.minimum(1, tt / .001) * .17
         else:
             e = np.minimum(1, tt / .02) * np.minimum(1, (m / SR - tt) / .025) * .12 * P['sib']
         i0 = int((t0 - tA) * SR)
         if i0 >= 0 and i0 + m <= L:
-            sig[i0:i0 + m] += x * e * na * float(at(eff, t0)) ** 1.2
+            sig[i0:i0 + m] += x * e * na * float(at(eff, t0)) ** .9
 
     i0 = int(round(tA * SR))
     if i0 >= 0 and i0 + L <= len(out):

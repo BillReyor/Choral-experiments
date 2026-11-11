@@ -13,6 +13,7 @@ no samples and no recordings — and in rendering written sheet music with it.
 | `tools/listen.py` | Uses a speech recognizer as ears: transcribes a render and reports how many of the score's words came through. |
 | `tools/check_part.py`, `tools/check_mix.py` | Check a transcription against a recording: pitch-track one isolated part, or test every written note against a recording of all voices. |
 | `tools/calibrate.py` | Fits the engine's tone to a recording of a real singer on the same notes. |
+| `tools/realism.py` | Scorecard: renders one simulated singer on a part and measures it beside a real singer's isolated recording of the same part — pitch glides and scoops, attacks, how notes are held, harmonics versus noise, consonant strength. |
 | `experiments/` | The stand-alone experiments that led here (a vowel-only "Shenandoah", and an original pop number in three engine generations). |
 | `scores/demo_shenandoah.score` | A short public-domain example. |
 
@@ -41,7 +42,19 @@ Audio, sheet music, and transcriptions of copyrighted arrangements are never com
 ## Honest status
 
 On the first real test piece (an 83-measure TTBB arrangement with piano), the transcription
-matched a real baritone's isolated track on every one of 335 notes. A speech recognizer makes
-out about 70% of the words in the synthesized voices, against about 76% for the real singers on
-the same piece — close, but the engine still reads as synthetic to a human listener. The piano
-is basic, and instruments that are not in the vocal score (percussion, strings) are not rendered.
+matched a real baritone's isolated track on every one of 335 notes.
+
+The voice model has been fitted to that singer with `tools/realism.py`. What the scorecard
+changed, each from a measured gap:
+
+- upper harmonics were far too noisy (4 dB over the noise against his 23 dB) — jitter and breath cut
+- held notes sagged, and consonants took too much of each note — consonants shortened
+- held vowels were frozen in tone — the mouth and larynx now keep moving slightly
+- pitch now scoops into phrase starts, glides faster with a little overshoot, dips on voiced
+  consonants and starts sharp after unvoiced ones
+- vowels moved further forward, as he places them; loudness rises with pitch
+
+A speech recognizer makes out about 65-70% of the words in the synthesized voices, against
+about 76% for the real singers on the same piece. The scorecard only measures what it measures:
+agreement on these numbers does not mean the result would pass for a recording. The piano is
+basic, and instruments that are not in the vocal score (percussion, strings) are not rendered.
