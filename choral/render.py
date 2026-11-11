@@ -24,7 +24,9 @@ PRESET = dict(                         # what differs from piece to piece (see c
     others=.2,                         # the other parts, in a "my part predominant" version
     under=.5,                          # the accompaniment, in that version (relative to the balanced mix)
     singers=12,                        # per section
-    note_decay=0.,                     # dB per second each note fades (-12 = bell-like) or swells (+4)
+    note_decay=0.,                     # dB per second each note fades (-12 = bell-like)
+    # swell: dB each soft, held note swells in from - set only when measured from a recording; otherwise the
+    # voice goes by its own rule (6.5 dB at piano and softer in slow music, nothing in quick music)
     attack=1.,                         # how slowly phrases begin, relative to the rule for their dynamic
     scoop=1.,                          # how far under the note phrases begin, relative to the usual
 )

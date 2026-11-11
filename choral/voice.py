@@ -13,6 +13,7 @@ A phrase is a list of notes  (beat, beats, midi, syllable, dynamic)  where sylla
 of phonemes such as "s IH ng" (lower case = consonant, upper case = vowel), or "-" to carry the
 previous vowel onto a new pitch.  midi may be a tuple for a divisi within the section.
 """
+import copy
 import os
 import numpy as np
 from scipy.signal import butter, sosfilt, lfilter, bilinear
@@ -68,7 +69,9 @@ TUNE.update(cons_max=.62,            # consonants may take this much of a note a
             f1_track=.95,            # the first resonance never drops below this multiple of the sung pitch
             note_decay=0.,           # dB per second each note fades (-12: bell-like) or swells (+4) after its start; per piece
             scoop=1.,                # how far below the note a phrase begins (per piece: a rehearsed trio hardly scoops)
-            flutter=7.)              # quick pitch unsteadiness, in cents: gives the 4-5 cents measured on nine real singers
+            flutter=7.,              # quick pitch unsteadiness, in cents: gives the 4-5 cents measured on nine real singers
+            swell=-1.)               # dB a long note swells in from at piano and softer (nothing at mezzo-forte and above);
+                                     # -1: 6.5 dB where the music is slow, none where it is quick
 for _kv in filter(None, os.environ.get('CHORAL_FIT', '').split(',')):   # e.g. CHORAL_FIT=b1=1.8,vib=.6
     if '.' not in _kv.split('=')[0]:
         FIT[_kv.split('=')[0]] = float(_kv.split('=')[1])
@@ -495,7 +498,18 @@ def render_phrase(ph, P, rng, out, gap=9.0):
         micro = micro + 28 * np.exp(-np.clip(tc - tk, 0, None) / .035) * (tc >= tk)
     # How a phrase begins depends on how loudly it is sung: measured on real singers, the rise from 20 dB down
     # to full voice takes about 36 ms at mezzo-forte, 125 ms at mezzo-piano, 200 ms at piano.
+    # dB each note swells in from: soft notes only, long ones only - and, unless a recording of the piece says
+    # otherwise, only in slow music (real singers did not swell into the soft held notes of a quick piece)
+    sw = TUNE['swell'] if TUNE['swell'] >= 0 else 6.5 * float(np.clip((np.median(te - ts) - .5) / .3, 0, 1))
+    sw = sw * np.clip((.66 - dyns) / .14, 0, 1) * np.clip((te - ts - .3) / .4, 0, 1)
+    pk = np.full(n, .62)                               # where in the note the swell arrives
+    if sw.any():                                       # no two notes alike: real singers range from no swell to twice the usual,
+        side = copy.deepcopy(rng)                      # and reach the top of a note anywhere from half way to four fifths.
+        side.bit_generator.advance(1 << 20)            # (A side stream of chance, so that every other choice this singer
+        sw = sw * np.clip(side.normal(1, .55, n), 0, 2.4)   # makes is the same with and without the swell.)
+        pk = side.uniform(.45, .8, n)
     att = TUNE['attack'] * rng.uniform(.8, 1.25) * float(np.clip(.09 + 1.5 * (.74 - dyns[0]), .05, .5))     # length of the fade-in
+    att *= 1 - .4 * min(sw[0] / 8, 1)                  # a note that swells in starts sooner and grows longer
     voiced = np.flatnonzero(av > 0)
     if len(voiced):
         r_ = np.clip((tc - tc[voiced[0]] + .004) / att, 0, 1)
@@ -536,7 +550,17 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     eff *= 10 ** (TUNE['note_decay'] * np.clip(tc - ts[ni] - .12, 0, 1.2) / 20 / TUNE['amp_exp'])   # bell-like or sustained
     eff = np.clip(eff, .05, 1.15)
     lift = 10 ** (np.clip(TUNE['lift'] * (mid - (P['comfy'] - 7)), -3, 3) / 20)        # singers get louder as they go up
-    amp = av * eff ** TUNE['amp_exp'] * lift * (1 + .04 * slow(rng, M, 25))
+    # Each note has a shape of its own.  In soft, slow singing real voices grow into every note: it begins some
+    # 7-9 dB under its peak, reaches it about two thirds of the way through and eases off again - further on a
+    # long note.  The first note of a phrase takes longer to arrive; the last one does not swell and tapers
+    # instead.  At mezzo-forte and above, or in quick music, none of this happens.  (Four singers on two soft
+    # pieces against five on louder or quicker ones.)
+    u_n = np.clip((tc - ts[ni]) / np.maximum(te - ts, .05)[ni], 0, 1)
+    d_n, p_n = sw[ni], pk[ni]
+    ease = d_n * (.3 + .35 * np.clip((te - ts - 1.3)[ni], 0, 1)) * np.clip((u_n - p_n - .03) / (.92 - p_n), 0, 1)
+    shape_db = np.where(ni == 0, -1.15 * d_n * (1 - np.clip(u_n / np.minimum(p_n + .08, .85), 0, 1)) - (ease if n == 1 else 0),
+                        np.where(ni == n - 1, -.35 * d_n * u_n, -d_n * (1 - np.clip(u_n / p_n, 0, 1)) - ease))
+    amp = av * eff ** TUNE['amp_exp'] * lift * (1 + .04 * slow(rng, M, 25)) * 10 ** (gf(shape_db, 6, mode='nearest') / 20)
     rd = np.clip(P['rd0'] + FIT['rd'] + FIT['alive'] * .07 * slow(rng, M, 45) + TUNE['rd_effort'] * (1 - eff)
                  + TUNE['rd_edge'] * (1 - np.clip(av / .3, 0, 1)), .45, 2.6)
 

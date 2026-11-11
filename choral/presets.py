@@ -148,6 +148,37 @@ def note_shape(sc, part, x, sr, T):
     return med(slopes, 8), med(rises, 4), med(scoops, 4)
 
 
+SWELL_SLOPE = 6.1      # dB of swell per dB-per-slice of climb, for the engine's own notes (checked by measuring its renders)
+
+
+def note_swell(sc, part, x, sr, T):
+    """How far one real singer swells into soft, held notes -> dB at piano (the engine's `swell`), or None when
+    the piece has too few such notes.  Each note's level is taken in ten equal slices from start to end; the
+    swell is read from how steeply slices 2-5 climb (the first slice is mostly consonant), which for the
+    engine's own notes is its depth divided by SWELL_SLOPE.  Only notes inside a phrase count: the first one is
+    shaped by the entry and the last one tapers."""
+    hop, n = 64, 256
+    fr = np.lib.stride_tricks.sliding_window_view(x, n)[::hop]
+    et = (np.arange(len(fr)) * hop + n / 2) / sr
+    edb = 10 * np.log10((fr ** 2).mean(1) + 1e-10)
+    notes = sc.parts[part]
+    rows, soft = [], []
+    for i, nt in enumerate(notes):
+        a, z = T(nt['beat']), T(nt['beat'] + nt['dur'])
+        w = float(np.clip((.66 - sc.dyn('voice', nt['beat'])) / .14, 0, 1) * np.clip((z - a - .3) / .4, 0, 1))
+        first = i == 0 or T(notes[i - 1]['beat'] + notes[i - 1]['dur']) < a - .3
+        last = i + 1 == len(notes) or T(notes[i + 1]['beat']) > z + .3
+        e = edb[(et >= a) & (et <= z)]
+        if w < .5 or first or last or len(e) < 30 or np.percentile(e, 80) < edb.max() - 30:
+            continue
+        rows.append(np.maximum([np.mean(e[k * len(e) // 10:(k + 1) * len(e) // 10]) for k in range(10)] - np.percentile(e, 80), -30))
+        soft.append(w)
+    if len(rows) < 8:
+        return None
+    c = np.mean(rows, axis=0)
+    return float(np.clip(np.polyfit(np.arange(4), c[1:5], 1)[0] * SWELL_SLOPE / np.mean(soft), 0, 12))
+
+
 def note_decay(sc, part, x, sr, T):
     return note_shape(sc, part, x, sr, T)[0] or 0.
 
@@ -156,9 +187,13 @@ def shape_settings(sc, part, x, sr, clock, log=print):
     """Preset entries for how notes are shaped, from one isolated real voice."""
     T = lambda b: float(np.interp(b, clock[0], clock[1]))
     fade, attack, scoop = note_shape(sc, part, x, sr, T)
+    swell = note_swell(sc, part, x, sr, T)
     out = {}
+    if swell is not None:       # soft, held notes: how far each one swells in
+        out['swell'] = round(swell, 1)
     if fade is not None:        # left alone the engine's notes fall about 1-2 dB a second; make up the difference
-        out['note_decay'] = round(float(np.clip(fade + (1 if fade > 0 else 2), -14, 5)), 1)
+        fade_ = float(np.clip(fade + (1 if fade > 0 else 2), -14, 5))
+        out['note_decay'] = round(min(fade_, 0.) if swell is not None else fade_, 1)    # a swell is a shape of its own now, not a slope
     if attack is not None:      # the engine's rule for this piece's first dynamic gives one entry speed; scale it to the measured one
         dyn0 = sc.dyn('voice', sc.parts[part][0]['beat']) if sc.parts[part] else .74
         rule = .39 * float(np.clip(.09 + 1.5 * (.74 - dyn0), .05, .5))
@@ -166,6 +201,7 @@ def shape_settings(sc, part, x, sr, clock, log=print):
     if scoop is not None:       # the engine begins a phrase about 45 cents under the note unless told otherwise
         out['scoop'] = round(float(np.clip(-scoop / 45, .15, 1.6)), 2)
     log('note shape in the recording: ' + ', '.join(f'{k} {v}' for k, v in (('fade (dB/s)', None if fade is None else round(fade, 1)),
+        ('swell into soft notes (dB)', None if swell is None else round(swell, 1)),
         ('entry (ms)', None if attack is None else round(1000 * attack)), ('scoop (cents)', None if scoop is None else round(scoop))) if v is not None)
         + '  -> ' + ', '.join(f'{k} {v}' for k, v in out.items()))
     return out

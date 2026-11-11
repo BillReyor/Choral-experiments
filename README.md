@@ -82,7 +82,7 @@ A piece's settings are worked out once and kept beside the score as `NAME.preset
 | Tempo, the first beat, ritardandos, the held last chord | Measured: the predominant part is pitch-tracked against the score, the beat grid is sharpened on the accompaniment's note attacks, and only a drift that never returns to the pulse counts as a tempo change | The score's `tempo:` |
 | Hall (amount and length) | Matched to how the recorded voices die away after each release | A rule from how short the quick syllables are |
 | Accompaniment level | Measured from the balanced mix | A fixed default |
-| Note shape (sustained, or fading like a bell) | Measured: how fast one real singer's held notes fade | Sustained |
+| Note shape (sustained, fading like a bell, or swelling into each note) | Measured on one real singer: how fast held notes fade, and how far soft ones swell in | Sustained; soft notes in slow music swell in by a rule |
 | How close the microphones are | The recognizer walks a ladder from dry-and-close to wet-and-blended and keeps the most blended setting that does not cost words (`--tune`) | The same rule |
 
 On the three test pieces the track separation recovers, with no hand-tuning, what had earlier
@@ -361,16 +361,45 @@ piece turned out to be consistent:
   and took 35-55 ms at any dynamic in the model. It now follows the dynamic (177-186 ms on this
   piece, against 195-226 ms).
 
-Two more are measured per piece from a recording, like the bell-like fade before: whether held
-notes swell (here +3.6 to +3.9 dB a second; the model now +3.2 to +4.0) and how far under the
-note a phrase begins (these singers hardly scoop: 14-21 cents; the model had 67-73).
+One more is measured per piece from a recording, like the bell-like fade before: how far under
+the note a phrase begins (these singers hardly scoop: 14-21 cents; the model had 67-73).
 
 The recognizer was the check on all of it: single voices on the English pieces score 54 / 84 / 72
 / 88% after the changes against 53 / 74 / 72 / 86% before, and the full choirs are unchanged
 within its noise.
 
-Still wrong: every simulated note sits at full voice for 96% of its length where real ones manage
-72% - real singers shape each note, and the model only shapes phrases. And the model is still
-cleaner than any real voice (harmonics 39-42 dB over the noise, against 30-34 dB).
+**The shape of a single note.** Every simulated note used to sit at full voice for 96% of its
+length; on this piece the real ones manage 66-70%. Slicing each held note into tenths and
+comparing levels, singer by singer, showed what the real voices do and when:
+
+| | level through the note, dB under its loudest fifth (ten slices, start to end) |
+|---|---|
+| real, soft and slow (three singers, one piece) | -8 -7 -5 -4 -2 -1 -2 -3 -5 -7 |
+| real, soft and slow (the soloist of another) | -6 -4 -3 -2 -1 -1 -1 -3 -5 -7 |
+| real, mezzo-forte and quicker (another piece) | -1 -1 -1 -1 -1 -1 -1 -3 -7 -10 |
+| the model, before | 0 -1 -1 -1 -1 -1 -1 -1 -4 -7 |
+| the model, now, on the first of these | -9 -7 -5 -3 -2 0 0 0 -4 -8 |
+
+In soft, slow singing a note grows for about two thirds of its length and eases off again. The
+first note of a phrase takes longer to arrive, the last one does not swell and tapers instead,
+and long notes taper further. No two notes are alike: the swell ranges from nothing to twice the
+usual and peaks anywhere from half way to four fifths through. None of it happens at mezzo-forte
+and above, and the same singers did not do it on the soft held notes of a quick piece. The voice
+now does all of this (`choral/voice.py`, the `swell` setting): by rule where there is no recording
+(6.5 dB at piano and softer, in slow music only), and at the depth measured from one isolated
+real voice where there is one (10.5 dB on this piece, 5.3 dB on the soft solo of the carol).
+
+Measured again afterwards: the share of each note at full voice is 72-77% on this piece (real
+66-70%) and 94% on the carol's solo (real 83%); the note-to-note spread is close (on both sides a
+tenth of the notes do not swell at all and a tenth swell nearly twice as far as the middle one);
+and the peak falls at 58-67% of the note (real 64-66%). The recognizer
+lost nothing: with the swell switched on and off for the same singers, the soft solo scores 80%
+against 79%, and two of the three upper voices on this piece 50% against 42% and 48% against 45%.
+Loud and quick pieces render exactly as before.
+
+What the real singers still do that the model does not: their level wanders more while a soft
+note is held (0.6-0.8 dB against 0.3-0.4), and a soloist stops for breath in a few places where
+no rest is written. And the model is still cleaner than any real voice (harmonics 39-42 dB over
+the noise, against 30-34 dB).
 
 None of these numbers says the result would pass for a recording.

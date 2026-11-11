@@ -115,14 +115,15 @@ def main():
     total = float(np.interp(sc.beats, *clock)) + 4.0
     if track is not None:
         total = max(total, len(track) / R.SR)
-    stems = R.sing(sc, (*clock, total), P['singers'], log, tune={'TUNE.note_decay': P.get('note_decay', 0.), 'TUNE.attack': P.get('attack', 1.), 'TUNE.scoop': P.get('scoop', 1.)})
+    stems = R.sing(sc, (*clock, total), P['singers'], log, tune={'TUNE.note_decay': P.get('note_decay', 0.), 'TUNE.attack': P.get('attack', 1.), 'TUNE.scoop': P.get('scoop', 1.),
+                                                                 **({'TUNE.swell': P['swell']} if 'swell' in P else {})})
     if ref_voices is not None and ('hall_from' not in saved or a.fresh):
         got = presets.match_hall(stems, P, ref_voices, log)
         P.update(got, **({'hall_from': 'recording'} if got else {}))
     if a.tune:
         P.update(presets.tune_for_words(stems, sc, clock, P, keep_hall=P.get('hall_from') == 'recording', log=log))
     json.dump(P, open(pfile, 'w'), indent=1)
-    log(f"preset: leaders' mics {P['spot']}, hall {P['hall']} ({P['hall_rt']}s), accompaniment {P['backing']}, note decay {P.get('note_decay', 0.)}  -> {pfile}")
+    log(f"preset: leaders' mics {P['spot']}, hall {P['hall']} ({P['hall_rt']}s), accompaniment {P['backing']}, note decay {P.get('note_decay', 0.)}, swell {P.get('swell', 'by rule')}  -> {pfile}")
 
     # ---- mix and write
     vox = R.mix_voices(stems, P) if part else {'all': R.choir(stems, P)}
