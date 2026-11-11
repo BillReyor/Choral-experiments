@@ -438,9 +438,62 @@ def ocr_cmd(work):
     return exe
 
 
+TEXT = {'pages': {}, 'page': None, 'width': None}     # words a PDF carries as text, by page, in the page image's pixels
+
+
+def pdf_words(pdf, zoom=2.6):
+    """The words a PDF carries as real text (a score exported from notation software has its lyrics that way, even
+    when its notes are in a font this project cannot read as shapes) -> {page number: [(x centre, y centre, x0, x1,
+    text)]}.  Music-font symbols are left out.  No text recognition is needed for such a file - on any system."""
+    import pymupdf
+    out = {}
+    for i, page in enumerate(pymupdf.open(pdf)):
+        words = []
+        for b in page.get_text('dict')['blocks']:
+            for l in b.get('lines', []):
+                for sp in l['spans']:
+                    t = sp['text'].strip()
+                    if not t or any(0xE000 <= ord(ch) <= 0xF8FF for ch in t) or re.search('Bravura|Maestro|Petrucci|Opus|Emmentaler|Leland|Sonata', sp['font']):
+                        continue
+                    x0, y0, x1, y1 = (v * zoom for v in sp['bbox'])
+                    parts = t.split()
+                    if len(parts) > 1:                   # several words in one run: share its width out by their lengths
+                        total = sum(len(q) for q in parts) + len(parts) - 1
+                        at = x0
+                        for q in parts:
+                            w = (x1 - x0) * len(q) / total
+                            words.append(((2 * at + w) / 2, (y0 + y1) / 2, at, at + w, q))
+                            at += w + (x1 - x0) / total
+                    else:
+                        words.append(((x0 + x1) / 2, (y0 + y1) / 2, x0, x1, t))
+        # A hyphen is a text object of its own, standing between two syllables: hang it on the syllable before it,
+        # which is how the rest of the reader expects to find it.
+        hyph = [w for w in words if w[4] in ('-', '–', '—')]
+        rest = [list(w) for w in words if w[4] not in ('-', '–', '—')]
+        for h in hyph:
+            before = [w for w in rest if abs(w[1] - h[1]) < .6 * (h[3] - h[2] + 8) + 6 and w[3] <= h[2] + 2]
+            if before:
+                w = max(before, key=lambda w: w[3])
+                if h[2] - w[3] < 60 * zoom and not w[4].endswith('-'):
+                    w[4] += '-'
+        out[i + 1] = [tuple(w) for w in rest]
+    return out
+
+
+def on_page(n, img=None):
+    """Tell the word reader which page is being looked at (it matters only when the words come from the PDF)."""
+    TEXT['page'] = n
+    if img is not None:
+        TEXT['width'] = img.shape[1]
+
+
 def ocr_words(exe, img, y0, y1, work, tag, zoom=3):
     """Words between two heights of a page, read at three times the size (small print needs it; hyphens too).
     -> [(x centre, y centre, x0, x1, text)] in page pixels."""
+    if TEXT['pages']:
+        if img.shape[1] != TEXT['width']:               # a close-up of one spot: the PDF's text has nothing more to give
+            return []
+        return [w for w in TEXT['pages'].get(TEXT['page'], []) if y0 <= w[1] <= y1]
     band = Image.fromarray(img[int(y0):int(y1)])
     band = band.resize((band.size[0] * zoom, band.size[1] * zoom), Image.LANCZOS)
     canvas = Image.new('L', (band.size[0], band.size[1] + 240), 255)
@@ -810,6 +863,7 @@ def has_piano(crops, pages, exe, work):
     sung = 0
     for c in big:
         img = np.asarray(Image.open(pages[c['page'] - 1]).convert('L'))
+        on_page(c['page'], img)
         top, bot = c['staves'][-1]
         unit = (bot - top) / 4
         words = ocr_words(exe, img, bot + .6 * unit, min(c['bot'], bot + 7 * unit), work, 'piano')
@@ -820,7 +874,7 @@ def has_piano(crops, pages, exe, work):
 
 
 def assemble(crops, pages, work, title, tempo, language, log, marked=False):
-    exe = ocr_cmd(work)
+    exe = 'pdf-text' if TEXT['pages'] else ocr_cmd(work)
     if not exe:
         log('  ! no text recognition here (it uses macOS): the notes will have no words')
     piano = has_piano(crops, pages, exe, work)
@@ -868,6 +922,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         if c['read']:
             counts = [len(st['measures']) for st in c['read']]
             img = imgs.setdefault(c['page'], np.asarray(Image.open(pages[c['page'] - 1]).convert('L')))
+            on_page(c['page'], img)
             c['texts'] = read_texts(c, img, max(set(counts), key=counts.count))
     # ... so that the words can be checked against each other before any note gets one.
     key = lambda t: re.sub(r"[^a-z']", '', t.lower())
@@ -930,6 +985,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         if not c['read']:
             continue
         img = imgs.setdefault(c['page'], np.asarray(Image.open(pages[c['page'] - 1]).convert('L')))
+        on_page(c['page'], img)
         counts = [len(st['measures']) for st in c['read']]
         M = max(set(counts), key=counts.count)
         out.append(f"// page {c['page']}, system {c['system']}")
@@ -1106,8 +1162,14 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
 def find_tempo(pages, work):
     """The metronome mark, if the first pages print one ("= ca. 60")."""
     exe = ocr_cmd(work)
-    for p in pages[:3]:
-        if exe:
+    for i, p in enumerate(pages[:3], 1):
+        if TEXT['pages']:
+            text = ' '.join(w[4] for w in sorted(TEXT['pages'].get(i, []), key=lambda w: (round(w[1] / 20), w[2])))
+            # the note before the "=" is a music-font symbol and so not in the text: "Tempo ... = 132", or a bare number
+            m = re.search(r'=\s*(?:ca\.?\s*)?(\d{2,3})', text)
+            if m and 30 <= int(m.group(1)) <= 240:
+                return float(m.group(1))
+        elif exe:
             text = ' '.join(l.partition('\t')[2] for l in subprocess.run([exe, p], capture_output=True, text=True).stdout.splitlines())
             m = re.search(r'=\s*(?:ca\.?\s*)?(\d{2,3})', text)
             if m and 30 <= int(m.group(1)) <= 240:
@@ -1123,6 +1185,10 @@ def main():
     work = a.work or os.path.splitext(a.out)[0] + '.scan'
     os.makedirs(work, exist_ok=True)
     pages = render_pages(a.pdf, work)
+    words = pdf_words(a.pdf)
+    if sum(len(v) for v in words.values()) >= 12 * len(pages):       # a PDF with its words in it: no need to read them off the picture
+        TEXT['pages'] = words
+        print("the words are taken from the PDF's own text")
     crops = read_systems(cut_systems(pages, work, print), print)
     found = None if a.tempo else find_tempo(pages, work)
     tempo = a.tempo or found or 100.

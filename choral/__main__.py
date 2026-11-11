@@ -42,10 +42,20 @@ def read_music(path, log, language=None):
     drawn = sum(len(p.get_drawings()) for p in doc) / max(len(doc), 1)
     if drawn > 200:                                  # vector: hundreds of shapes a page
         r = subprocess.run([sys.executable, os.path.join(tools, 'pdf2score.py'), path, out], capture_output=True, text=True)
+        sung = 0
         if r.returncode == 0 and os.path.exists(out):
+            try:
+                sung = sum(len(v) for v in scoremod.load(out).parts.values())
+            except Exception:
+                sung = 0
+        if sung >= 8:
             log(r.stdout.strip()); log(f'read {path} -> {out}')
             return out
-    log('this PDF is a scan: recognizing the notes (about half a minute a page)...')
+        if os.path.exists(out):                      # notes drawn in a music font the shape reader does not know: nothing was read
+            os.remove(out)
+        log('the notes of this PDF are in a font I cannot read as shapes: recognizing them from the rendered pages (about half a minute a page)...')
+    else:
+        log('this PDF is a scan: recognizing the notes (about half a minute a page)...')
     r = subprocess.run([sys.executable, os.path.join(tools, 'scan2score.py'), path, out] + (['--language', language] if language else []))
     if r.returncode or not os.path.exists(out):
         raise SystemExit('Could not read the music out of this PDF.')

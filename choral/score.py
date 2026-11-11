@@ -15,7 +15,7 @@ DYN = {'pp': .42, 'p': .52, 'mp': .62, 'mf': .74, 'f': .88, 'ff': 1.0}
 VOCAL = {'TEN': ('T1', 'T2'), 'LOW': ('BR', 'BS'), 'T1': ('T1',), 'T2': ('T2',), 'BR': ('BR',), 'BS': ('BS',), 'SOLO': ('SOLO',),
          'TRIO': ('TR1', 'TR2'), 'TR1': ('TR1',), 'TR2': ('TR2',), 'TR3': ('TR3',)}
 PIANO = ('RH', 'RH2', 'RH3', 'LH', 'LH2', 'LH3')
-TOKEN = re.compile(r"^(?P<p>r|[a-g][#bn]?-?\d~?(?:\+[a-g][#bn]?-?\d~?)*)/(?P<d>[whqest]3?\.*)"
+TOKEN = re.compile(r"^(?P<p>r|[a-g](?:##|bb|[#bn])?-?\d~?(?:\+[a-g](?:##|bb|[#bn])?-?\d~?)*)/(?P<d>[whqest]3?\.*)"
                    r"(?P<f>(?:~|\^|>|'|%gl)*)(?:=(?P<l>\S+))?$")
 
 
@@ -270,7 +270,10 @@ def _line(sc, mnum, name, toks, beat0, meas_len, keysig, warn):
                 one_tie = p.endswith('~')            # a tie on just this note of the chord
                 p = p.rstrip('~')
                 letter, rest = p[0], p[1:]
-                if rest[0] in '#bn':
+                if rest[:2] in ('##', 'bb'):         # a double sharp or double flat
+                    acc[(letter, rest[2:])] = 2 if rest[0] == '#' else -2
+                    rest = rest[2:]
+                elif rest[0] in '#bn':
                     acc[(letter, rest[1:])] = {'#': 1, 'b': -1, 'n': 0}[rest[0]]
                     rest = rest[1:]
                 alter = acc.get((letter, rest), keysig(letter))
