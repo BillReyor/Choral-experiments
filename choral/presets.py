@@ -148,13 +148,13 @@ def note_shape(sc, part, x, sr, T):
     return med(slopes, 8), med(rises, 4), med(scoops, 4)
 
 
-SWELL_SLOPE = 6.1      # dB of swell per dB-per-slice of climb, for the engine's own notes (checked by measuring its renders)
+SWELL_SLOPE = 6.7      # dB of swell per dB-per-slice of climb, for the engine's own notes (checked by measuring its renders)
 
 
 def note_swell(sc, part, x, sr, T):
     """How far one real singer swells into soft, held notes -> dB at piano (the engine's `swell`), or None when
     the piece has too few such notes.  Each note's level is taken in ten equal slices from start to end; the
-    swell is read from how steeply slices 2-5 climb (the first slice is mostly consonant), which for the
+    swell is read from how steeply slices 3-6 climb (the first two are partly consonant, and shift with any error in the timing), which for the
     engine's own notes is its depth divided by SWELL_SLOPE.  Only notes inside a phrase count: the first one is
     shaped by the entry and the last one tapers."""
     hop, n = 64, 256
@@ -169,14 +169,14 @@ def note_swell(sc, part, x, sr, T):
         first = i == 0 or T(notes[i - 1]['beat'] + notes[i - 1]['dur']) < a - .3
         last = i + 1 == len(notes) or T(notes[i + 1]['beat']) > z + .3
         e = edb[(et >= a) & (et <= z)]
-        if w < .5 or first or last or len(e) < 30 or np.percentile(e, 80) < edb.max() - 30:
+        if w < .5 or z - a < .7 or first or last or len(e) < 30 or np.percentile(e, 80) < edb.max() - 30:   # shorter notes are mostly consonant at the start
             continue
         rows.append(np.maximum([np.mean(e[k * len(e) // 10:(k + 1) * len(e) // 10]) for k in range(10)] - np.percentile(e, 80), -30))
         soft.append(w)
     if len(rows) < 8:
         return None
     c = np.mean(rows, axis=0)
-    return float(np.clip(np.polyfit(np.arange(4), c[1:5], 1)[0] * SWELL_SLOPE / np.mean(soft), 0, 12))
+    return float(np.clip(np.polyfit(np.arange(4), c[2:6], 1)[0] * SWELL_SLOPE / np.mean(soft), 0, 12))
 
 
 def note_decay(sc, part, x, sr, T):
@@ -260,20 +260,26 @@ def from_recordings(sc, part, balanced, accompaniment, predominant=None, muted=N
         log('  ! not clean enough to trust the separated voices: keeping only the timing')
         return out, iso
     out['backing'] = round(R.loud(iso['accompaniment']) / R.loud(iso['voices']), 3)
-    for p2, pred2 in (more or {}).items():      # other parts' practice tracks: each knows the timing where it sings
+    # The accompaniment leads.  Every isolated voice and the accompaniment track are followed through the piece
+    # together (timing.track): the written piano attacks say exactly where each beat falls, the singers say which
+    # beat it is.  (Blending maps fitted to each singer separately, as was done before, let them disagree by a
+    # third of a second and made the voices lurch against the accompaniment.)
+    singers = {}
+    if 'part' in iso:
+        singers[part] = (resample_poly(iso['part'].mean(1), 1, 2), R.SR // 2)
+    for p2, pred2 in (more or {}).items():
         r2 = reference.isolate(sc, None, p2, balanced, accompaniment, pred2, None, log=lambda *a: None)
-        if 'part' not in r2 or not sc.parts[p2]:
-            continue
-        t2 = timingmod.measure(sc, p2, resample_poly(r2['part'].mean(1), 1, 2), R.SR // 2, acc, log)
-        if t2['agree'] < .6:
-            continue
-        on1 = np.array(sorted(n['beat'] for n in sc.parts[part])); on2 = np.array(sorted(n['beat'] for n in sc.parts[p2]))
-        b = np.array(tm['beats']); s1, s2 = np.array(tm['secs']), np.interp(b, t2['beats'], t2['secs'])
-        d1 = np.abs(b[:, None] - on1[None, :]).min(1); d2 = np.abs(b[:, None] - on2[None, :]).min(1)
-        w = np.clip((d1 - d2) / 8 + .5, 0, 1)                    # lean on whichever part is singing nearby
-        w = np.convolve(np.pad(w, 4, mode='edge'), np.ones(9) / 9, 'valid')
-        tm['secs'] = [round(float(v), 3) for v in np.maximum.accumulate(s1 * (1 - w) + s2 * w)]
-        clock = R.clock_for(sc, tm, absolute=True)
+        if 'part' in r2 and sc.parts[p2]:
+            singers[p2] = (resample_poly(r2['part'].mean(1), 1, 2), R.SR // 2)
+    beats = np.arange(0, sc.beats + 1.)
+    secs = timingmod.track(sc, beats, np.interp(beats, clock[0], clock[1]), acc, singers, log)
+    tm = dict(tm, beats=[float(b) for b in beats], secs=[round(float(v), 3) for v in secs], led='recordings')
+    out['timing'] = tm
+    clock = R.clock_for(sc, tm, absolute=True)
+    for p2, (x2, sr2) in singers.items():
+        log(f'  {R.NAMES.get(p2, p2)}: {100 * timingmod.on_pitch(sc, p2, x2, sr2, beats, secs):.0f}% of its notes are on pitch where the timing puts them')
+    if sc.piano:
+        log('  ' + timingmod.sync_report(timingmod.against_accompaniment(sc, tm, acc[0], acc[1])))
     if 'part' in iso:
         out.update(shape_settings(sc, part, resample_poly(iso['part'].mean(1), 1, 2), R.SR // 2, clock, log))
     return out, iso

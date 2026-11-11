@@ -165,6 +165,191 @@ def follow(notes, total_beats, t, m, sbeats, ssecs, res=8):
     return beats, steady(beats) + dev
 
 
+def _piano_attacks(sc):
+    """Beats at which the written accompaniment strikes, and how heavily (more notes at once = heavier)."""
+    on = {}
+    for n in sc.piano:
+        on[n['beat']] = on.get(n['beat'], 0) + 1
+    ob = np.array(sorted(on))
+    return ob, np.sqrt([on[b] for b in ob])
+
+
+def _fits(sc, x, sr, beats, secs, span, hop, lags):
+    """For each stretch of `span` beats: how well the written piano attacks, placed by the map and shifted by each
+    lag, land on the recording's own attacks.  -> (stretch centres in beats, fit[stretch, lag], attacks per stretch)"""
+    tt, fl = _flux(x, sr)
+    fl = fl / np.percentile(fl, 99)
+    ob, ow = _piano_attacks(sc)
+    starts = np.arange(0, max(sc.beats - span / 2, hop), hop)
+    fit = np.zeros((len(starts), len(lags))); count = np.zeros(len(starts), int)
+    for i, b0 in enumerate(starts):
+        sel = (ob >= b0) & (ob < b0 + span)
+        count[i] = sel.sum()
+        if count[i] >= 4:
+            at = np.interp(ob[sel], beats, secs)
+            v = np.array([(np.interp(at + lg, tt, fl, left=0., right=0.) * ow[sel]).sum() for lg in lags]) / ow[sel].sum()   # nothing is heard outside the recording
+            fit[i] = np.clip(v / (np.median(v) + 1e-9) - 1, 0, 3) * min(count[i] / 8, 1)
+    return starts + span / 2, fit, count
+
+
+def _singer_fits(sc, part, x, sr, beats, secs, starts, span, lags):
+    """For each stretch: the share of this singer's notes that are on their written pitch when the map is shifted
+    by each lag (the middle four fifths of every note must be on pitch).  -> (fit[stretch, lag] in 0..1, notes per stretch)"""
+    t, m = yin(x, sr)
+    dt = t[1] - t[0]
+    notes = part_notes(sc, part)
+    fit = np.zeros((len(starts), len(lags))); count = np.zeros(len(starts), int)
+    if not notes:
+        return fit, count
+    per = np.zeros((len(notes), len(lags)))
+    for i, (b, d, mi) in enumerate(notes):
+        a, z = np.interp([b, b + d], beats, secs)
+        c = np.cumsum(np.r_[0., (np.abs(m - mi) < .7).astype(float)])      # NaN (no voice) compares false
+        i0 = np.clip(((a + .1 * (z - a) + lags - t[0]) / dt).astype(int), 0, len(m))
+        i1 = np.clip(((a + .9 * (z - a) + lags - t[0]) / dt).astype(int), 0, len(m))
+        per[i] = (c[i1] - c[i0]) / np.maximum(i1 - i0, 1)
+    nb = np.array([n[0] for n in notes])
+    for w, b0 in enumerate(starts):
+        sel = (nb >= b0) & (nb < b0 + span)
+        count[w] = sel.sum()
+        if count[w] >= 2:
+            fit[w] = per[sel].mean(0) * min(count[w] / 4, 1)
+    return fit, count
+
+
+def _path(E, lags, K, jump=1.5):
+    """The best path through (how far the map is off, how fast that is changing) -> lag per stretch.  Keeping a tempo
+    is free, changing it a little costs a little, and one sudden change of place and tempo - a held chord, a new
+    section in a tempo the map did not expect - costs a fixed price, so it has to be worth it."""
+    W, L = E.shape
+    ks = np.arange(-K, K + 1); nk = len(ks)
+    D = np.repeat(E[0][:, None], nk, 1) - .002 * np.abs(ks)[None, :] - .05 * np.abs(lags)[:, None]
+    kind = np.zeros((W, L, nk), np.int8); far = np.zeros((W, 2), int)
+    for w in range(1, W):
+        jj, kk = np.unravel_index(int(np.argmax(D)), D.shape)
+        far[w] = jj, kk
+        best = np.full((L, nk), D[jj, kk] - jump); how = np.full((L, nk), 9, np.int8)
+        for dk in (-2, -1, 0, 1, 2):                         # tempo as it was, or changed by a step or two
+            lo, hi = max(0, -dk), min(nk, nk - dk)
+            for i in range(lo, hi):                          # arriving at lag j with slope k means coming from lag j - k
+                k = ks[i]
+                col = np.full(L, -np.inf)
+                if k > 0:
+                    col[k:] = D[:L - k, i + dk]
+                elif k < 0:
+                    col[:k] = D[-k:, i + dk]
+                else:
+                    col = D[:, i + dk].copy()
+                col -= .05 * abs(dk)
+                better = col > best[:, i]
+                best[better, i] = col[better]; how[better, i] = dk
+        D = best + E[w][:, None] - .002 * np.abs(ks)[None, :]
+        kind[w] = how
+    j, i = np.unravel_index(int(np.argmax(D)), D.shape)
+    path, slope = [j], ks[i]
+    for w in range(W - 1, 0, -1):
+        h = kind[w][j, i]
+        if h == 9:
+            j, i = far[w]
+        else:
+            j, i = j - ks[i], i + h
+        path.append(j)
+    return lags[np.array(path[::-1])], slope * (lags[1] - lags[0])
+
+
+def track(sc, beats, secs, accompaniment=None, singers=None, log=print, span=8., hop=2.):
+    """Bend a tempo map onto the recordings there are.  Two kinds of evidence, stretch by stretch along the piece:
+    the written piano attacks landing on the accompaniment track's own attacks (exact to a hundredth of a second,
+    but a pattern of even notes fits equally well a beat further on), and each isolated singer's notes being on
+    their written pitch (only good to a tenth of a second, but a melody fits in one place only).  The path taken
+    is the one that fits best over the whole piece (see _path).  First coarsely and far - the map may be wrong by
+    many seconds and by a different tempo - then finely around what that found.
+    accompaniment: (mono array, sr); singers: {part: (mono array, sr)}.  -> seconds for each of `beats`."""
+    beats = np.asarray(beats, float); ref = np.asarray(secs, float).copy()
+    starts = np.arange(0, max(sc.beats - span / 2, hop), hop)
+    centres = starts + span / 2
+    total = np.zeros(len(starts)); heard = np.zeros(len(starts), bool)
+    for lags, K in ((np.arange(-20., 20.001, .02), 40), (np.arange(-1., 1.0001, .01), 8), (np.arange(-.5, .5001, .01), 6)):
+        E = np.zeros((len(starts), len(lags))); heard[:] = False
+        if accompaniment is not None and len(sc.piano) >= 16:
+            _, fp, cp = _fits(sc, accompaniment[0], accompaniment[1], beats, ref, span, hop, lags)
+            E += .5 * fp; heard |= cp >= 4
+        for part, (x, sr) in (singers or {}).items():
+            fs, cs = _singer_fits(sc, part, x, sr, beats, ref, starts, span, lags)
+            E += 2. * fs; heard |= cs >= 2
+        if heard.sum() < 6:
+            return ref
+        lag, slope = _path(E, lags, K)
+        if len(lag) >= 3:
+            lag = np.median(np.lib.stride_tricks.sliding_window_view(np.pad(lag, 1, mode='edge'), 3), axis=1)
+        last = int(np.flatnonzero(heard)[-1])                # after the last thing heard, carry on in the tempo found
+        # A sudden move needs music on both sides to vouch for it.  One with less than 32 beats after it (or before
+        # it) means the recordings do not fit the score as read there - misread notes, a cut - and the map carries on
+        # in the tempo it had instead of chasing them.
+        big = np.flatnonzero(np.abs(np.diff(lag)) > 1.5) + 1
+        late = [w for w in big if len(lag) - w < 32 / hop]
+        if late and late[0] > 8:
+            w0 = late[0]
+            m0 = max(q for q in sc.measures if sc.measures[q][0] <= starts[w0] + span / 2 + 1e-6)
+            log(f'  ! from about measure {m0} the recordings do not fit the score as read (misread notes, or a cut): '
+                f'the timing carries on from there in the tempo it had')
+            last = min(last, w0 - 1)
+        early = [w for w in big if w < 32 / hop and w <= last]
+        if early:
+            w1 = early[-1]
+            lag[:w1] = lag[w1] - (lag[min(w1 + 4, last)] - lag[w1]) / 4 * np.arange(w1, 0, -1)
+        cb = np.r_[centres[:last + 1], centres[last] + 400.]
+        cl = np.r_[lag[:last + 1], lag[last] + (lag[last] - lag[max(last - 4, 0)]) / max(min(last, 4), 1) * 400. / hop]
+        moved = np.interp(beats, cb, cl)
+        new = ref + moved
+        step = np.diff(new)                                  # time only runs forwards: a beat lasts at least a third of its neighbours
+        floor = np.median(step) / 3 * np.diff(beats)
+        new = np.r_[new[0], new[0] + np.cumsum(np.maximum(step, floor))]
+        total += lag
+        if np.abs(new - ref).max() < .02:
+            ref = new
+            break
+        ref = new
+    log(f'followed through the recordings ({heard.sum()} of {len(starts)} stretches say something): the map moved by '
+        f'{1000 * np.median(np.abs(total[heard])):.0f} ms on average, {np.abs(total[heard]).max():.1f} s at most')
+    return ref
+
+
+def on_pitch(sc, part, x, sr, beats, secs):
+    """Share of a singer's notes that are on their written pitch where the map says they are."""
+    fit, count = _singer_fits(sc, part, x, sr, beats, secs, np.array([0.]), sc.beats + 1., np.array([0.]))
+    return float(fit[0, 0]) if count[0] >= 4 else float('nan')
+
+
+def against_accompaniment(sc, timing, x, sr, span=8., hop=4.):
+    """Are the voices in time with the accompaniment track?  -> [(measure, seconds the map is off, clear?)] per stretch:
+    where the written piano attacks, placed by the tempo map, best fit the recording's own attacks."""
+    from . import render as R
+    beats, secs = R.clock_for(sc, timing, absolute=True)
+    lags = np.arange(-.4, .4001, .01)
+    centres, fit, count = _fits(sc, x, sr, beats, secs, span, hop, lags)
+    out = []
+    near = np.abs(lags) <= .03
+    for c, f, k in zip(centres, fit, count):
+        if k >= 4:
+            m = max(q for q in sc.measures if sc.measures[q][0] <= c - span / 2 + 1e-6)
+            here = f[near].max() >= .7 * f.max()             # an even pattern fits a beat away just as well: that is not "off"
+            out.append((m, 0. if here else float(lags[int(np.argmax(f))]), bool(f.max() > .6)))
+    return out
+
+
+def sync_report(rows):
+    """One line on what against_accompaniment() found."""
+    clear = [r for r in rows if r[2]]
+    if not clear:
+        return 'voices against the accompaniment: nothing clear enough to say'
+    off = [r for r in clear if abs(r[1]) > .06]
+    line = f'voices against the accompaniment: within 60 ms in {len(clear) - len(off)} of {len(clear)} stretches'
+    if off:
+        line += '; off at measures ' + ', '.join(f'{m} ({1000 * d:+.0f} ms)' for m, d, _ in off[:12]) + (' ...' if len(off) > 12 else '')
+    return line
+
+
 def _flux(x, sr, hop=220, n=2048):
     fr = np.lib.stride_tricks.sliding_window_view(x, n)[::hop] * np.hanning(n)
     M = np.log1p(50 * np.abs(np.fft.rfft(fr, axis=1)))

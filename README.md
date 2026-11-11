@@ -82,7 +82,7 @@ A piece's settings are worked out once and kept beside the score as `NAME.preset
 
 | Setting | From practice tracks | Without them |
 |---|---|---|
-| Tempo, the first beat, ritardandos, the held last chord | Measured: the predominant part is pitch-tracked against the score, the beat grid is sharpened on the accompaniment's note attacks, and only a drift that never returns to the pulse counts as a tempo change | The score's `tempo:` |
+| Tempo, the first beat, ritardandos, holds | Measured: the written piano attacks are followed through the accompaniment track and every isolated voice's notes through its own track, together, so the voices stay with the accompaniment; the run reports how well both fit | The score's `tempo:` |
 | Hall (amount and length) | Matched to how the recorded voices die away after each release | A rule from how short the quick syllables are |
 | Accompaniment level | Measured from the balanced mix | A fixed default |
 | Note shape (sustained, fading like a bell, or swelling into each note) | Measured on one real singer: how fast held notes fade, and how far soft ones swell in | Sustained; soft notes in slow music swell in by a rule |
@@ -460,5 +460,25 @@ begins quickly and leaves the growing to the swell: 55-63 ms, the first tenth of
 within 2-6 dB of the singers' instead of 4-8, and the recognizer unchanged within its noise (soft
 solo 80% -> 80%, its baritone 48 -> 45, two voices of the unaccompanied piece 48 -> 48 and
 46 -> 43, the full choir 58 -> 60).
+
+**Voices against the accompaniment.** A fault that none of the measurements above could see, and
+that was heard, not measured: in the carol the voices ran behind the accompaniment, then rushed to
+catch up. Each voice had only ever been checked against its own isolated track. Checked instead
+against the accompaniment's own note attacks, the tempo map was 150-400 ms out for most of the
+piece. It had been blended from maps fitted to two singers separately, which disagreed by a third
+of a second, and it assumed a faster last verse because a tempo mark said so; the recording keeps
+its tempo.
+
+Now the accompaniment leads (`timing.track`). The written piano attacks and every isolated voice
+are followed through the piece together: the piano says exactly where a beat falls, but an even
+pattern fits a beat further on just as well; a melody is only good to a tenth of a second, but
+fits in one place. The path through both may drift freely with the tempo, and a sudden move - a
+held chord, a breath before a new verse, a section in a tempo the score did not promise - has to
+be worth a fixed price. On the carol the soloist's notes are 100% on pitch where the new map puts
+them and the baritone's 94% (85% before, with whole passages off), and the voices are within
+60 ms of the accompaniment in 85 of 90 stretches. The program now reports both numbers on every
+run with practice tracks. It also says where the recordings do not fit the score as read: here the
+written introduction is five seconds longer than the played one, and the baritone's last five
+measures were misread from the scan - the timing there carries on in the tempo it had.
 
 None of these numbers says the result would pass for a recording.
