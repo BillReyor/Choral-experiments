@@ -218,3 +218,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Choral-experiments ---------------------------------------------------
+# Never commit audio (renders or reference tracks) or sheet music.
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.aiff
+*.pdf
+*.png
+# Transcriptions of copyrighted arrangements stay on the local machine.
+scores/private/
+# Local working files
+out/
+.venv/
+models/
