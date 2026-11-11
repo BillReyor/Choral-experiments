@@ -16,10 +16,13 @@ Everything is model minus real, in dB, and the largest differences are listed fi
 on the first piece that has it, without anyone having to think of the right question.  Because every table is
 relative to the voice's own level, neither recording level nor microphone distance enters.
 
-A real "isolated" voice still carries a little of the other parts and of the room, some 15-25 dB under the singer.
-So nothing here looks further down than FLOOR dB under a note's own level, entries and releases are found at 12 dB
-under it, and what follows a release is shown but never listed as a difference: that is the hall, which a single
-dry simulated singer does not have.
+Like with like.  A real "isolated" voice still has its room around it and a little of the other parts, some 10-25 dB
+under the singer; a simulated singer is dry.  Compared as they are, every consonant looks like a hole in the model
+that the real singers do not have - the room fills theirs.  (That mistake was made here once: a "17 dB gap before
+every stop" turned out to be the missing room, and the real singers' breaks are as long as the model's.)  So the
+simulated voices are first put in a plain room chosen to make them die away after phrase ends as the recording
+does, and only then measured.  Nothing looks further down than FLOOR dB under a note's own level, entries and
+releases are found at 12 dB under it, and what follows a release is never listed as a difference: it was matched.
 """
 import numpy as np
 from scipy.signal import resample_poly
@@ -148,6 +151,54 @@ def tables(rows):
     return T
 
 
+def reverb(x, rt, wet):
+    """A plain room: x plus `wet` times x through a noise burst that dies away in rt seconds."""
+    from scipy.signal import fftconvolve
+    n = int(1.2 * rt * SR); t = np.arange(n) / SR
+    ir = np.random.default_rng(5).standard_normal(n) * np.exp(-6.91 * t / rt) * np.clip(t / .008, 0, 1)
+    return x + wet * fftconvolve(x, ir / np.sqrt((ir ** 2).sum()))[:len(x)]
+
+
+AFTER = np.array([.03, .06, .1, .15, .22, .3])      # seconds after a release at which the dying sound is read
+
+
+def dying(x, sc, part, T):
+    """How the sound dies after the ends of phrases: its level against the last note's, at AFTER -> array or None."""
+    win = int(.04 * SR)
+    c = np.cumsum(np.r_[0., np.asarray(x, float) ** 2])
+    lev = lambda t: 10 * np.log10((c[min(int(t * SR) + win, len(x))] - c[max(min(int(t * SR), len(x)) - win, 0)]) / (2 * win) + 1e-12)
+    notes = sc.parts[part]; rows = []
+    for i, n in enumerate(notes):
+        a, z = T(n['beat']), T(n['beat'] + n['dur'])
+        if z - a < .3 or not (i + 1 == len(notes) or T(notes[i + 1]['beat']) > z + .45):
+            continue
+        ref = np.median([lev(a + u * (z - a)) for u in np.linspace(.3, .8, 9)])
+        ts = np.arange(z - .5, z + .3, .01)
+        up = [t for t in ts if lev(t) > ref - 12]
+        if up:
+            rows.append(np.maximum([lev(up[-1] + d) - ref for d in AFTER], -30))
+    return np.mean(rows, axis=0) if len(rows) >= 3 else None
+
+
+def match_room(target, sim, sc, part, T):
+    """The plain room in which a dry simulated voice dies away after phrase ends as the recording does -> (rt, wet) or None."""
+    if target is None:
+        return None
+    from scipy.signal import fftconvolve
+    best = None
+    for rt in (.3, .6, 1., 1.5, 2.2, 3.2):
+        n = int(1.2 * rt * SR); t = np.arange(n) / SR
+        ir = np.random.default_rng(5).standard_normal(n) * np.exp(-6.91 * t / rt) * np.clip(t / .008, 0, 1)
+        tail = fftconvolve(sim, ir / np.sqrt((ir ** 2).sum()))[:len(sim)]
+        for wet in (0., .03, .06, .12, .2, .35, .6, 1., 1.7):
+            got = dying(sim + wet * tail, sc, part, T)
+            if got is not None:
+                err = float(np.mean((got - target) ** 2))
+                if best is None or err < best[0]:
+                    best = (err, rt, wet)
+    return best[1:] if best else None
+
+
 def simulate(sc, part, timing=None, singers=SINGERS, settings=None, pool=True):
     """The part by a few simulated singers, on the recording's clock.  -> ([audio at 22050 Hz], beats -> seconds)."""
     beats, secs = R.clock_for(sc, timing, absolute=bool(timing))
@@ -264,6 +315,9 @@ def report(c, name='the singer', top=10):
     """The comparison as text."""
     d, real, model = c['diff'], c['real'], c['model']
     L = [f"{name}: {real.get('held', 0)} held notes of {real.get('notes', 0)} measured.  Everything below is model minus real, in dB."]
+    room = c.get('room')
+    L.append(f'The simulated voices stand in a room matched to how the recording dies away after phrase ends ({room[0]} s, level {room[1]}).' if room and room[1] > 0
+             else 'The simulated voices are dry: ' + ('the recording dies away as fast as they do.' if room else 'too few phrase ends to match a room, so read the entries with care.'))
     if 'tone' not in d:
         return L[0] + '\n  too few held notes to compare.'
     L.append('\nLargest differences')
@@ -301,12 +355,18 @@ def report(c, name='the singer', top=10):
 
 
 def run(sc, part, x, sr, timing, singers=SINGERS, settings=None, pool=True):
-    """Compare a real voice (mono audio x at sr, on the clock `timing` describes) with the model.  -> see compare()."""
+    """Compare a real voice (mono audio x at sr, on the clock `timing` describes) with the model, the model standing in
+    a room matched to the recording.  -> see compare(), plus 'room': (seconds, level) or None."""
     x = np.asarray(x, float)
     if sr != SR:
         x = resample_poly(x, SR, sr)
     sims, T = simulate(sc, part, timing, singers, settings, pool)
-    return compare(measure(x, sc, part, T), [measure(y, sc, part, T) for y in sims])
+    room = match_room(dying(x, sc, part, T), sims[0], sc, part, T)          # like with like: the model in the recording's room
+    if room and room[1] > 0:
+        sims = [reverb(y, *room) for y in sims]
+    c = compare(measure(x, sc, part, T), [measure(y, sc, part, T) for y in sims])
+    c['room'] = room
+    return c
 
 
 def across(results, names):

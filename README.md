@@ -23,7 +23,7 @@ no samples and no recordings — and in rendering written sheet music with it.
 | `tools/check_part.py`, `tools/check_mix.py` | Check a transcription against a recording: pitch-track one isolated part, or test every written note against a recording of all voices. |
 | `tools/calibrate.py` | Fits the engine's tone to a recording of a real singer on the same notes. |
 | `tools/tone.py` | Tone, harmonic by harmonic: on every held vowel, compares the strength of each harmonic in a real solo recording and in the model. Only harmonic peaks count, so room reverb does not. |
-| `tools/compare.py`, `choral/compare.py` | Spectral comparison: one real singer alone beside the same part sung by simulated singers on the recording's timing, measured the same way note by note (tone in 16 bands, loudness through each note, colour through the note, entries by consonant type, releases, loud against soft, steadiness). Lists what differs, largest first; given several singers, lists what they have in common. `python -m choral` writes this report on its own whenever practice tracks let it isolate a real voice. |
+| `tools/compare.py`, `choral/compare.py` | Spectral comparison: one real singer alone beside the same part sung by simulated singers on the recording's timing, measured the same way note by note (tone in 16 bands, loudness through each note, colour through the note, entries by consonant type, releases, loud against soft, steadiness) - the simulated ones first placed in a room matched to the recording's, so that like is compared with like. Lists what differs, largest first; given several singers, lists what they have in common. `python -m choral` writes this report on its own whenever practice tracks let it isolate a real voice. |
 | `tools/realism.py` | Scorecard: renders one simulated singer on a part and measures it beside a real singer's isolated recording of the same part — pitch glides and scoops, attacks, how notes are held, harmonics versus noise, consonant strength. |
 | `experiments/` | The stand-alone experiments that led here (a vowel-only "Shenandoah", and an original pop number in three engine generations). |
 | `scores/demo_shenandoah.score` | A short public-domain example. |
@@ -404,25 +404,33 @@ Loud and quick pieces render exactly as before.
 five pieces because nothing was looking for them: every earlier measurement answered a question
 somebody had thought to ask. `tools/compare.py` asks none. It sets a real singer beside the model
 on the same notes and the same timing, measures both spectra note by note, and lists whatever
-differs. All eleven isolated real singers take 15 seconds. Run after the note shaping, it finds
-loudness through a note within 2 dB of the real singers at every tenth - and three things that
-had not been measured before, on nearly every singer:
+differs. All eleven isolated real singers take 19 seconds.
 
-- *Nothing above 5 kHz.* While a note is held the real voices have 18-26 dB more energy above
-  5.6 kHz than the model (11 of 11 singers), and it is the voice, not the recording: that band
-  stands 10-31 dB above its own level in the rests. The model also has a peak around 4 kHz that
-  the singers do not (9 dB, 10 of 11). The earlier tone fit could see neither - it compared
-  harmonic peaks only, in wider bands.
-- *Gaps between syllables.* Where a syllable inside a phrase begins with a stop or a hiss, the
-  model's sound drops 17 dB for the tenth of a second before it; the real singers' barely dips
-  (11 of 11). Before sung consonants (m, n, l, r) the model loses 11 dB between 0.8 and 1.8 kHz
-  that the singers keep (10 of 11). Real singers carry the tone up to and through the consonant;
-  the model stops the vowel early and makes room.
-- *Too steady.* While a note is held, a real voice's level wanders by 0.53 dB and its brightness
-  by 1.2 dB; the model's by 0.26 and 0.54. A soloist also stops for breath in a few places where
-  no rest is written.
+Its first version made a mistake worth recording. It reported three differences on nearly every
+singer, and two of them were not differences between voices at all:
 
-None of the three is fixed yet. Each needs the recognizer's check as well: shorter consonants
-have cost words before.
+- *"The model's sound drops 17 dB for a tenth of a second before every stop; real singers' barely
+  dips."* The real recordings have a room around the voice and the simulated singer was dry. A
+  room fills a consonant's gap; silence does not. Measured two ways that a room cannot fool -
+  with the model placed in a room matched to how each recording dies away, and by timing the
+  sound's fall and its next rise - the real singers' breaks are as long as the model's or longer
+  (before "t": 142 ms real, 116 ms model), and the levels around a syllable's start agree within
+  1-3 dB in every band below 3.6 kHz.
+- *"Real held notes wander twice as much in level and brightness."* The same room: in it the
+  model wanders as much as the singers do (level 0.23-0.72 dB real, 0.33-1.02 model).
+
+So the comparison now puts the simulated voices in a plain room chosen to make them die away
+after phrase ends as the recording does, and only then measures. Like with like, what is left on
+the eleven singers is:
+
+- *Tone above 3.5 kHz.* The model has a peak around 4 kHz that the singers do not (10 dB, 10 of
+  11 singers) and too little above 5.6 kHz while a note is held (12-16 dB, 11 of 11). It is the
+  voice, not the recordings' noise: that band stands 10-31 dB above its own level in the rests.
+  The earlier tone fit could see neither - it compared harmonic peaks only, in wider bands.
+- *Loudness through a note* within 3 dB of the real singers at every tenth, in the room as well:
+  the note shaping holds.
+- Smaller things on some singers only: after a consonant the model's brightness arrives 20-40 ms
+  sooner than the singers' (7-8 of 11), and in two pieces the real singers grow much louder on
+  their high notes than the model does (8-14 dB against 2-4).
 
 None of these numbers says the result would pass for a recording.
