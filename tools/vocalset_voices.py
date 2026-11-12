@@ -4,29 +4,33 @@
 
 VocalSet - Wilkins, Seetharaman, Wahl and Pardo, "VocalSet: A Singing Voice Dataset", ISMIR 2018,
 https://zenodo.org/records/1193957, Creative Commons Attribution 4.0 - is twenty professional singers recorded alone
-for research.  This takes fourteen seconds of one song from each of ten of its men.  Give it the archive if you have
-it; without one it fetches just those ten clips from zenodo.org (about 30 MB of the archive's 2 GB).  The clips are
+for research.  This takes fourteen seconds of one song from each of nine of its men.  Give it the archive if you have
+it; without one it fetches just those clips from zenodo.org (about 30 MB of the archive's 2 GB).  The clips are
 the singers' work: keep the credit above with anything you publish that was made with them.
 
 Which singing.  Each man sings the song twice: as he normally would, and "straight" - told to hold his vibrato back.
 The sections get the normal singing: a line re-voiced from it has 2-5 dB more ring (2.4-3.6 kHz) in six voices of
-nine and keeps its words as well or better in eight.  The soloist gets the straight one: alone, his words came
-through better from it (91% twice, against 83% and 91%).  Either way the notes sung are the engine's, not his.
+nine and keeps its words as well or better in eight.  The soloist gets the straight one, for the reason given
+below.  Either way the notes sung are the engine's, not his.
 
 Who sings which part.  The men all sing the same songs in the same key, so pitch does not tell a bass from a tenor
 here.  The size of the voice does: a larger throat and mouth put every resonance lower by the same ratio.  SHIFT is
 that, measured on three songs per man against the average of the others, in semitones (each song within 0.45 of the
 man's average; a line re-voiced in these voices keeps their order).  The largest voices sing bass, the smallest
-first tenor.  The solos go to a man of a baritone's size whose re-voiced held notes come out clean and whose words
-came through best (men 2, 4 and 11 come out breathier than the rest: fine in a section, less so alone).  The eleventh man of the
-collection (its male9) is a countertenor and is left out.  To seat someone elsewhere, rename his file."""
+first tenor.  The collection's male9 is a countertenor and male10 was the soloist of an earlier try; neither is
+used.  To seat someone elsewhere, rename his file.
+
+The soloist.  A listener heard the same solo in five of these voices and chose male3, a baritone, who also sings in
+the baritone section - a chorus member stepping forward.  His solo is re-voiced from his straight singing: from it
+the result has a quarter of the catches in the voice (moments without a clear period inside a held note: 1.1 a
+second, against 4.6 from his normal singing)."""
 import os, io, argparse, wave, zipfile, urllib.request
 import numpy as np
 
 URL = 'https://zenodo.org/api/records/1193957/files/VocalSet.zip/content'
 SONG = 'caro'                      # the song all of them sing: fourteen seconds of it
 #        man  part        SHIFT
-SEATS = [(8, 'Bass', -1.49), (4, 'Bass', -1.30), (3, 'Baritone', -.76), (10, 'Solo', -.69), (2, 'Baritone', .03),
+SEATS = [(8, 'Bass', -1.49), (4, 'Bass', -1.30), (3, 'Baritone', -.76), (3, 'Solo', -.76), (2, 'Baritone', .03),
          (1, 'Tenor 2', .36), (11, 'Tenor 2', .39), (5, 'Tenor 1', .77), (7, 'Tenor 1', .95), (6, 'Tenor 1', 1.75)]
 SR, SECONDS = 44100, 14
 

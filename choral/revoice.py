@@ -255,8 +255,11 @@ def _repitch(y, src, log=None):
     below middle C, 43 at a bass's low A - and sings somewhere inside the step it was given: a held note sits a few
     cents off, wanders, and when the engine's pitch lies near the edge of a step it flickers between two.  The
     engine's pitch is known exactly.  So the two are tracked, and wherever both are sung the re-voiced one is played
-    that many cents slower or faster (at most a semitone).  Playing faster also arrives sooner: when it has run a
-    whole period of the voice ahead or behind, one period is dropped or repeated, and in a silence it is set right."""
+    that many cents slower or faster (at most a semitone).  Playing faster also arrives sooner - a few milliseconds
+    a second.  That is set right wherever nothing is sung: in rests, and in the consonants without voice that come
+    every few syllables.  (Setting it right inside a note, by dropping or repeating one period of the voice, was
+    tried first: each such place is a moment without a clear period - a catch in the voice, most of a second apart.
+    It is done now only if LOOSE seconds have built up with no such place in reach.)"""
     from scipy.signal import resample_poly
     from scipy.ndimage import map_coordinates
     from . import pitch
@@ -277,18 +280,19 @@ def _repitch(y, src, log=None):
     near = np.abs(np.arange(k)[:, None] - at[np.searchsorted(at, np.arange(k)).clip(0, len(at) - 1)][:, None]).ravel()
     near = np.minimum(near, np.abs(np.arange(k) - at[(np.searchsorted(at, np.arange(k)) - 1).clip(0, len(at) - 1)]))
     filled = np.where(near <= 12, np.interp(np.arange(k), at, d[at]), 0.)        # carried across gaps of up to 70 ms
-    filled = gf(filled, 2.5)
+    filled = gf(filled, PITCH_SMOOTH)
     t = (np.arange(k) * hop + 512) * 2.                           # where each value sits, in samples at 44100
     rate = 2. ** (-np.interp(np.arange(n), t, filled) / 1200.)
     ahead = np.cumsum(rate - 1.)                                  # how far the reading has run ahead, in samples
     period = SR / (440. * 2. ** ((np.where(np.isnan(my[:k]), 60., my[:k]) - 69.) / 12.))
     step = np.zeros(n); jumps = []; off = 0.
+    rest = np.convolve(np.isnan(ms[:k]).astype(float), np.ones(9), 'same') >= 9      # the original has no voice here, nor 12 ms either side
     for i in range(k):
         j = int(min(t[i], n - 1)); a = ahead[j] + off
-        if ok[i] and abs(a) > period[i]:                          # a whole period out: drop or repeat one
-            off -= np.sign(a) * period[i]; jumps.append((j, -np.sign(a) * period[i]))
-        elif near[i] > 12 and abs(a) > 20:                        # nothing sung here: set it right
+        if rest[i] and abs(a) > 20:                               # nothing sung here (a rest, an s, the silence of a t): set it right
             off -= a; jumps.append((j, -a))
+        elif ok[i] and abs(a) > LOOSE * SR:                       # sung on and on, and now this far out: drop or repeat whole periods
+            by = -np.round(a / period[i]) * period[i]; off += by; jumps.append((j, by))
     for j, by in jumps:
         step[j] += by
     at_ = np.arange(n) + ahead + np.cumsum(step)
@@ -350,6 +354,51 @@ def _sized(ref, size, work, made):
     return made[ref, size]
 
 
+PITCH_SMOOTH = 6.      # over how many pitch readings (2.9 ms each) the correction of the pitch is smoothed: quicker, and it roughens the voice
+LOOSE = .03            # seconds a sung stretch may run ahead or behind before it is set right inside a note
+TOP = ((3600, 5000), (5000, 8000), (8000, 12000), (12000, 20000))      # the bands of a voice's top end, Hz
+_TOPS = {}
+
+
+def _top(x):
+    """How much of a voice's sung sound lies in each band of its top end (dB under everything below 3.6 kHz).
+    A moment counts as sung when it is loud and most of it lies below 1 kHz."""
+    n = (len(x) - 2048) // 1024
+    if n < 8:
+        return None
+    fr = np.lib.stride_tricks.sliding_window_view(x, 2048)[::1024][:n] * np.hanning(2048)
+    sp = np.abs(np.fft.rfft(fr, axis=1)) ** 2
+    fq = np.fft.rfftfreq(2048, 1 / SR)
+    e = sp.sum(1)
+    k = (e > .003 * np.percentile(e, 95)) & (sp[:, (fq >= 80) & (fq < 1000)].sum(1) > .5 * e)
+    if k.sum() < 8:
+        return None
+    body = sp[k][:, (fq >= 80) & (fq < 3600)].sum()
+    return np.array([10 * np.log10(sp[k][:, (fq >= lo) & (fq < hi)].sum() / body + 1e-12) for lo, hi in TOP])
+
+
+def _tame(y, ref):
+    """A re-voiced singer's track with its top end brought down to that of the recording of his voice.
+
+    The model's sound has more at the top than the voice it copies: on sung notes 8-16 dB more above 12 kHz and
+    4-7 dB more from 8 to 12 kHz than the same man's own recording - a fizz on the tone - and its consonants are
+    brighter still.  Each band above 3.6 kHz is lowered by what the track's sung notes have too much of there
+    against the recording's (consonants come down with them), and never raised."""
+    from scipy.signal import firwin2, fftconvolve
+    if ref not in _TOPS:
+        _TOPS[ref] = _top(_read(ref))
+    a, b = _TOPS[ref], _top(np.asarray(y, np.float64))
+    if a is None or b is None:
+        return y
+    cut = -np.clip(b - a, 0., 24.)
+    if cut.min() > -1.:
+        return y
+    mid = [np.sqrt(lo * hi) for lo, hi in TOP]
+    f = np.r_[0., 3000., mid, SR / 2]
+    g = 10 ** (np.r_[0., 0., cut, cut[-1]] / 20)
+    return fftconvolve(y, firwin2(511, f, g, fs=SR), mode='same').astype(np.asarray(y).dtype)
+
+
 CACHE = os.path.join(ROOT, '.svc', 'cache')
 CACHE_MAX = 4e9                    # bytes; the oldest go first
 
@@ -357,7 +406,8 @@ CACHE_MAX = 4e9                    # bytes; the oldest go first
 def _kept(job, cmd):
     """Where the result of this very job is kept: the same singing, the same voice, the same model, the same draw."""
     import hashlib
-    h = hashlib.sha1(json.dumps([cmd, job.get('seed', 0)]).encode())
+    more = sorted((k, v) for k, v in job.items() if k not in ('source', 'reference', 'out', 'seed'))     # settings passed on to the model
+    h = hashlib.sha1(json.dumps([cmd, job.get('seed', 0)] + ([more] if more else [])).encode())
     for f in (job['source'], job['reference']):
         h.update(open(f, 'rb').read())
     return os.path.join(CACHE, h.hexdigest() + '.wav')
@@ -431,6 +481,10 @@ def revoice(tracks, voices, log=print, seed=0):
                     f = int((.04 if loud(kb) else .012) * SR); h = min(f // 2, b - kb)
                     kb += h; w = np.r_[w, np.zeros(h, np.float32)]; w[len(w) - 2 * h:] = np.cos(np.linspace(0, np.pi / 2, 2 * h)) ** 2
                 out[i][ka:kb] += y[ka - a:kb - a] * w
+        heard = {}                                       # (a voice at another size is a file of its own; its top is measured once)
+        for i in range(len(out)):
+            ref = _sized(voices[i][0], voices[i][1], work, made)
+            out[i] = _tame(out[i], heard.setdefault(ref, ref))
         return out
     finally:
         shutil.rmtree(work, ignore_errors=True)

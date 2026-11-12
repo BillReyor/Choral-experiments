@@ -74,10 +74,14 @@ at the same moments. `choral/revoice.py` then makes each piece the engine's agai
 - **Pitch**: the model is told the pitch only in coarse steps (15 to 43 cents wide in a man's
   range) and sings somewhere inside the step - a held note wavers, and singers on one note
   disagree. The engine's pitch is exact, so the re-voiced piece is played as many cents slower
-  or faster as it is off, moment by moment; when that has run a whole period of the voice ahead
-  or behind, one period is dropped or repeated.
+  or faster as it is off, moment by moment. Playing faster also arrives sooner, a few
+  milliseconds a second; that is set right in the engine's rests and voiceless consonants, not
+  inside a note, where every such correction is heard as a catch in the voice.
 - **Loudness**: it is made as loud as the original, first on the whole and then moment by moment,
   so the shape the engine gave each note is kept.
+- **The top end**: the model's sound has a fizz above 5 kHz that the voice it copies does not
+  (on sung notes up to 19 dB too much above 12 kHz). Each singer's track is lowered above
+  3.6 kHz by what his sung notes have too much of against the recording of his voice.
 
 One thing is done before the model, not after it: a part sung by one person is sung by the
 engine with consonants a third longer than usual when it is to be re-voiced. The model blurs
@@ -119,7 +123,9 @@ Creative Commons Attribution 4.0): professional singers recorded alone for resea
 only the ten clips it needs (about 30 MB), or reads them from the archive if you give it one. Then
 `--voice .svc/voices`. Those men all sing the same songs in the same key, so pitch could not seat
 them; they are seated by the size of the voice instead - how low its resonances lie, measured on
-the songs they share - and the solos go to the one whose held notes came out cleanest. To move a
+the songs they share. The soloist is the one a listener chose from five auditions, re-voiced from
+his "straight" singing, which gives a quarter of the catches in the voice that his normal singing
+gives. To move a
 man to another part, rename his file; to drop him, delete it. Anything published that was made
 with these voices should carry the credit.
 

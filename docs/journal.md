@@ -964,3 +964,56 @@ loudness, pitch and timing the result is held to are those of the same longer-co
 One warning about the yardstick: the same recognizer, on the soloist's four measures over the
 humming choir in the full mix, has read 18% to 76% across versions whose soloist alone reads
 16 of 17 words. A mix-level reading of a short passage decides nothing by itself.
+
+**"The chorus sounds decent, the solo sounds bad."** On key, in time, "just not an attractive
+voice": not what a chorus member should be given to emulate. Attractiveness has no number here,
+so the listener was given auditions - the same opening with five soloists - and chose the third, a
+baritone, adding that it "still has that slight spasmodic dysphonia sound". Two things were found
+on the way, both measurable, both in every re-voiced singer.
+
+*Fizz.* Against the same men's own recordings, a re-voiced voice has too much at the very top. On
+sung notes: 11-12 dB too much above 12 kHz straight from the model, and after the putting-back
+4-6 dB too much at 5-8 kHz, 5-10 at 8-12 kHz, 12-19 above 12 kHz. Its consonants: 7-10 dB too
+bright at 8-12 kHz, 15-18 above. Each re-voiced singer's top end (above 3.6 kHz) is now lowered by
+what his sung notes have too much of against the recording of his voice, never raised. For two
+soloists that took 7 and 11 dB off the sung notes above 12 kHz and 7 and 11 dB off the consonants
+there, with the words where they were (64 and 62 of 70). In the full mix the choir's verse above
+12 kHz went from 30 dB under the whole to 40, where the engine's own choir sits.
+
+*Catches.* The description was exact. Count the moments, inside notes the engine sings with a
+clear period, where the re-voiced voice has none: the engine itself has none, and the re-voiced
+soloists the listener heard had about 7 a second - 12% of their sung time, most of them 15-40 ms
+long and as loud as the note around them. Not gaps: the voice catching. (Measured over all their
+sounding time, these men's own recordings are without a clear period 2-6% of the time, the
+re-voiced soloists 12-14%.) Where they come from:
+
+| | catches a second, straight from the model |
+|---|---|
+| ten, thirty or fifty refinement steps | 3.5-4.2 (no difference) |
+| held to the voice loosely / as usual / hard | 3.3 / 3.8 / 4.8 |
+| five men, each from his straight singing | 1.9, 1.9, 3.8, 3.9, 6.5 |
+| one of them from his normal singing instead | 6.2 (from 3.9) |
+| the chosen soloist, whole solo: straight / normal singing | 1.1 / 4.6 |
+
+So the recording matters most: a man's normal singing, vibrato and all, gives a re-voiced line
+several times the catches of his held-back "straight" singing - and the normal singing had just
+been adopted for the sections, and used for all five auditions. On the choir's lines the same
+holds more mildly (the three lower parts: 2.6 a second from straight singing, 3.4 from normal; the
+two voices noted earlier as breathy are the worst at 3-6; the first tenors have almost none).
+
+The rest was this program's doing. Putting the pitch back raised the chosen soloist's catches
+from 1.1 to 1.8 a second (from 4.6 to 6.8 from his normal singing), and smoothing the correction
+more did not help: what added them was the dropping or repeating of one period of the voice, most
+of a second apart, to keep the corrected sound in time. That is now done only where the engine
+itself has a rest or a consonant without voice, a few times a second anyway, and inside a note
+only if 30 ms have built up. With that, and the correction smoothed over 17 ms instead of 7: 1.2
+catches a second, as the model gave him, his pitch typically 5 cents from the engine's (14 as the
+model gave him). As the piece renders him now: 1.2 a second, 1.3% of his sung time - against 6.6
+and 12% in the audition the listener chose, and 7.4 and 12% for the soloist before him.
+
+One guess that failed: that the model's coarse pitch steps flicker when a held pitch lies on the
+edge of one (a held G with 4 cents of flutter crosses a step edge 110 times in 3 s). Holding the
+step until the pitch has clearly left it changed nothing that could be measured, and is off.
+
+The sections still sing from normal-voice recordings: the listener calls the chorus decent, and
+changing its voices again is a decision for the listener's ears, not for this count.
