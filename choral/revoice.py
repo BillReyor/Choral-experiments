@@ -311,12 +311,150 @@ def _repitch(y, src, log=None):
 LIFT = 10.             # dB: the most a moment of a re-voiced stretch is raised to reach its original's loudness
 
 
+def _cycles(xl, a, b, f):
+    """The cycles of a voice from sample a to b, found as voice-analysis programs find them: each one's waveform
+    (xl: the sound below 1.2 kHz) is matched with the next.  f: roughly the pitch it has, Hz, per sample.
+    -> where each cycle starts (to a fraction of a sample), and how well each matched the one before."""
+    p = float(a); out = [p]; fit = [1.]
+    T = SR / f[int(p)]
+    while p + 2.3 * T < b:
+        T0 = .5 * T + .5 * SR / f[int(p)]                 # follow the pitch it has, pulled towards the pitch it is said to have
+        L = int(.12 * T0) + 2; n = int(T0); i = int(p)
+        ref = xl[i:i + n]; lo = i + n - L; seg = xl[lo:lo + n + 2 * L]
+        if len(seg) < n + 2 * L or len(ref) < n:
+            break
+        r = np.correlate(seg, ref, 'valid') / np.sqrt(np.convolve(seg ** 2, np.ones(n), 'valid') * (ref @ ref) + 1e-20)
+        k = int(np.argmax(r)); d = 0.
+        if 0 < k < len(r) - 1:                            # the top of the curve, between samples
+            den = r[k - 1] - 2 * r[k] + r[k + 1]
+            d = .5 * (r[k - 1] - r[k + 1]) / den if abs(den) > 1e-12 else 0.
+        T = (lo + k + d) - i
+        p += T; out.append(p); fit.append(float(r[k]))
+    return np.array(out), np.array(fit)
+
+
+def _pitch_of(src):
+    """The engine's pitch, read from its own sound cycle by cycle -> (Hz at every sample, where it is voiced).
+    A pitch tracker's reading wobbles by more than the singer does (17 cents, 3-20 times a second, on notes the engine
+    holds within 7): rebuilt on such a reading, a held note flutters.  The lengths of the cycles themselves do not."""
+    from scipy.signal import resample_poly, butter, sosfiltfilt
+    from . import pitch
+    n = len(src)
+    tt, m = pitch.yin(resample_poly(src, 1, 2), SR // 2, fmin=60., fmax=700., hop=64)
+    v = ~np.isnan(m)
+    if v.sum() < 16:
+        return None, None
+    at = tt * SR
+    rough = 440. * 2. ** ((np.interp(np.arange(n), at[v], m[v]) - 69.) / 12.)
+    voiced = np.interp(np.arange(n), at, v.astype(float)) > .5
+    f = rough.copy()
+    xl = sosfiltfilt(butter(4, 1200., 'lp', fs=SR, output='sos'), src)
+    e = np.flatnonzero(np.diff(np.r_[0, v.astype(np.int8), 0]))
+    for i0, i1 in zip(e[::2], e[1::2]):
+        a, b = int(at[i0]), int(at[i1 - 1])
+        if b - a < .05 * SR:
+            continue
+        mk, fit = _cycles(xl, a, b, rough)
+        if len(mk) < 6:
+            continue
+        T = np.diff(mk); ok = (fit[1:] > .8) & (np.abs(T * rough[np.minimum(mk[:-1].astype(int), n - 1)] / SR - 1) < .12)
+        if ok.sum() < 4:
+            continue
+        mid = .5 * (mk[:-1] + mk[1:])[ok]
+        f[a:b] = np.interp(np.arange(a, b), mid, gf(SR / T[ok], 1.5))          # over three cycles
+    return f, voiced
+
+
+CALM = .01             # seconds over which a rebuilt voice's colour and loudness are steadied everywhere
+STILL = .08            # ... over which its pitch is steadied inside a held note (0: the engine's own, flutter and all)
+LEVEL_HELD = .3        # ... and its loudness
+HELD_CHANGE = 1.5      # dB in 20 ms: an engine colour changing faster than this is a syllable changing, not a held vowel
+CALM_HELD = .12        # ... over which its colour is steadied inside a held note
+
+
+def _rebuild(y, src):
+    """A re-voiced stretch (lined up with its original) with its sung tone built again: the model's vowel colour,
+    sounded at the engine's pitch.  For a voice heard alone.  Needs the WORLD analysis/synthesis (pip install
+    pyworld); returns None without it.
+
+    Heard alone, the model's held notes are rough - "a slight spasmodic dysphonia", a listener said, "most apparent
+    when the voice model holds a note for an extended period".  Measured as a voice clinic measures it, successive
+    cycles of the voice differ three times as much in length and twice as much in strength as in the same man's own
+    recording (0.69% and 4.0% against 0.23% and 2.0%), whatever the model is given and however it is set.  It is not
+    the timing of the cycles: the colour of the voice flickers from one moment to the next, and so does its loudness,
+    and the model's pitch wanders.  So the sound is taken apart into what WORLD calls its spectral envelope (the
+    colour, every 5 ms), its breath (how much of each band is noise) and its pitch, and put together again:
+    - the pitch is the engine's, read from the engine's own sound cycle by cycle (_pitch_of);
+    - the colour and the breath are steadied a little everywhere (CALM) and, inside each vowel the engine holds,
+      a lot (CALM_HELD), each such vowel as a whole from 15 ms after it begins - what flutter was left sat "just
+      after the attack" until then;
+    - inside a held vowel the loudness (LEVEL_HELD) and the pitch (STILL) are steadied too.
+    Where the engine has no voice - consonants, rests - the model's own sound is kept."""
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            import pyworld as pw
+    except Exception:
+        return None
+    from scipy.signal import resample_poly
+    from . import pitch
+    n = len(src)
+    if n < SR // 2:
+        return y
+    y = np.ascontiguousarray(y, np.float64); src = np.ascontiguousarray(src, np.float64)
+    fp = 5.
+    f, v = _pitch_of(src)
+    if f is None:
+        return y
+    nfr = n // int(SR * fp / 1000) + 1
+    t = np.arange(nfr) * fp / 1000
+    k = np.minimum((t * SR).astype(int), n - 1)
+    voiced = v[k]
+    f0 = np.where(voiced, f[k], 0.)
+    lf = np.log2(np.maximum(np.where(voiced, f[k], np.interp(k, np.flatnonzero(v), f[v])), 1.))
+    sp = pw.cheaptrick(y, f0, t, SR)
+    ap = np.minimum(pw.d4c(y, f0, t, SR), pw.d4c(src, f0, t, SR))  # no breathier than the engine sang it
+    ls, la = np.log(sp + 1e-16), np.log(ap + 1e-16)
+    if CALM:                                                       # everywhere a little: over 10 ms the flicker goes and the syllables stay
+        ls, la = gf(ls, CALM * 1000 / fp, axis=0, mode='nearest'), gf(la, CALM * 1000 / fp, axis=0, mode='nearest')
+    # Held vowels, as the engine sings them: voiced, the pitch not on its way to another note, the colour not changing.
+    # Each is steadied as a whole, from 15 ms after it begins to 15 ms before it ends - a listener heard what was left
+    # of the flutter "just after the attack", which is where a steadying that grows slowly into each note had not reached.
+    le = np.log(pw.cheaptrick(src, f0, t, SR) + 1e-16)
+    nb = le.shape[1]; edges = np.unique(np.geomspace(4, nb - 1, 25).astype(int))
+    bands = np.stack([le[:, i:j].mean(1) for i, j in zip(edges[:-1], edges[1:])], 1)
+    change = np.r_[0., 0., np.abs(bands[4:] - bands[:-4]).mean(1), 0., 0.] * 4.343      # dB the engine's colour changes in 20 ms
+    moving = np.abs(np.gradient(gf(lf, 3.))) * 1200 * (1000 / fp) > 600        # the pitch on its way to another note
+    steady = voiced & ~moving & (change < HELD_CHANGE)
+    runs = np.flatnonzero(np.diff(np.r_[0, steady.astype(np.int8), 0]))
+    for i0, i1 in zip(runs[::2], runs[1::2]):
+        i0, i1 = i0 + 3, i1 - 3
+        if i1 - i0 < 12:                                           # 60 ms: shorter than that is not a held note
+            continue
+        u = np.minimum(1., np.minimum(np.arange(i1 - i0), np.arange(i1 - i0)[::-1]) / 3.)[:, None]     # in and out over 15 ms
+        if CALM_HELD:
+            new = gf(ls[i0:i1], CALM_HELD * 1000 / fp, axis=0, mode='nearest')
+            if LEVEL_HELD:                                         # the loudness of the whole, more slowly still: no wander 1-3 times a second
+                lev = new.mean(1); new = new + (gf(lev, LEVEL_HELD * 1000 / fp, mode='nearest') - lev)[:, None]
+            ls[i0:i1] = (1 - u) * ls[i0:i1] + u * new
+            la[i0:i1] = (1 - u) * la[i0:i1] + u * gf(la[i0:i1], CALM_HELD * 1000 / fp, axis=0, mode='nearest')
+        if STILL:
+            lf[i0:i1] = (1 - u[:, 0]) * lf[i0:i1] + u[:, 0] * gf(lf[i0:i1], STILL * 1000 / fp, mode='nearest')
+    f0 = np.where(voiced, 2. ** lf, 0.)
+    sp, ap = np.exp(ls), np.exp(la)
+    z = pw.synthesize(f0, sp, ap, SR, fp)[:n]
+    z = np.pad(z, (0, max(0, n - len(z))))
+    keep = np.interp(np.arange(n), t * SR, gf(voiced.astype(float), 1.6))    # 8 ms from the one to the other
+    return keep * z + (1 - keep) * y
+
+
 def _fit_job(job):
-    path, src = job
-    return _fit(_read(path), np.asarray(src, np.float64)).astype(np.float32)
+    path, src, rebuilt = job
+    return _fit(_read(path), np.asarray(src, np.float64), rebuilt).astype(np.float32)
 
 
-def _fit(y, src):
+def _fit(y, src, rebuilt=False):
     """A re-voiced stretch, put where its original was: the same length, lined up with it, and as loud at every moment."""
     n = len(src)
     y = np.pad(y, (0, max(0, n - len(y))))[:n]
@@ -325,6 +463,9 @@ def _fit(y, src):
     lags = range(-int(.06 * SR / HOP), int(.06 * SR / HOP) + 1)
     k = max(lags, key=lambda k: float(np.dot(a[max(0, -k):len(a) - max(0, k)], b[max(0, k):len(b) - max(0, -k)]))) * HOP
     y = np.pad(y, (0, k))[k:] if k > 0 else np.pad(y, (-k, 0))[:n]
+    z = _rebuild(y, src) if rebuilt else None                     # a voice heard alone: its tone built again at the engine's pitch
+    if z is not None:                                             # (its loudness is steadied there, note by note; made to follow the
+        return z * np.sqrt(np.mean(src ** 2) / (np.mean(z ** 2) + 1e-20))      # engine's moment by moment, it was heard to fade oddly)
     y = _repitch(y, src)
     y = y * np.sqrt(np.mean(src ** 2) / (np.mean(y ** 2) + 1e-20))      # first as loud as the original on the whole; then moment by moment
     # the engine shaped every note's loudness against real singers; the model has ideas of its own.  The engine's are kept.
@@ -420,9 +561,10 @@ def _trim():
         total -= os.path.getsize(files[0]); os.unlink(files.pop(0))
 
 
-def revoice(tracks, voices, log=print, seed=0):
+def revoice(tracks, voices, log=print, seed=0, alone=None):
     """tracks: one dry mono track (at 44100 Hz) per singer.  voices: for each track a reference recording, or
-    (recording, size) as deal() gives them.  -> the tracks again, in those voices."""
+    (recording, size) as deal() gives them.  alone: for each track, whether it is a voice heard by itself (a
+    soloist), whose tone is then built again (_rebuild).  -> the tracks again, in those voices."""
     cmd = command()
     if cmd is None:
         raise SystemExit('No voice-conversion model is set up (looked for .svc/command.json): see docs/how-it-works.md, "A real voice\'s sound".')
@@ -441,6 +583,14 @@ def revoice(tracks, voices, log=print, seed=0):
                 where.append((i, a, b, ka, kb))
         total = sum(kb - ka for _, _, _, ka, kb in where) / SR
         log(f're-voicing {len(tracks)} singers: {total / 60:.0f} minutes of singing in {len(jobs)} stretches, in {len(set(v for v, _ in voices))} voice(s) ...')
+        if alone and any(alone):
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    import pyworld
+            except Exception:
+                log('  ! pyworld is not installed (pip install pyworld): the soloist\'s held notes will be rougher than they need be')
         os.makedirs(CACHE, exist_ok=True)
         kept = [_kept(j, cmd) for j in jobs]             # the engine sings a piece the same way every time: a second
         todo = [j for j, f in zip(jobs, kept) if not os.path.exists(f)]         # rendering finds its stretches converted
@@ -469,7 +619,7 @@ def revoice(tracks, voices, log=print, seed=0):
         out = [np.zeros(len(x), np.float32) for x in tracks]
         from multiprocessing import Pool, cpu_count
         with Pool(min(8, cpu_count())) as pool:
-            fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32)) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
+            fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32), bool(alone and alone[i])) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
             for (i, a, b, ka, kb), y in zip(where, fitted):
                 w = np.ones(kb - ka, np.float32)         # pieces cut from one stretch are crossed over: in 12 ms where
                 top = float(np.abs(tracks[i]).max())     # it is quiet, in 40 ms where the cut had to be made in a held note

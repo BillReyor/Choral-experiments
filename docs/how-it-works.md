@@ -83,6 +83,16 @@ at the same moments. `choral/revoice.py` then makes each piece the engine's agai
   (on sung notes up to 19 dB too much above 12 kHz). Each singer's track is lowered above
   3.6 kHz by what his sung notes have too much of against the recording of his voice.
 
+**A voice heard alone** is treated differently after the model. Heard by itself, the model's
+held notes are rough: measured cycle by cycle as a voice clinic does, it has three times the
+jitter and twice the shimmer of the same man's own recording, however it is set - a listener called
+it a slight spasmodic dysphonia. So a soloist's sung tone is taken apart with the WORLD analysis
+(`pip install pyworld`) into its colour, its breath and its pitch, and built again: at the
+engine's pitch, read from the engine's own sound cycle by cycle; with the colour steadied a little
+everywhere and, inside every vowel the engine holds, steadied as a whole from just after the
+attack, together with its loudness and pitch. Consonants and rests stay the model's. Without
+pyworld the soloist is put back like a section singer, and the run says so.
+
 One thing is done before the model, not after it: a part sung by one person is sung by the
 engine with consonants a third longer than usual when it is to be re-voiced. The model blurs
 consonants; given longer ones, a re-voiced soloist is understood about as well as the engine's own

@@ -1017,3 +1017,67 @@ step until the pitch has clearly left it changed nothing that could be measured,
 
 The sections still sing from normal-voice recordings: the listener calls the chorus decent, and
 changing its voices again is a decision for the listener's ears, not for this count.
+
+**The roughness of a held note.** With the catches counted down from 7 a second to 1.2, the
+listener's answer was "Still there". So the count had been measuring something else. Four clips
+of the same opening settled where to look: the soloist as rendered, the model's sound with none
+of this program's putting-back, the same from a legato engine, and the engine's own voice. "#2
+sounds the best. I hear the artifacts in 1, 2, and 3. I dont hear it at all in #4" - and then:
+"its most apparent when the voice model holds a note for an extended period." It is in the
+model's own output, and the putting-back made a soloist slightly worse, not better.
+
+*Counts that were wrong.* Everything counted with the pitch tracker had to go. On these voices a
+strong first resonance sits on the second harmonic (the fundamental 15 dB under it on some
+notes), the tracker reads an octave high, and "no clear period", "gross breaks" and "pitch jerks"
+were mostly that. The spectra have no doubled or halved pitch anywhere.
+
+*The measure that fits.* A voice clinic measures a rough voice cycle by cycle: jitter, how much
+successive cycles differ in length, and shimmer, how much in strength. Found by matching each
+cycle's waveform with the next, on held notes:
+
+| | jitter | shimmer |
+|---|---|---|
+| the engine's soloist | 0.22% | 2.1% |
+| six men's own recordings | 0.18-0.34% | 1.7-3.0% |
+| the same solo from the model | 0.69% (its worst quarter of notes 1.2-1.35%) | 4.0% (5.5-6.1%) |
+
+Ten, thirty or fifty refinement steps, the model held loosely or hard to the voice, five voices,
+both kinds of recording, a pitch told between the model's steps or held to one step, an engine
+source without any jitter of its own: the same every time. It is how this model makes a voice.
+
+*Two corrections that did not work*, both measured and thrown away. Making the cycles' lengths
+even (reading the sound a little faster or slower through each) raised the jitter from 0.65% to
+0.95%: the cycles were not arriving unevenly, their shapes were changing, and moving them added
+real unevenness to the apparent one. Blending each cycle with the two before and after left it
+at 0.70%: the change from cycle to cycle is not random about a steady shape, it drifts.
+
+*What worked: taking the sound apart.* The WORLD analysis (pyworld, installed with the listener's
+leave) divides a voice into its colour every 5 ms, its breath, and its pitch, and builds it again
+from the three. The model's pitch is thrown away and the engine's used. Each step below was sent
+to the listener as the same 37 seconds:
+
+| what was changed | measured on held notes | the listener |
+|---|---|---|
+| tone rebuilt at the engine's pitch; colour steadied over 20 ms | shimmer 4.1% -> 1.9% | "B is best, but theres still too much flutter in the held notes" |
+| colour and loudness steadied over 120 ms inside held notes | loudness flutter 0.52 -> 0.30 dB (his own recording: 0.33) | "Flutter still there" |
+| the engine's pitch read cycle by cycle, not by the tracker | pitch flutter 16.7 -> 6.8 cents (the engine: 7.5) | "Better, not gone" |
+| the engine's loudness followed moment by moment | slow wander of loudness 0.8 -> 0.4 dB | "better but not gone and theres a new side effect I hear some weird fading"; and where: "just after the attack" |
+| each held vowel steadied as a whole from 15 ms after it begins; the loudness-following taken out again | loudness movement in the quarter second after the attack 0.95 -> 0.42 dB (real singers 0.33-0.80) | "Good now" |
+
+The third row was this program's own fault: the pitch given to the rebuild came from the tracker,
+whose reading of a note the engine holds within 7 cents wobbles by 17, and the rebuilt voice sang
+the wobble. The engine's pitch is now read from the lengths of its own cycles. The fourth row
+was a correct measurement and the wrong cure: the loudness did wander, but tying it to the
+engine's contour brought the engine's note shapes onto a voice with other syllable timing.
+
+As the piece renders the soloist now: jitter 0.26% (worst quarter 0.73%), shimmer 1.5% (3.4%) -
+a healthy voice by the clinic's measure, where he was rough. His words read 53 of 70 against 58
+before the rebuild, and he sits 1.9 dB lower against the choir than the engine intends (6.6 dB
+under the choir's verse, not 4.7); neither was changed after the listener said "Good now". Only
+parts sung by one person are rebuilt: in a section the roughness of twelve voices averages out,
+and the listener calls the chorus decent as it is.
+
+Four times on the way the numbers said a real voice's steadiness had been reached while the
+listener still heard the fault, and each time the listener's next words - held notes; flutter;
+just after the attack; weird fading - named the measurement that was missing. The numbers decided
+nothing here except which of two things the ear had asked for was actually different.
