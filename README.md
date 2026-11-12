@@ -63,12 +63,12 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
 - **Men's chorus only** (TTBB, TTB, soloist or trio over the choir), with piano or unaccompanied.
 - **Reading scans is imperfect.** Typically 96-99% of the notes are right. About one syllable in
   ten is wrong or missing, more with Tesseract. (A PDF exported from notation software is read
-  exactly instead, from its own symbols - in a current music font or Finale's older Maestro. That
-  reader has met two such files so far, and does not yet follow "8va" lines or first and second
-  endings. A PDF that stores its music font under private numbers is recognized like a scan.)
-  Repeats, D.S. and codas are followed; first and second endings are not. Always look through the
-  `.score` file it writes.
-- **Words:** English (by dictionary) and church Latin (by rule). A word the dictionary does not
+  exactly instead, from its own symbols - in a current music font or Finale's older Maestro;
+  "8va" lines are not followed yet. A PDF that stores its music font under private numbers is
+  recognized like a scan.) Repeats, D.S., codas and numbered endings are followed - numbered
+  endings have been met in one piece so far. Always look through the `.score` file it writes.
+- **Words:** English (by dictionary) and church Latin (by rule); which of the two a scan is in
+  is told from its words (`--language` overrides). A word the dictionary does not
   have - a name, another language, a misread - is sung as it is spelled, by rough English rules:
   a near miss, which a `say:` line in the score corrects. Words spelled alike and said differently
   ("lives", "tears", "read") follow a short table of what a song usually means.
@@ -80,7 +80,9 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   match the recording (a misread ending, a cut), the run says so and the timing there is a guess.
 - **From a PDF alone, the pacing is by rule.** A metronome mark is followed; a tempo given in words
   ("Moderately slow") is looked up in a table; a fermata adds about a beat, a "rall." slows to
-  about three quarters until the next "a tempo". The accompaniment is the built-in piano playing
+  about three quarters until the next "a tempo". With no tempo on the page at all the program
+  guesses, and says so in capitals: 120 for a notation-software export (the speed such software
+  plays an unmarked score at), 100 for a printed page. The accompaniment is the built-in piano playing
   the piano staves: no other instrument, and no pianist's judgement.
 - **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece.
 

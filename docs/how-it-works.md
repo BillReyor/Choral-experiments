@@ -54,6 +54,27 @@ macOS's built-in text recognition (`tools/ocr.swift`, compiled on first use); wi
 notes come out with no words. What is and is not reliable yet is in the status section below.
 
 
+What the reader works out without being told, and from what:
+
+- **Which staves are sung.** From the names printed beside them where there are any, and on the
+  systems without names from the system that looked the same. A treble and a bass staff joined by
+  a brace are a keyboard in most music; with a line of words between them they are the choir.
+- **Where one system ends.** Staves joined at their left end by a line are one system. The line
+  must stand where the staves begin: three spaces in stands the clef, and a clef's tail, a
+  measure number and the next clef's top in one column look much like a line.
+- **A staff with no barlines** (a line of chant). The recognition engine finds a staff by its
+  barlines and clefs and returns nothing for one that has neither clearly; such a staff is shown
+  to it again with a barline drawn at its end.
+- **The language.** Latin is known by its words (*sanctus, dominus, gratia, et, in ...* against
+  *the, and, of ...*); `--language english` or `latin` overrides.
+- **The order of performance.** Repeat signs, D.S. and D.C., "to Coda" and "Fine", and numbered
+  endings. An ending's bracket is found by its shape - a level line above the staff with a
+  short stroke down from its left end - and the passes it is for are read under that corner
+  ("1.", "1., 2.", "3."). Each ending is played on the passes it names and stepped over on the
+  others. The order is written into the score as a `play:` line, which can be corrected.
+- **The tempo.** A metronome mark; failing that a heading in words ("Moderately slow", "Quietly
+  flowing"), looked up in a table; failing that a guess, announced in capitals.
+
 Where the words come from: the PDF's own text when it has one (exact; nothing to install);
 otherwise text recognition - macOS's built-in one, or [Tesseract](https://tesseract-ocr.github.io/)
 on Linux and Windows (`SCAN_OCR=tesseract` forces it; it gets fewer syllables right, see the

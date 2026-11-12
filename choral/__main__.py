@@ -20,7 +20,7 @@ MUSIC is a score file (docs/score-format.md) or a PDF exported from notation sof
                     low each lies.  tools/vocalset_voices.py fetches ten men's voices to start with.
                     Needs the optional voice model - docs/how-it-works.md - and takes about half as
                     long as all the singing lasts.  Use your own voice, or one whose owner has agreed
-  --language        latin, when a scanned score's words are Latin (English is assumed otherwise)
+  --language        latin or english, when the program takes the words for the wrong one (it tells Latin by its words)
   --only            write just one version, e.g. --only "Baritone predominant"
 
 What was estimated for the piece is saved beside the score as NAME.preset.json and reused.
@@ -113,7 +113,7 @@ def main():
     ap.add_argument('--accompaniment'); ap.add_argument('--balanced'); ap.add_argument('--predominant'); ap.add_argument('--muted')
     ap.add_argument('--tune', action='store_true'); ap.add_argument('--only'); ap.add_argument('--singers', type=int)
     ap.add_argument('--preset', help='a preset file to use instead of NAME.preset.json')
-    ap.add_argument('--language', help='the language of the words when a scan is read (latin, or leave out for English)')
+    ap.add_argument('--language', help='the language of the words, latin or english, when the program takes them for the wrong one')
     ap.add_argument('--fresh', action='store_true', help='ignore a saved preset and estimate again')
     ap.add_argument('--voice', help='recording(s) of a real voice for the singers to sound like')
     ap.add_argument('--reread', action='store_true', help='read the PDF again even if a score read from it earlier is there (one corrected by hand is kept)')

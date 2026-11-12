@@ -140,8 +140,12 @@ def group_systems(img, staves):
         joined = False
         # the line stands where the staves begin - but a staff's found beginning can be late (a long slur, a clef
         # missed), so every earlier beginning seen on the page is tried as well
+        # ... and never more than two and a half spaces to their right: three spaces in stands the clef, whose stem and
+        # tail, the 8 under it, a measure number and the next clef's top can fill a column nearly as well as a line
+        # does (0.65 of it, on one page; over nine scans every real line stood within 1.7 spaces)
+        reach = int(2.5 * (prev[1] - prev[0]) / 4)
         for x in sorted({here} | {int(s_[2]) for s_ in staves if s_[2] < here}):
-            dark = img[gap0:gap1, max(0, x - 42):x + 42] < 140
+            dark = img[gap0:gap1, max(0, x - 42):x + reach] < 140
             near = dark[:, :-4] | dark[:, 1:-3] | dark[:, 2:-2] | dark[:, 3:-1] | dark[:, 4:]     # the line may lean a pixel or two
             joined = joined or (gap1 > gap0 and near.mean(0).max() > .6)       # measured: 0.73-1.00 within a system, under 0.4 between
         if joined:
@@ -475,6 +479,26 @@ def read_systems(crops, log):
             reads = [(read_xml(n + '.musicxml') if os.path.exists(n + '.musicxml') else [])[:1] for n in names]
             reads += [read_xml(part_image(c, i, j, tag) + '.musicxml') if os.path.exists(part_image(c, i, j, tag) + '.musicxml') else [] for i, j, tag in rest]
             c['read'] = [st for r in reads for st in r]
+    # A line of chant has no barlines, and the engine finds its staves by their barlines and clefs: where it returns
+    # nothing at all for a staff that stands alone, it is shown that staff again with a barline drawn at its end.
+    # (Only a staff whose five lines are really there: a ghost of the other side of the paper is left unread.)
+    lost, todo = [], []
+    for c in crops:
+        if not c['read'] and len(c['staves']) == 1 and not os.path.exists(c['name'] + '.musicxml') and os.path.exists(c['name'] + '.png'):
+            name, (top, bot) = c['name'] + '_closed', c['staves'][0]
+            if not os.path.exists(name + '.png'):
+                page = np.asarray(Image.open(c['name'] + '.png').convert('L')).copy()
+                if len(staves_in(page, (int(c['x0']), int(top), int(c['x1']), int(bot)))) != 1:
+                    continue
+                page[int(top):int(bot) + 1, int(c['x1']) - 3:int(c['x1'])] = 0
+                Image.fromarray(page).save(name + '.png')
+            lost.append((c, name))
+            todo += [name + '.png'] if not os.path.exists(name + '.musicxml') else []
+    if todo:
+        log(f'reading {len(todo)} staff(s) with no barlines again, closed with one...')
+        run_homr(todo)
+    for c, name in lost:
+        c['read'] = (read_xml(name + '.musicxml') if os.path.exists(name + '.musicxml') else [])[:1]
     for c in crops:
         if len(c['read']) != len(c['staves']):
             log(f"  ! page {c['page']} system {c['system']}: {len(c['staves'])} staves on the page but {len(c['read'])} were read")
@@ -869,6 +893,55 @@ def find_segno(img, y0, y1, unit):
     return out
 
 
+def find_endings(img, y0, y1, unit):
+    """Brackets of numbered endings between two heights of a page: a level line with a short stroke down from its left
+    end (the passes it is for are printed under that corner).  -> [(x of the stroke, y of the line, x where it ends)].
+    A word's extension line has no stroke; a hairpin is not level; a beam is thick; a triplet's bracket is short."""
+    from scipy import ndimage
+    y0, y1 = int(max(0, y0)), int(min(img.shape[0], y1))
+    if y1 - y0 < 2 * unit:
+        return []
+    dark = img[y0:y1] < 140
+    loose = dark.copy(); loose[1:] |= dark[:-1]; loose[:-1] |= dark[1:]         # a scan is never level: a row either way
+    level = ndimage.binary_opening(loose, structure=np.ones((1, int(5 * unit)), bool))
+    lab, n = ndimage.label(level, structure=np.ones((3, 3)))
+    out = []
+    for sl in ndimage.find_objects(lab):
+        xl, xr = sl[1].start, sl[1].stop
+        rows = dark[sl[0], xl:xr]
+        if np.median(rows.sum(0)) > max(3., .3 * unit):                          # a beam, a thick rule
+            continue
+        yl = sl[0].start + int(np.argmax(rows[:, :int(2 * unit)].sum(1)))        # the line's height at its left end
+        strip = dark[yl:yl + int(2.2 * unit), max(0, xl - 3):xl + 4].any(1)      # the stroke down from that end
+        down = int(np.argmin(strip)) if not strip.all() else len(strip)
+        up = dark[max(0, yl - int(1.2 * unit)):max(0, yl - 2), max(0, xl - 3):xl + 4].any(1)
+        if down >= .8 * unit and down < 2.2 * unit and (not len(up) or up.mean() < .4):
+            out.append((float(xl), float(y0 + yl), float(xr)))
+    return out
+
+
+def ending_passes(exe, img, x, y, unit, work, tag):
+    """The numbers printed under an ending bracket's corner - "1.", "1., 2.", "3." - read from that corner alone:
+    with the stroke, the line and a measure number beside them in view, they are read as "T2." and "22/3.".
+    Read at more than one size: a heavy "3." is seen at twice its size and not at four times."""
+    x0, x1, y0, y1 = int(x + .4 * unit), int(x + 7 * unit), int(y + .3 * unit), int(y + 2.8 * unit)
+    corner = np.full_like(img, 255)
+    corner[y0:y1, x0:x1] = img[y0:y1, x0:x1]
+    for zoom in (4, 2, 3):
+        words = sorted((w for w in ocr_words(exe, corner, y0 - .5 * unit, y1 + .5 * unit, work, tag, zoom=zoom) if x0 - unit <= w[2] <= x1), key=lambda w: w[2])
+        found = []
+        for w in words:
+            m = re.match(r'(?:[1-9][.,]{1,2}\s*)+', w[4].strip())           # "2.Te": the number, then the start of a word
+            if not m:
+                break
+            found += [int(d) for d in re.findall(r'[1-9]', m.group(0))]
+            if m.end() < len(w[4].strip()):
+                break
+        if found:
+            return sorted(set(found))
+    return []
+
+
 def navigation(words, segnos, bars, first, unit):
     """Words and signs above a system -> [(what, printed measure)], measures counted from `first`.
     A jump instruction is printed at the end of the measure it follows; a section label at its start."""
@@ -893,21 +966,33 @@ def navigation(words, segnos, bars, first, unit):
     return out
 
 
-def performed(n, nav, starts, ends):
+def performed(n, nav, starts, ends, endings=()):
     """The order the printed measures 1..n are played in, by the usual rules: a repeated passage twice;
     D.S. / D.C. back to the sign / the top, no repeats the second time; then on to the coda at "to coda",
-    or stop at "Fine".  -> list of printed measure numbers, or None when there is nothing to unroll."""
+    or stop at "Fine".  endings: [(measure, passes)] - numbered endings: each is played on the passes it names and
+    stepped over on the others, a pass being one time through the repeated passage it closes (so "1., 2." followed
+    by a "1.", a "2." and a "3." is a refrain with three different continuations).
+    -> list of printed measure numbers, or None when there is nothing to unroll."""
     where = lambda k: next((m for what, m in nav if what == k), None)
     jump = next(((what, m) for what, m in nav if what.startswith(('ds', 'dc'))), None)
     if not jump and not ends:
         return None
-    order, i, taken, back, second = [], 1, set(), 1, False
-    while 1 <= i <= n and len(order) < 6 * n:
+    begins = dict(endings); at = sorted(begins)
+    last_of = lambda a: next((b for b in at if b > a), n + 1) - 1          # an ending lasts until the next one begins
+    order, i, taken, back, second, passes = [], 1, set(), 1, False, {}
+    while 1 <= i <= n and len(order) < 8 * n:
         if i in starts and not second:
             back = i
+        if i in begins:
+            turn = passes.get(back, 0) + 1
+            # the second time through after a D.S., like any last time: the ending that leads on, not one that turns back
+            skip = any(m in ends for m in range(i, last_of(i) + 1)) if second else turn not in begins[i]
+            if skip and last_of(i) < n and any(b > i for b in at):
+                i = last_of(i) + 1
+                continue
         order.append(i)
         if i in ends and i not in taken and not second:
-            taken.add(i); i = back
+            taken.add(i); passes[back] = passes.get(back, 0) + 1; i = back
             continue
         if jump and not second and i == jump[1]:
             target = where('segno') if jump[0].startswith('ds') else 1
@@ -1177,13 +1262,14 @@ def roles_for(crops, piano=None):
 
 
 def has_piano(crops, pages, exe, work):
-    """Are the two lowest staves a piano?  Not if words are printed under the lowest one."""
-    if any('p' in ''.join(c.get('kinds') or []) for c in crops if len(c['staves']) >= 3):
-        return True                                  # a grand staff under other staves, as the staff finder saw it
+    """Are the two lowest staves a piano?  Not if they are sung from: words printed under the lowest one, or between
+    the two.  A treble and a bass staff joined by a brace look like a keyboard's to the staff finder, and are one
+    in most music; in unaccompanied music they are the choir's, and the words between them say so."""
+    seen = any('p' in ''.join(c.get('kinds') or []) for c in crops if len(c['staves']) >= 3)   # a grand staff under other staves
     big = [c for c in crops if len(c['read']) >= 3][:4]
     if not big or not exe:
-        return None
-    sung = 0
+        return True if seen else None
+    sung = between = 0
     for c in big:
         img = np.asarray(Image.open(pages[c['page'] - 1]).convert('L'))
         on_page(c['page'], img)
@@ -1192,8 +1278,25 @@ def has_piano(crops, pages, exe, work):
         words = ocr_words(exe, img, bot + .6 * unit, min(c['bot'], bot + 7 * unit), work, 'piano')
         mid = ocr_words(exe, img, c['staves'][-2][1] + .6 * unit, top - 1.0 * unit, work, 'piano')
         lyric = lambda ws: sum(1 for w in ws if re.search('[aeiou]', w[4].lower()) and len(w[4]) > 1 and not NOT_LYRICS.match(w[4]) and not CHORD.match(w[4]))
-        sung += lyric(words) >= 3 or lyric(mid) >= 3
+        sung += lyric(words) >= 3 or lyric(mid) >= 3; between += lyric(mid) >= 3
+    if seen:                                         # the staff finder saw a keyboard: only a line of words inside it says otherwise
+        if between <= len(big) / 2:
+            return True
+        for c in crops:
+            if c.get('kinds'):
+                c['kinds'] = ['v'] * len(c['kinds'])
+        return False
     return sung < len(big) / 2
+
+
+# Words that tell Latin from English when nobody has said which is sung: the common words of the Mass and the prayers
+# set most often (whole or put together from their printed syllables), against the small words no English text is without.
+LATIN_WORDS = set("""sanctus dominus domini domine deus dei deo excelsis hosanna osanna benedictus benedicta gratia plena sabaoth
+    pleni sunt caeli coeli terra tua tuae tui tuum agnus peccata mundi miserere nobis dona pacem kyrie eleison christe mater ora nunc
+    hora mortis nostrae mulieribus fructus ventris angelus ancilla verbum caro factum habitavit secundum fiat mihi spiritu sancto
+    sancta concepit nuntiavit ecce laudamus adoramus glorificamus venit nomine qui est et cum pro""".split())
+ENGLISH_WORDS = set("""the and of to you that it we for on with all my be is are was this your our his her they have will not when what
+    from by at as so no night day love""".split())
 
 
 def assemble(crops, pages, work, title, tempo, language, log, marked=False):
@@ -1227,6 +1330,12 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             tall = TEXT.get('tall') or 0.                  # large print under a small staff: a line is as tall as its letters
             near = max(1.2 * unit, .6 * tall)
             loose = [w for w in loose if re.search('[A-Za-z]', w[4]) and '(' not in w[4] and not NOT_LYRICS.match(w[4])]
+            if not loose and si + 1 == len(c['staves']):       # nothing under the lowest staff as far as half way to the next system:
+                under = [o['staves'][0][0] for o in crops if o['page'] == c['page'] and o['staves'] and o['staves'][0][0] > bot]
+                far = min(min(under) - 2.5 * unit, bot + 9 * unit) if under else 0     # where systems stand close, the words are past half way
+                if far > nxt - 1.2 * unit:
+                    loose = ocr_multi(exe, img, bot + .6 * unit, far, work, tag, (2, 3, 6))
+                    loose = [w for w in loose if re.search('[A-Za-z]', w[4]) and '(' not in w[4] and not NOT_LYRICS.match(w[4])]
             ys = []
             for w in sorted(loose, key=lambda w: w[1]):
                 if not any(abs(w[1] - y) < near for y in ys):
@@ -1260,6 +1369,18 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             c['texts'] = read_texts(c, img, max(set(counts), key=counts.count))
     # ... so that the words can be checked against each other before any note gets one.
     key = lambda t: re.sub(r"[^a-z']", '', t.lower())
+    if not language:                                # nobody has said what language is sung: Latin is known by its words
+        lat = eng = 0
+        for c in crops:
+            for lines, *_ in c.get('texts', {}).values():
+                for line in lines:
+                    k_ = [re.sub('[^a-z]', '', t.lower()) for _, t in line]
+                    whole = [not t.endswith('-') and (i == 0 or not line[i - 1][1].endswith('-')) for i, (_, t) in enumerate(line)]
+                    eng += sum(w and k in ENGLISH_WORDS for k, w in zip(k_, whole))
+                    lat += sum(''.join(k_[i:i + n]) in LATIN_WORDS for i in range(len(k_)) for n in (1, 2, 3, 4, 5) if i + n <= len(k_))
+        if lat >= 8 and lat > 3 * eng:
+            language = 'latin'
+            log(f'  the words are Latin ({lat} Latin words against {eng} English ones): they will be sung as church Latin  (--language english if that is wrong)')
     words_ok = None
     if not language or language == 'english':
         try:
@@ -1314,6 +1435,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                                     w[1] += '-'
             c['texts'][si] = ([[tuple(w) for w in line] for line in lines], bars, unit, ys)
     nav, rep_starts, rep_ends = [], set(), set()    # what sends the music elsewhere: signs, words, repeat barlines
+    endings = []                                    # numbered endings: (the measure each begins at, the passes it is for)
     last = {}                                       # (role, voice) -> (line number in out, pitch) of the note that ended the previous bar
     for c in crops:
         if not c['read']:
@@ -1337,6 +1459,12 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 bars0 = bars0 if len(bars0) == M + 1 else list(np.linspace(c['x0'], c['x1'], M + 1))
             line = ' '.join(w[4] for w in sorted(above, key=lambda w: w[2]))
             nav += navigation(above, find_segno(img, max(c['top'], top - 9 * unit0), top - .2 * unit0, unit0), bars0, num + 1, unit0)
+            over = [o['staves'][-1][1] for o in crops if o['page'] == c['page'] and o['staves'] and o['staves'][-1][1] < top]   # the staff above, on this page
+            y_from = max(over) + .6 * unit0 if over else top - 9 * unit0
+            for bx, by, bx1 in find_endings(img, y_from, top - .3 * unit0, unit0):
+                which = ending_passes(exe, img, bx, by, unit0, work, f"{c['page']}_{c['system']}_e")
+                if which:
+                    endings.append((num + 1 + int(np.clip(np.searchsorted(bars0, bx + 1.5 * unit0) - 1, 0, M - 1)), tuple(which)))
             rows_t = []                              # line by line: a triplet's "3" on the staff must not come between "=" and its number
             for w in sorted(above, key=lambda w: w[1]):
                 if rows_t and abs(w[1] - rows_t[-1][0]) < 1.2 * unit0:
@@ -1346,6 +1474,8 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             for _, ws in rows_t:
                 row = ' '.join(w[4] for w in sorted(ws, key=lambda w: w[2]))
                 for mm in re.finditer(r'=\s*(?:ca\.?\s*)?(\d{2,3})', row):
+                    if re.search(r'(?:^|\s)(?:p{1,3}|m[pf]|f{1,3}|s?fz?|fp)\s*$', row[:mm.start()]):
+                        continue                         # after a dynamic stand hairpins, which read as "= 72" as easily as a mark does
                     if 30 <= int(mm.group(1)) <= 240:
                         num_w = next((w for w in ws if mm.group(1) in w[4]), None)
                         xw = min([w[2] for w in ws if num_w and num_w[2] - 32 * unit0 < w[2] <= num_w[2]] or [c['x0']])
@@ -1363,6 +1493,18 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 if not re.search(r'=\s*(?:ca\.?\s*)?\d{2,3}', ' '.join(w[4] for w in ws)):
                     for xw, bpm in tempo_words(ws):
                         marks.setdefault(max(0, int(np.searchsorted(bars0, xw + 2 * unit0)) - 1), bpm); worded = True
+            if not marks and not TEXT['pages']:
+                # On a scan a heading's two words can come back at different heights and with a staff's name before
+                # them and a dynamic after ("Trio Quietly flowing p"): words that follow one another along a line,
+                # whatever row each was put in, are tried together once more.
+                run = []
+                for w in sorted((w for w in above if re.search('[A-Za-z]', w[4])), key=lambda w: w[2]) + [None]:
+                    if w is not None and run and 0 <= w[2] - run[-1][3] < 3 * unit0 and abs(w[1] - run[-1][1]) < 1.2 * unit0:
+                        run.append(w)
+                        continue
+                    for xw, bpm in tempo_words(run) if len(run) > 1 else []:
+                        marks.setdefault(max(0, int(np.searchsorted(bars0, xw + 2 * unit0)) - 1), bpm); worded = True
+                    run = [w]
             # "rall." ... "a tempo", wherever in the system they are printed (each staff may carry its own copy)
             if TEXT['pages']:
                 inside = sorted(ocr_words(exe, img, c['top'], c['bot'], work, 'pace'), key=lambda w: (round(w[1] / (2 * unit0)), w[2]))
@@ -1580,9 +1722,11 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
     first = next((i for i, l in enumerate(out) if l.startswith('time: ')), None)
     if first is not None:
         out.pop(first)
-    order = performed(num, nav, rep_starts, rep_ends)
+    endings = sorted(set(endings))
+    order = performed(num, nav, rep_starts, rep_ends, endings)
     if nav or rep_ends:
         found = sorted(set(nav), key=lambda x: x[1]) + [('repeat', f'{a_}-{b_}') for b_ in sorted(rep_ends) for a_ in [max([x for x in rep_starts if x <= b_] or [1])]]
+        found += [('ending ' + ', '.join(map(str, which)), m_) for m_, which in endings]
         log('  on the page: ' + ', '.join(f'{what} at {m}' for what, m in found))
         head.insert(-1, '// found on the page: ' + ', '.join(f'{what} at {m}' for what, m in found))
         if order and order != list(range(1, num + 1)):
@@ -1593,7 +1737,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
 
 
 TEMPO_WORDS = sorted({'very slow': 48, 'very slowly': 48, 'moderately slow': 72, 'moderately slowly': 72, 'slowly': 60, 'slow': 60, 'tenderly': 69,
-                      'gently': 76, 'flowing': 88, 'freely': 63, 'rubato': 63, 'ballad': 66, 'moderately fast': 120, 'moderately bright': 120,
+                      'gently': 76, 'flowing': 88, 'quietly flowing': 72, 'gently flowing': 76, 'freely': 63, 'rubato': 63, 'ballad': 66, 'moderately fast': 120, 'moderately bright': 120,
                       'moderately': 96, 'moderate': 96, 'medium': 100, 'very fast': 168, 'fast': 144, 'bright': 132, 'brightly': 132, 'lively': 132,
                       'briskly': 132, 'with spirit': 126, 'majestically': 84, 'grave': 42, 'largo': 48, 'larghetto': 60, 'lento': 54, 'adagio': 63,
                       'andantino': 84, 'andante': 76, 'moderato': 104, 'allegretto': 112, 'allegro': 128, 'vivace': 152, 'presto': 176,
@@ -1663,16 +1807,22 @@ def main():
         print(f'  (reading the symbols directly did not work: {e}; recognizing the pages instead)')
     if crops is None and a.exact_only:
         sys.exit(3)
+    drawn = crops is not None                       # exported from notation software, not a picture of a page
     if crops is None:
         crops = join_split_systems(read_systems(cut_systems(pages, work, print), print))
     found = None if a.tempo else find_tempo(pages, work)
-    tempo = a.tempo or found or 100.
-    title = a.title or (pdf_title(a.pdf) if TEXT['pages'] else None) or re.sub(r'[_-]+', ' ', os.path.splitext(os.path.basename(a.pdf))[0]).strip().title()
+    # With no tempo on the page: notation software plays an unmarked score at 120 to the quarter, so that is what
+    # whoever exported this heard.  A printed page with no tempo at all is rare, and 100 offends least.
+    guess = 120. if drawn else 100.
+    tempo = a.tempo or found or guess
+    named = re.sub(r'\s+', ' ', re.sub(r'_+|(?<=\w)-(?=\w)', ' ', os.path.splitext(os.path.basename(a.pdf))[0])).strip()    # the file's name, as its owner wrote it
+    title = a.title or (pdf_title(a.pdf) if TEXT['pages'] else None) or (named if named != named.lower() else named.title())
     text = assemble(crops, pages, work, title, tempo, a.language, print, marked=found is not None)
     open(a.out, 'w').write(text)
     began = re.search(r'^tempo: (\S+)', text, re.M)
     print(f'wrote {a.out}: {sum(len(c["read"][0]["measures"]) for c in crops if c["read"])} measures from {len(crops)} systems, tempo {began.group(1) if began else tempo}'
-          + ('' if found or 'tempo: ' in text.split('== 1')[-1] or (began and float(began.group(1)) != 100.) else ' (none is printed: 100 is a guess - set  tempo:  in the score)'))
+          + ('' if a.tempo or found or 'tempo: ' in text.split('== 1')[-1] or (began and float(began.group(1)) != guess) else
+             f' (NO TEMPO IS PRINTED: {guess:.0f} is a guess' + (', the speed notation software plays an unmarked score at' if drawn else '') + ' - set  tempo:  in the score)'))
 
 
 if __name__ == '__main__':

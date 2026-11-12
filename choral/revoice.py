@@ -590,7 +590,7 @@ def _tame(y, ref):
 
 
 CACHE = os.path.join(ROOT, '.svc', 'cache')
-CACHE_MAX = 4e9                    # bytes; the oldest go first
+CACHE_MAX = float(os.environ.get('CHORAL_CACHE_GB', 4)) * 2 ** 30     # bytes of converted singing kept for the next run (a long piece with twelve to a part is about 1 GB)
 
 
 def _kept(job, cmd):
