@@ -956,8 +956,9 @@ so it is given longer ones. Over the whole solo (72 words), four draws each:
 
 A sixth longer gives 64 and 64; a half longer 65 and 62; two thirds longer 67 and 64: the gain is
 there from a third on and does not grow. As a twelve-to-a-part render draws him: 59 and 60 of 70
-with the usual consonants, 63 and 65 with the longer. A re-voiced section of twelve baritones is
-understood the same either way (87% of its words), so only parts sung by one person get them. The
+with the usual consonants, 63 and 65 with the longer. A re-voiced section of twelve is understood
+the same either way (baritones 87% of their words and 87%, first tenors 83% and 87%: one word), so
+only parts sung by one person get them. The
 loudness, pitch and timing the result is held to are those of the same longer-consonant singing.
 
 One warning about the yardstick: the same recognizer, on the soloist's four measures over the
