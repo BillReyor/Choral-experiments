@@ -29,6 +29,7 @@ PRESET = dict(                         # what differs from piece to piece (see c
     # voice goes by its own rule (6.5 dB at piano and softer in slow music, nothing in quick music)
     attack=1.,                         # how slowly phrases begin, relative to the rule for their dynamic
     scoop=1.,                          # how far under the note phrases begin, relative to the usual
+    solo_late=.07,                     # seconds a soloist sits behind the beat (see sing); 0 where the timing was measured from recordings
 )
 LEAD_IN = 1.0   # seconds of room before the first beat
 
@@ -118,11 +119,16 @@ def loud(x):
     return float(np.sqrt(np.percentile(blk, 90)) + 1e-12)
 
 
-def sing(sc, clock, singers=12, log=print, tune=None, voices=None):
+def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
     """Every singer of every section -> {section: array (3, N, 2)}: what the main microphone pair
     hears, what goes to the hall, and the leaders' close mics.  tune: voice settings for this piece
     (keys as in voice.apply_fit).  voices: recordings of real voices for the singers to be re-voiced in
-    (choral/revoice.py), shared out by how low each lies: the lowest to the basses, the highest to the first tenors."""
+    (choral/revoice.py), shared out by how low each lies: the lowest to the basses, the highest to the first tenors.
+
+    late: seconds by which a part sung by one person is moved back.  The engine puts every vowel on the beat (in
+    fact some 20 ms before it) with its consonant ahead of that, and the built-in piano plays on the beat.  In a
+    section that is how a choir sounds; one voice alone over a few piano chords is heard to run ahead of them.  A
+    listener given the soloist 35 ms earlier, as sung, 35 ms later and 70 ms later chose 70."""
     t0 = time.time()
     voice.set_clock(*clock)
     voice.PER_SECTION = singers
@@ -146,6 +152,9 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None):
             dry, send, spot = stems[sect]
             if sect in SINGLE:
                 mono = mono * (SOLO_GAIN if sect == 'SOLO' else .75 * SOLO_GAIN)
+                back = int(max(late, 0.) * SR)
+                if back:
+                    mono = np.r_[np.zeros(back, mono.dtype), mono[:N - back]]
             for c, (mx, aim) in enumerate(((-.35, 125.), (.35, 55.))):       # two cardioids, angled apart
                 d = np.hypot(x - mx, y)
                 g = (.5 + .5 * np.cos(np.arctan2(y, x - mx) - np.deg2rad(aim))) / d
@@ -231,7 +240,7 @@ def render(sc, per_section=12, log=print, preset=None):
     P = dict(PRESET, singers=per_section, **(preset or {}))
     clock = clock_for(sc)
     total = float(np.interp(sc.beats, *clock)) + 4.0
-    stems = sing(sc, (*clock, total), P['singers'], log)
+    stems = sing(sc, (*clock, total), P['singers'], log, late=P.get('solo_late', 0.))
     vox = {'all': choir(stems, P)}
     out = versions(vox, backing(sc, len(vox['all']), voice.T, P), P)
     return out.get('balanced', out['voices only']), out['voices only'], (*clock, total)

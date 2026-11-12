@@ -172,6 +172,9 @@ def main():
         from . import timing
         P['timing'] = timing.from_accompaniment(sc, track.mean(1), R.SR, log)
 
+    if (P.get('timing') or track is not None or sc.timing) and 'solo_late' not in saved:
+        P['solo_late'] = 0.                            # the beat was taken from a recording: the singers are where that puts them
+
     # ---- sing
     clock = R.clock_for(sc, P.get('timing'), absolute=track is not None)
     total = float(np.interp(sc.beats, *clock)) + 4.0
@@ -192,7 +195,7 @@ def main():
         from . import revoice
         if revoice.command() is None:
             raise SystemExit('--voice needs the optional voice model, which is not set up here: see docs/how-it-works.md, "A real voice\'s sound".')
-    stems = R.sing(sc, (*clock, total), P['singers'], log, tune=R.tune_of(P), voices=voices or None)
+    stems = R.sing(sc, (*clock, total), P['singers'], log, tune=R.tune_of(P), voices=voices or None, late=P['solo_late'])
     if ref_voices is not None and ('hall_from' not in saved or a.fresh):
         got = presets.match_hall(stems, P, ref_voices, log)
         P.update(got, **({'hall_from': 'recording'} if got else {}))

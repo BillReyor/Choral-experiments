@@ -918,3 +918,28 @@ seconds of the voice, and different draws read 83-88%, in no order; the engine's
 same words. So the recognizer's gap is small and what a listener calls bad enunciation is mostly
 not in it - it is in how the model moves from one voiced sound to the next, which nothing tried
 here changes.
+
+*Where the timing was off.* Asked whether the trouble was at the four marked slow-downs, the
+listener said no; asked where, then: "Intro feels fast, but it feels like it resolves itself
+around 0:52", and the voices "drift from piano slightly". At 0:50 the choir takes over from the
+soloist. What was checked on the way, and was not it: the solo's rhythm as read matches the page
+note for note in the measures looked at; the built-in piano's attacks sit within 10 ms of the
+clock in every section; the re-voiced soloist follows the engine's soloist within 10 ms; the
+soloist is timed no differently from a choir singer.
+
+A false lead cost an hour. One syllable in five of the re-voiced solo looked late by 60 ms or
+more, judged by when the loudness comes up, and again judged by the spectrum's changes. A step was
+built to move such syllables onto the engine's (reading further on, a period of the voice at a
+time). Moving by the first measure made the second measure worse; moving by the second fixed five
+starts of sixteen. The lateness was not there: the "late" starts cluster at 105-150 ms, the length
+of a consonant, and the pitch of every note begins on time. What the measures were matching was
+the engine's strong consonant against the model's weak one, and finding the vowel instead. The
+step was thrown away. (A lateness that comes in one size is a mismatch, not a delay.)
+
+What it was: nothing drifting, a placement. The engine starts each vowel on the beat - measured,
+about 20 ms before it - with the consonant ahead of that, and the piano plays on the beat. Many
+voices blur that into a choir's entry. One voice over a chord a beat is heard ahead of the piano.
+No measurement here says where a soloist should sit, so the listener was given the opening four
+times - the soloist 35 ms earlier, as sung, 35 ms and 70 ms later - and chose 70 ms later. A part
+sung by one person is now placed that far back (`solo_late`), in pieces whose beat comes from the
+page; where it was measured from a recording, the singers stay where the recording puts them.

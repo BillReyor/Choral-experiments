@@ -151,6 +151,7 @@ A piece's settings are worked out once and kept beside the score as `NAME.preset
 | Hall (amount and length) | Matched to how the recorded voices die away after each release | A rule from how short the quick syllables are |
 | Accompaniment level | Measured from the balanced mix | A fixed default |
 | Note shape (sustained, fading like a bell, or swelling into each note) | Measured on one real singer: how fast held notes fade, and how far soft ones swell in | Sustained; soft notes in slow music swell in by a rule |
+| Where a soloist sits against the beat | With the recording's beat, as sung | 70 ms behind the engine's placement (`solo_late`): the engine puts vowels on the beat and consonants before it, which one voice alone over a piano is heard to rush; a listener chose 70 ms from four placements |
 | How close the microphones are | The recognizer walks a ladder from dry-and-close to wet-and-blended and keeps the most blended setting that does not cost words (`--tune`) | The same rule |
 
 On the three test pieces the track separation recovers, with no hand-tuning, what had earlier
