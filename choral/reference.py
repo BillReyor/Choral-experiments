@@ -61,10 +61,13 @@ def isolate(sc, clock, part, balanced, accompaniment, predominant=None, muted=No
         clean = _db(balanced[q]) - _db(voices[q]) if q.stop - q.start >= SR else _db(balanced[:n]) - _db(voices) 
         out = {'voices': voices, 'accompaniment': a * accompaniment[:n], 'clean': clean if q.stop - q.start >= SR else 0., 'acc_gain': a}
         if out['clean'] >= 15 and (muted is not None or predominant is not None):
-            other = muted if muted is not None else predominant
-            b = _gain(other, accompaniment, q)
-            rest = other[:n] - b * accompaniment[:n]
-            out['part'] = voices - rest if muted is not None else rest
+            if muted is not None:
+                rest = muted[:n] - _gain(muted, accompaniment, q) * accompaniment[:n]
+                out['part'] = voices - rest
+            # A "part muted" track is only useful if it really is the balanced mix without the part: taking it away
+            # must leave less than there was.  Otherwise the "predominant" track, which has the part in front.
+            if predominant is not None and (muted is None or _db(out['part']) > _db(voices) - 2):
+                out['part'] = predominant[:n] - _gain(predominant, accompaniment, q) * accompaniment[:n]
         return out
     T = lambda b: float(np.interp(b, clock[0], clock[1]))
     span = lambda b0, b1: slice(max(0, int(T(b0) * SR)), min(n, int(T(b1) * SR)))
@@ -85,25 +88,32 @@ def isolate(sc, clock, part, balanced, accompaniment, predominant=None, muted=No
     log(f'accompaniment is in the balanced mix at {a:.2f}; subtracting it leaves {clean:.0f} dB less in the introduction')
     if clean < 15:
         return out
+    mine = sorted((b0, b1) for b0, b1, p in sung if p == part)
+    rests = []                                              # where this part is silent while the others sing
+    for (s0, s1), (n0, n1) in zip(mine, mine[1:] + [(sc.beats, sc.beats)]):
+        if n0 - s1 >= 3 and any(o0 < n0 - 1 and o1 > s1 + 1 for o0, o1, p in sung if p != part):
+            rests.append(span(s1 + 1.5, n0 - .5))
+    if mine and mine[0][0] >= 3:
+        rests.append(span(0, mine[0][0] - .5))
     if muted is not None:                                   # balanced minus "part muted" = the part
         am = _gain(muted, accompaniment, q)
         rest = muted[:n] - am * accompaniment[:n]
-        # The two mixes may be at different levels; the accompaniment, which is in both, says by how much.  (Scaling
-        # the others by how much of the full choir they explain overshoots - the part itself is in the full choir
-        # too - and leaves the others in the result upside down: on one piece that put only 56% of the part's
-        # notes on pitch where taking them out level for level gives 94%.)
-        k = a / am if am > 1e-6 and .5 < a / am < 2 else 1.
+        # The two mixes need not be at the same level.  Where the part is silent and the others sing, the "muted" mix
+        # is the full choir, which says exactly how much of it to take away.  (Scaling by how much of the full choir
+        # it explains over the whole piece overshoots - the part itself is in the full choir - and leaves the
+        # others in the result upside down.)
+        num = sum(float(voices[s].ravel() @ rest[s].ravel()) for s in rests)
+        den = sum(float(rest[s].ravel() @ rest[s].ravel()) for s in rests)
+        k = num / den if den > 0 and .4 < num / den < 2.5 else 1.
         out['part'] = voices - k * rest
-    elif predominant is not None:                           # predominant = part + c * others + b * accompaniment
+        if _db(out['part']) > _db(voices) - 2 and predominant is not None:      # taking the others away left more than there was
+            log('the "muted" track is not the balanced mix without the part (another take, or another mix): using the "predominant" track')
+            del out['part']
+        else:
+            log(f'"muted" track: accompaniment at {am:.2f}, the other parts at {1 / k:.2f} of their balanced level')
+    if 'part' not in out and predominant is not None:       # predominant = part + c * others + b * accompaniment
         b = _gain(predominant, accompaniment, q)
         pv = predominant[:n] - b * accompaniment[:n]
-        mine = sorted((b0, b1) for b0, b1, p in sung if p == part)
-        rests = []                                          # the others sing while this part is silent
-        for (s0, s1), (n0, n1) in zip(mine, mine[1:] + [(sc.beats, sc.beats)]):
-            if n0 - s1 >= 3 and any(o0 < n0 - 1 and o1 > s1 + 1 for o0, o1, p in sung if p != part):
-                rests.append(span(s1 + 1.5, n0 - .5))
-        if mine and mine[0][0] >= 3:
-            rests.append(span(0, mine[0][0] - .5))
         num = sum(float(pv[s].ravel() @ voices[s].ravel()) for s in rests)
         den = sum(float(voices[s].ravel() @ voices[s].ravel()) for s in rests)
         c = num / den if den > 0 else 0.

@@ -514,4 +514,93 @@ needs neither the recognition engine nor text recognition. If a PDF's symbols do
 music, it says so and the pages are recognized instead. Not handled yet: "8va" lines, first and
 second endings - and it has met exactly one file.
 
+**The ninth piece** (a quick comic number for four-part men's choir, clarinet and keyboard; an
+18-page PDF from notation software, 83 measures; balanced mix, accompaniment, "baritone
+predominant" and "baritone muted" tracks) was sent as a second file for the exact reader. It is
+not one. It comes from older software, whose music font predates the standard, and the file
+stores both its music symbols and its words under codes of its own. So the pages were recognized
+like a scan - and a clean, wide-open score with an instrument in it found more weak spots in that
+path than any scan had.
+
+*Reading the notes.*
+
+- **Text that is not text.** The PDF does carry its words as text, but as garbage letters. A PDF's
+  text is now trusted only if four tokens in five look like words; otherwise the page is read by
+  sight.
+- **Staves are named, not counted.** Until now, which staff is whose was told from how many there
+  are. Here that changes from page to page: four voices and keyboard, the same with a clarinet on
+  top, the two low voices under the clarinet, the clarinet with keyboard alone. The names printed at the left of
+  the staves are now read: tenor or bass with a number, "Bar.", instrument names and their
+  abbreviations, and a keyboard's name standing between the two staves it means. A system without
+  names takes those of the last system with the same staves and clefs. A name set in several lines
+  beside one staff ("Tenor" with I and II, "Baritone" over "Bass") names a staff that carries two
+  parts. An instrument's staff is read and left out; systems that are an instrument alone (its
+  part, printed after the score) are dropped.
+- **A staff the engine did not find.** Under two long slurs it reported no staff at all, and where
+  a slur hid a staff's beginning it split one system in two. Systems are now joined across such a
+  break, and five evenly spaced lines standing between two found staves are taken for the staff
+  they are. That adds this one staff, and none among some 800 staves of six earlier pieces.
+- **A clef misread.** In one system the baritones' bass clef was read as an alto clef and the
+  basses' as a treble clef - also when each staff was read again alone - so every note stood a
+  seventh or a thirteenth off. A part keeps its clef through a piece: a staff read under another
+  clef than its part has in at least three systems of four has its notes moved to where the usual
+  clef puts them, key signature respected. Checked against the page: all twelve notes right.
+- **A tempo mark** with a triplet's "3" printed between the "=" and the number was missed; marks
+  are now matched line by line. The three tempos (120, 68, 120) were then found from the print,
+  and the accompaniment agrees: 120.0, 67.7, 120.0.
+- **The "muted" track** is not the balanced mix without the baritones here: taking it away leaves
+  something louder than the voices. The program notices and isolates the part from the
+  "predominant" track instead.
+
+*The words* took the most work, and what was wrong was general.
+
+- **Print size.** Lines of words were told apart, and each read again close up, in a band sized by
+  the staff. This score has large print under small staves: one line of text was taken for two,
+  and the close-up cut the tails off y, p and j, which then read as v, n or b, and i. The sizes now
+  come from the print itself.
+- **Where a note stands.** The engine's report of where each note stands on the page can be half a
+  note off, and in a staff it read alone it was sometimes nonsense (notes running right to left).
+  A measure with exactly as many syllables under it as it has notes to sing them now gets them
+  one each, in order, whatever the positions say; notes reported out of order or outside their
+  measure are placed by when they sound.
+- **A held vowel read as a number.** An italic "oo" under a long note comes back from text
+  recognition as two zeros and was thrown away with the measure numbers. The note, left without a
+  word, then took half of whatever word another part was singing, and that half was glued to the
+  singer's next word. Zeros are now read as the vowel; and a borrowed beginning of a word that is
+  followed by a note with a word of its own is held from the note before, or stands alone.
+- **Hyphens.** Of two readings of a word with the same letters, the one that kept its hyphens is
+  kept. And the second, close-up look for a syllable under a bare note no longer returns a
+  syllable the first look had already given to the note beside it.
+
+Words in this piece that are not dictionary words: 62 of some 630 before; 25 after, of which 22
+are seven real words the dictionary lacks and 3 are misreadings. Syllables on the right note in the earlier graded scans:
+piece 1 from 89% to 93%, piece 3 from 90% to 92%, piece 4 (Latin) from 90% to 89%. Their notes
+are unchanged to the last byte; so are the seventh and eighth pieces'. The fifth piece differs in
+one note: a tie across a system break that is not on the page, which the earlier reading had put
+in.
+
+**Words the dictionary does not have** were sung on "ah" - every name, every word from another
+language, every misreading. Now a word is first looked for under a fuller spelling: a letter left
+out for the metre ("ev'ry", "o'er", "singin'"), a letter doubled or not. Failing that it is sung
+as it is spelled, by a few dozen English spelling rules that keep vowels plain in open syllables
+(what is not in an English dictionary is mostly a name or another language). Measured on 3000
+words the dictionary does know: 24% of the sounds differ from the dictionary's (11% of the
+consonants), and the number of syllables is right in 87%. A near miss, and the run prints each
+one so that a `say:` line can correct it. In the eighth piece one slang spelling, sung on "ah" 48
+times until now, is sung as written; in the seventh, the Hebrew.
+
+*The result on this piece.* The recognizer hears 69% of the words in the simulated baritone alone
+(57% before the word fixes) and 57% in the first tenor (45%); the real "baritone predominant"
+track as given scores 76%. The baritone's notes are on pitch against the real baritone in 97% of
+cases at the best steady fit - 76% by the strict count where the followed timing puts each note,
+on a part isolated from a track that still has the other voices at a fifth of their level.
+Following the recordings moved the timing by 0 ms on average; voices within 60 ms of the
+accompaniment in 72 of 73 stretches.
+
+Not built: reading this older family of PDFs exactly. The symbols are all in the file, each under
+a private code that keeps the order of the font's own table, so the table can probably be
+recovered from a handful of symbols that are unmistakable by position (a clef at the start of
+every staff, a time signature after it). Until then such files go the slower way, which this
+piece has made a good deal sturdier.
+
 None of these numbers says the result would pass for a recording.

@@ -91,7 +91,44 @@ def page_staves(img, txt):
             unit = (y1 - y0) / (1 if want == 1 else 3.2)
             found = [(y0, y1)] if want == 1 else [(y0, y0 + unit), (y1 - unit, y1)]
         staves += [(a, b, x0, x1, 'p' if label == 1 else 'v') for a, b in found]
-    return sorted(staves)
+    staves = sorted(staves)
+    return sorted(staves + missed_staves(img, staves))
+
+
+def missed_staves(img, staves):
+    """Staves the staff finder did not report (it happens to a staff with long slurs drawn through it): five lines,
+    spaced like the page's other staves, standing between two staves it did find."""
+    if len(staves) < 3:
+        return []
+    sp = float(np.median([(s[1] - s[0]) / 4 for s in staves]))       # from one line to the next
+    tol = max(2., .2 * sp)
+    out = []
+    for prev, cur in zip(staves, staves[1:]):
+        g0, g1 = int(prev[1] + 1.5 * sp), int(cur[0] - 1.5 * sp)
+        x0, x1 = int(max(prev[2], cur[2])), int(min(prev[3], cur[3]))
+        if g1 - g0 < 4 * sp or x1 - x0 < 20 * sp:
+            continue
+        hit = None
+        for f in (.5, .3, .7, .2, .8):                               # narrow strips: scans are never level, and one may be crossed by a slur
+            a = int(x0 + (f - .06) * (x1 - x0)); b = int(x0 + (f + .06) * (x1 - x0))
+            rows = np.where((img[g0:g1, a:b] < 150).mean(1) > .6)[0]
+            ys = []
+            for r in rows:
+                if ys and r - ys[-1][-1] <= 2:
+                    ys[-1].append(r)
+                else:
+                    ys.append([r])
+            ys = [float(np.mean(l)) for l in ys]
+            for y in ys:
+                five = [min(ys, key=lambda z: abs(z - y - k * sp)) for k in range(5)]
+                if all(abs(z - y - k * sp) <= tol for k, z in enumerate(five)) and \
+                        not any(y - 1.6 * sp < z < y - tol or five[4] + tol < z < five[4] + 1.6 * sp for z in ys):     # five lines, not six
+                    hit = (g0 + five[0], g0 + five[4]); break
+            if hit:
+                break
+        if hit:
+            out.append((hit[0], hit[1], x0, x1, 'v'))
+    return out
 
 
 def group_systems(img, staves):
@@ -99,10 +136,14 @@ def group_systems(img, staves):
     groups = [[staves[0]]] if staves else []
     for prev, cur in zip(staves, staves[1:]):
         gap0, gap1 = int(prev[1]) + 2, int(cur[0]) - 2
-        x = int(min(prev[2], cur[2]))
-        dark = img[gap0:gap1, max(0, x - 42):x + 42] < 140
-        near = dark[:, :-4] | dark[:, 1:-3] | dark[:, 2:-2] | dark[:, 3:-1] | dark[:, 4:]     # the line may lean a pixel or two
-        joined = gap1 > gap0 and near.mean(0).max() > .6       # measured: 0.73-1.00 within a system, under 0.4 between
+        here = int(min(prev[2], cur[2]))
+        joined = False
+        # the line stands where the staves begin - but a staff's found beginning can be late (a long slur, a clef
+        # missed), so every earlier beginning seen on the page is tried as well
+        for x in sorted({here} | {int(s_[2]) for s_ in staves if s_[2] < here}):
+            dark = img[gap0:gap1, max(0, x - 42):x + 42] < 140
+            near = dark[:, :-4] | dark[:, 1:-3] | dark[:, 2:-2] | dark[:, 3:-1] | dark[:, 4:]     # the line may lean a pixel or two
+            joined = joined or (gap1 > gap0 and near.mean(0).max() > .6)       # measured: 0.73-1.00 within a system, under 0.4 between
         if joined:
             groups[-1].append(cur)
         else:
@@ -140,6 +181,13 @@ def cut_systems(pages, work, log):
             top = max(0 if si == 1 else (bounds[si - 2][1] + g[0][0]) / 2, g[0][0] - 3.5 * unit)
             bot = min(H if si == len(groups) else (g[-1][1] + bounds[si][0]) / 2, g[-1][1] + 3.5 * unit)
             name = os.path.join(work, 'p%02d_s%d' % (pi, si))
+            sig = repr([(int(s_[0]), int(s_[1])) for s_ in g])        # what was read before is kept only for the same staves
+            if os.path.exists(name + '.staves') and open(name + '.staves').read() != sig or (os.path.exists(name + '.png') and not os.path.exists(name + '.staves')
+                                                                                         and os.path.exists(os.path.join(work, 'layout.done'))):
+                for f in os.listdir(work):
+                    if f.startswith(os.path.basename(name) + '.') or f.startswith(os.path.basename(name) + '_'):
+                        os.remove(os.path.join(work, f))
+            open(name + '.staves', 'w').write(sig)
             if not os.path.exists(name + '.png'):       # the page with everything but this system blanked out:
                 only = np.full_like(img, 255)           # the reader then sees one system at its normal size
                 only[int(top):int(bot)] = img[int(top):int(bot)]
@@ -203,7 +251,10 @@ def read_xml(path):
                     for c in e.findall('clef'):
                         k = int(c.get('number') or 1) - 1
                         if k < nst and mine[k]['clef'] is None:
-                            mine[k]['clef'] = c.findtext('sign')
+                            mine[k]['clef'] = c.findtext('sign'); mine[k]['line'] = c.findtext('line')
+                    if e.findtext('key/fifths'):
+                        for x in mine:
+                            x.setdefault('key', int(e.findtext('key/fifths')))
                 elif e.tag == 'backup':
                     cur -= Fraction(int(e.findtext('duration')), div)
                 elif e.tag == 'forward':
@@ -218,7 +269,7 @@ def read_xml(path):
                     if e.find('rest') is not None:
                         if e.findtext('type') is None:           # a whole bar of rest
                             ql = Fraction(0)
-                        midi = name = None
+                        midi = name = step = alter = octv = None
                     else:
                         step, alter, octv = e.findtext('pitch/step'), int(float(e.findtext('pitch/alter') or 0)), int(e.findtext('pitch/octave'))
                         midi = 12 * (octv + 1) + 'C D EF G A B'.index(step) + alter
@@ -227,6 +278,7 @@ def read_xml(path):
                     xy = [float(v) for v in re.findall(r'-?\d+(?:\.\d+)?', pos)[:2]] if pos else [None, None]
                     if midi is not None or ql:
                         per[k]['notes'].append(dict(on=on, ql=ql, midi=midi, name=name, voice=e.findtext('voice') or '1', chord=chord, x=xy[0],
+                                                    step=step, alter=alter, oct=octv,
                                                     tie=any(t.get('type') == 'start' for t in e.findall('tie')),
                                                     slur=[x.get('type') for x in e.iter('slur')]))
                     if not chord:
@@ -365,7 +417,7 @@ def read_systems(crops, log):
     if need:
         log(f'reading {len(need)} system(s)...')
         run_homr(need)
-    sound = lambda read, n: len(read) == n and len({len(st['measures']) for st in read}) == 1
+    sound = lambda read, n: len(read) == n and len({len(st['measures']) for st in read}) == 1 and all(st['clef'] in ('G', 'F') for st in read)
     for c in crops:
         c['read'] = read_xml(c['name'] + '.musicxml') if os.path.exists(c['name'] + '.musicxml') else []
     # A system of many staves (each voice on its own, then the piano) is sometimes read as a pile of piano systems.
@@ -510,6 +562,12 @@ def on_page(n, img=None):
         TEXT['width'] = img.shape[1]
 
 
+def as_printed(t):
+    """Text recognition reads a held "oo" (in italics, as such vowels are printed) as zeros, and "I'll" as I'II."""
+    t = re.sub(r'^[0oO]*0[0oO]*(?=[\W_]*$)', lambda m: 'o' * len(m.group()), t) if len(t) > 1 else t
+    return re.sub(r"^([Il1][’'][Il1|]{2}|I[I1|][Il1|]|I[Il1|][I1|])(?=[\W_]*$)", "I'll", t)
+
+
 def ocr_words(exe, img, y0, y1, work, tag, zoom=3):
     """Words between two heights of a page, read at three times the size (small print needs it; hyphens too).
     -> [(x centre, y centre, x0, x1, text)] in page pixels."""
@@ -523,11 +581,14 @@ def ocr_words(exe, img, y0, y1, work, tag, zoom=3):
     canvas.paste(band, (0, 120))
     path = os.path.join(work, f'band_{tag}.png')
     canvas.save(path)
-    out = []
+    out, tall = [], []
+    TEXT['tall'] = None
     if exe == 'tesseract':
         for x0, t0, x1, t1, text in _tesseract(path):
-            out.append(((x0 + x1) / 2 / zoom, ((t0 + t1) / 2 - 120) / zoom + y0, x0 / zoom, x1 / zoom, text))
+            out.append(((x0 + x1) / 2 / zoom, ((t0 + t1) / 2 - 120) / zoom + y0, x0 / zoom, x1 / zoom, as_printed(text)))
+            tall.append((t1 - t0) / zoom)
         os.remove(path)
+        TEXT['tall'] = float(np.median(tall)) if tall else None
         return out
     for line in subprocess.run([exe, path], capture_output=True, text=True).stdout.splitlines():
         box, _, text = line.partition('\t')
@@ -535,8 +596,10 @@ def ocr_words(exe, img, y0, y1, work, tag, zoom=3):
         if len(f) == 4 and text.strip():
             x0, x1 = f[0] * canvas.size[0] / zoom, f[2] * canvas.size[0] / zoom
             yc = ((f[1] + f[3]) / 2 * canvas.size[1] - 120) / zoom + y0
-            out.append(((x0 + x1) / 2, yc, x0, x1, text.strip()))
+            out.append(((x0 + x1) / 2, yc, x0, x1, as_printed(text.strip())))
+            tall.append(abs(f[3] - f[1]) * canvas.size[1] / zoom)
     os.remove(path)
+    TEXT['tall'] = float(np.median(tall)) if tall else None     # how tall this print is: lyrics are not sized by their staff
     return out
 
 
@@ -544,14 +607,22 @@ def ocr_multi(exe, img, y0, y1, work, tag, zooms):
     """Text recognition is moody about size: the same line can come back whole at one enlargement and empty at
     the next.  So read it at several and keep everything seen, the later (usually larger) reading winning
     where two overlap."""
-    kept = []
+    kept, talls = [], []
     for z in zooms:
-        for w in ocr_words(exe, img, y0, y1, work, tag, zoom=z):
-            clash = [k for k in kept if abs(k[1] - w[1]) < 14 and min(k[3], w[3]) - max(k[2], w[2]) > .3 * min(k[3] - k[2], w[3] - w[2])]
+        seen = ocr_words(exe, img, y0, y1, work, tag, zoom=z)
+        if TEXT.get('tall'):
+            talls.append(TEXT['tall'])
+        same = max(14., .6 * min(talls)) if talls else 14.
+        for w in seen:
+            clash = [k for k in kept if abs(k[1] - w[1]) < same and min(k[3], w[3]) - max(k[2], w[2]) > .3 * min(k[3] - k[2], w[3] - w[2])]
             if not clash:
                 kept.append(w)
-            elif len(clash) == 1 and len(re.sub(r"[^A-Za-z]", '', w[4])) >= len(re.sub(r"[^A-Za-z]", '', clash[0][4])):
-                kept[kept.index(clash[0])] = w
+            elif len(clash) == 1:
+                letters = lambda t: len(re.sub(r"[^A-Za-z]", '', t))
+                inner = lambda t: len(re.findall(r"(?<=[A-Za-z])-(?=[A-Za-z])", t))       # hyphens are dropped more often than invented
+                if letters(w[4]) > letters(clash[0][4]) or (letters(w[4]) == letters(clash[0][4]) and inner(w[4]) >= inner(clash[0][4])):
+                    kept[kept.index(clash[0])] = w
+    TEXT['tall'] = min(talls) if talls else None
     return kept
 
 
@@ -857,6 +928,163 @@ def place(slots, syls):
 
 
 # ------------------------------------------------------------------- putting it together ----
+def join_split_systems(crops, log=print):
+    """A system whose joining line was not found comes out as two: some voices, then the remaining staves with the
+    keyboard.  Where a keyboard-less group is followed, on the same page, by one that ends with the keyboard, has
+    as many measures, begins at the same place and lies no further below than staves lie within a system, they are
+    one system."""
+    out = []
+    for c in crops:
+        a = out[-1] if out else None
+        if a is not None and a['page'] == c['page'] and a['read'] and c['read'] and len(a['read']) == len(a['staves']) and len(c['read']) == len(c['staves']) \
+                and 'p' not in a.get('kinds', []) and c.get('kinds', [])[-2:] == ['p', 'p'] and abs(a['x0'] - c['x0']) < 12:
+            ma = {len(st['measures']) for st in a['read']}; mc = {len(st['measures']) for st in c['read']}
+            both = a['staves'] + c['staves']
+            inner = [q[0] - p_[1] for p_, q in zip(both, both[1:])]
+            gap = c['staves'][0][0] - a['staves'][-1][1]
+            rest = [g for g in inner if g != gap]
+            if ma == mc and len(ma) == 1 and rest and gap < 1.5 * max(rest):
+                a['staves'] = both; a['kinds'] = a['kinds'] + c['kinds']; a['read'] = a['read'] + c['read']; a['bot'] = c['bot']
+                a['x1'] = max(a['x1'], c['x1'])
+                log(f"  page {a['page']}: two groups of staves are one system (its joining line was not found)")
+                continue
+        out.append(c)
+    for i, c in enumerate(out):
+        c['system'] = 1 + sum(1 for o in out[:i] if o['page'] == c['page'])
+    return out
+
+
+def label_role(text):
+    """A staff's printed name -> what it is: 'T1' 'T2' 'BR' 'BS' 'TEN' 'BASS' 'SOLO', 'P' (keyboard), 'I' (an instrument), or None."""
+    t = re.sub(r'[^a-z0-9 ]', ' ', text.lower()).split()
+    j = ' '.join(t)
+    if not t:
+        return None
+    if re.search(r'clar|flute|oboe|bassoon|violin|viola|cello|horn|trumpet|trombone|sax|drum|perc|guitar|harp|bells|glock|timp|strings', j) or \
+            re.fullmatch(r'(cl|fl|ob|bsn|vln|vn|vla|vc|hn|tpt|tbn|dr)( (1|2|i|ii|in bb?|in a))?', j):
+        return 'I'
+    if re.search(r'keyb|piano|pno|organ|accomp|kbd', j):
+        return 'P'
+    if 'solo' in j:
+        return 'SOLO'
+    two = bool(re.search(r'\b(2|ii)\b', j)); one = bool(re.search(r'\b(1|i)\b', j))
+    if re.search(r'\bt(en|enor|enors)?\b', j) or j in ('t1', 't2', 'ti', 'tii'):
+        if one and two:                                  # "Tenor 1 2": both on this staff
+            return 'TEN'
+        return 'T2' if two or j in ('t2', 'tii') else 'T1' if one or j in ('t1', 'ti') else 'TEN'
+    if re.search(r'\bbar', j):
+        return 'LOW' if re.search(r'\bbass', j) else 'BR'      # "Baritone Bass" on one staff
+    if re.search(r'\bb(ass|asses)?\b', j) or j in ('b1', 'b2', 'bi', 'bii'):
+        if one and two:
+            return 'LOW'
+        return 'BS' if two or j in ('b2', 'bii') else 'BR' if one or j in ('b1', 'bi') else 'BASS'
+    return None
+
+
+def staff_labels(crops, pages, exe, work):
+    """Read the names printed at the left of the staves ("Tenor 1", "B 2", "Clarinet", "Keybd.") -> c['labels'] per system.
+    A system may show a different set of staves from the one before - an instrument that comes and goes, voices that
+    divide - and the names are what says which is which."""
+    if not exe:
+        return
+    for c in crops:
+        if not c['read'] or len(c['staves']) != len(c['read']):
+            continue
+        img = np.asarray(Image.open(pages[c['page'] - 1]).convert('L'))
+        on_page(c['page'], img)
+        unit = float(np.mean([(b - a) / 4 for a, b in c['staves']]))
+        x1 = int(c['x0'] - .4 * unit)
+        if x1 < 6 * unit:
+            continue
+        if TEXT['pages']:
+            words = [w for w in ocr_words(exe, img, c['top'], c['bot'], work, 'label') if w[3] <= x1 + unit]
+        else:
+            strip = np.full((img.shape[0], x1 + int(4 * unit)), 255, np.uint8)
+            strip[:, int(2 * unit):int(2 * unit) + x1] = img[:, :x1]
+            words = [(w[0] - 2 * unit, w[1], w[2] - 2 * unit, w[3] - 2 * unit, w[4]) for w in ocr_multi(exe, strip, c['top'], c['bot'], work, 'label', (3, 5))]
+        rows = []                                        # the words of one name stand on one line
+        for w in sorted(words, key=lambda w: w[1]):
+            if rows and abs(w[1] - rows[-1][0]) < 1.2 * unit:
+                rows[-1][1].append(w)
+            else:
+                rows.append([w[1], [w]])
+        labels = [None] * len(c['staves'])
+        centres = [(a + b) / 2 for a, b in c['staves']]
+        beside = [[] for _ in centres]                   # the lines of text beside each staff, top to bottom
+        for y, ws in rows:
+            text = ' '.join(w[4] for w in sorted(ws, key=lambda w: w[2]))
+            if label_role(text) == 'P' and len(centres) >= 2:        # a keyboard's name stands between its two staves
+                gaps = [(abs(y - (c['staves'][i][1] + c['staves'][i + 1][0]) / 2), i) for i in range(len(centres) - 1)]
+                d, i = min(gaps)
+                if d < 3.5 * unit:
+                    labels[i] = labels[i + 1] = 'P'
+                    continue
+            d, i = min((abs(y - cy), i) for i, cy in enumerate(centres))
+            if d < 3 * unit:
+                beside[i].append(text)
+        for i, lines in enumerate(beside):
+            if labels[i] is not None or not lines:
+                continue
+            role = label_role(' '.join(lines))           # "Tenor" with I above and II below it, "Baritone" over "Bass": one name in several lines
+            if role is None:
+                for r in filter(None, map(label_role, lines)):
+                    if role is None or role == r:
+                        role = r
+                    elif {role, r} <= {'T1', 'T2', 'TEN'}:           # two names beside one staff: it carries both parts
+                        role = 'TEN'
+                    elif {role, r} <= {'BR', 'BS', 'BASS', 'LOW'}:
+                        role = 'LOW'
+            labels[i] = role
+        c['labels'] = labels
+        if 'P' in labels:                                # the names know better than the staff finder which two staves are the keyboard's
+            c['kinds'] = ['p' if t == 'P' else 'v' for t in labels]
+        elif c.get('kinds'):
+            c['kinds'] = ['v' if t in ('T1', 'T2', 'BR', 'BS', 'TEN', 'BASS', 'LOW', 'SOLO', 'I') else k for t, k in zip(labels, c['kinds'])]
+
+
+BOTTOM = {('G', 2): 30, ('G', 1): 32, ('F', 4): 18, ('F', 3): 20, ('C', 3): 24, ('C', 4): 22, ('C', 1): 28}    # each clef's bottom line, in steps up from C0
+
+
+def reclef(st, sign):
+    """A staff whose clef sign was misread: every note put back where it stands under the clef the staff really has.
+    A note that followed the key keeps following it; one with its own accidental keeps that accidental."""
+    was = BOTTOM.get((st['clef'], int(st.get('line') or 0)), BOTTOM[{'G': ('G', 2), 'F': ('F', 4)}.get(st['clef'], ('C', 3))])
+    d = BOTTOM[('G', 2) if sign == 'G' else ('F', 4)] - was
+    fifths = st.get('key') or 0
+    in_key = lambda step: (1 if 'FCGDAEB'.index(step) < fifths else 0) if fifths > 0 else (-1 if 'BEADGCF'.index(step) < -fifths else 0)
+    for m in st['measures']:
+        for n in m['notes']:
+            if n['midi'] is None or not n.get('step'):
+                continue
+            pos = n['oct'] * 7 + 'CDEFGAB'.index(n['step']) + d
+            step, octv = 'CDEFGAB'[pos % 7], pos // 7
+            alter = in_key(step) if n['alter'] == in_key(n['step']) else n['alter']
+            n.update(step=step, oct=octv, alter=alter, midi=12 * (octv + 1) + 'C D EF G A B'.index(step) + alter, name=name_of(step, alter, octv))
+    st['clef'], st['line'] = sign, None
+
+
+def fix_clefs(crops, log):
+    """A voice keeps its clef through a piece.  Where one system shows a part's staff under another clef than
+    that part has everywhere else, the sign was misread - and every note on the staff with it, by a sixth or
+    more.  The notes are moved to where the part's usual clef puts them."""
+    seen = {}
+    for c in crops:
+        for st, role in zip(c['read'], c.get('roles') or []):
+            if role in ('T1', 'T2', 'BR', 'BS', 'TEN', 'LOW') and st['clef']:
+                seen.setdefault(role, []).append(st['clef'])
+    for c in crops:
+        for st, role in zip(c['read'], c.get('roles') or []):
+            signs = seen.get(role)
+            if not signs or not st['clef'] or len(signs) < 4:
+                continue
+            usual = max(sorted(set(signs)), key=signs.count)
+            if st['clef'] != usual and usual in ('G', 'F') and signs.count(usual) >= .75 * len(signs) and \
+                    any(n.get('step') for m in st['measures'] for n in m['notes']):
+                log(f"  page {c['page']} system {c['system']}: the {role} staff was read under a {st['clef']} clef, but that part is written "
+                    f"under a {usual} clef everywhere else: its notes are moved to where that clef puts them")
+                reclef(st, usual)
+
+
 def roles_for(crops, piano=None):
     """Which staff of each system is what.  With a piano, its two staves are the lowest.  Above them (or all of
     them, unaccompanied): one staff = a soloist (if the piece has solo-plus-choir systems) or the whole choir;
@@ -879,6 +1107,46 @@ def roles_for(crops, piano=None):
         else:
             c['roles'] = {0: [], 2: ['TEN', 'LOW'], 3: ['SOLO', 'TEN', 'LOW'], 4: ['T1', 'T2', 'BR', 'BS']}.get(k, ['TEN', 'LOW'] + ['?'] * (k - 2))
         c['roles'] += ['RH', 'LH'] if grand[i] else []
+    # ---- the printed names, where there are any, say it better than counting staves does
+    known_sets = {}
+    has_instrument = any('I' in (c.get('labels') or []) for c in crops)
+    for i, c in enumerate(crops):
+        labels = c.get('labels')
+        if labels:
+            labels = [t for t in labels if t != 'P']     # the voices' and instruments' staves, top to bottom
+        nv = voc[i]
+        clefs = tuple(st['clef'] for st in c['read'][:nv])
+        if not labels or not any(labels[:nv]):
+            labels = known_sets.get((nv, clefs))         # no names on this system: the last system that looked like it
+            if not labels:
+                continue
+        else:
+            known_sets[(nv, clefs)] = labels
+        tags = list(labels[:nv])
+        if not any(t in ('I', 'T1', 'T2', 'BR', 'BS', 'TEN', 'BASS', 'LOW', 'SOLO') for t in tags):
+            continue
+        if has_instrument and sum(t is None for t in tags) == 1 and sum(t in ('T1', 'T2', 'BR', 'BS', 'TEN', 'BASS', 'LOW') for t in tags) >= 2:
+            tags = ['I' if t is None else t for t in tags]
+        sung = [k for k, t in enumerate(tags) if t != 'I']
+        has_bar = any(t == 'BR' for t in tags); n_bass = sum(t in ('BASS', 'BS', 'BR') for t in tags)
+        roles = list(c['roles'][:nv])
+        if any(t == 'I' for t in tags):                  # with the instruments set aside, count the voices again
+            base = {1: ['ALL'], 2: ['TEN', 'LOW'], 3: ['SOLO', 'TEN', 'LOW'], 4: ['T1', 'T2', 'BR', 'BS']}.get(len(sung))
+            for k in range(nv):
+                roles[k] = 'I'
+            for j, k in enumerate(sung):
+                roles[k] = base[j] if base else '?'
+        for k, t in enumerate(tags):
+            if t in ('T1', 'T2', 'BR', 'BS', 'SOLO'):
+                roles[k] = t
+            elif t == 'TEN':
+                roles[k] = 'TEN'
+            elif t == 'BASS':                            # "Bass" under a "Baritone" is the second basses; alone it is all the low voices
+                roles[k] = 'BS' if has_bar or n_bass > 1 else 'LOW'
+            elif t == 'LOW':
+                roles[k] = 'LOW'
+        if len(set(r for r in roles if r not in ('I',))) == len([r for r in roles if r != 'I']):
+            c['roles'] = roles + c['roles'][nv:]
 
 
 def has_piano(crops, pages, exe, work):
@@ -908,33 +1176,43 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
     piano = has_piano(crops, pages, exe, work)
     if piano is False:
         log('  no piano part: words are printed under the lowest staff')
+    staff_labels(crops, pages, exe, work)
     roles_for(crops, piano)
+    fix_clefs(crops, log)
+    lone = [c for c in crops if c['read'] and c.get('roles') and all(r == 'I' for r in c['roles'])]
+    if lone and len(lone) < len(crops):
+        log(f"  {len(lone)} system(s) are an instrument's part alone (printed after the score): left out")
+        for c in lone:
+            c['read'] = []
     out, num, cur_time, length = [], 0, None, Fraction(4)
     imgs = {}
     def read_texts(c, img, M):
         texts = {}
         for si, role in enumerate(c['roles'][:len(c['read'])]):
-            if role in ('RH', 'LH') or not exe or si >= len(c['staves']):
+            if role in ('RH', 'LH', 'I') or not exe or si >= len(c['staves']):
                 continue
             top, bot = c['staves'][si]
             unit = (bot - top) / 4
             nxt = c['staves'][si + 1][0] if si + 1 < len(c['staves']) else c['bot']
             tag = f"{c['page']}_{c['system']}_{si}"
             loose = ocr_multi(exe, img, bot + .6 * unit, min(nxt - 1.2 * unit, bot + 9 * unit), work, tag, (2, 3, 6))
+            tall = TEXT.get('tall') or 0.                  # large print under a small staff: a line is as tall as its letters
+            near = max(1.2 * unit, .6 * tall)
             loose = [w for w in loose if re.search('[A-Za-z]', w[4]) and '(' not in w[4] and not NOT_LYRICS.match(w[4])]
             ys = []
             for w in sorted(loose, key=lambda w: w[1]):
-                if not any(abs(w[1] - y) < 1.2 * unit for y in ys):
-                    ys.append(float(np.median([v[1] for v in loose if abs(v[1] - w[1]) < 1.2 * unit])))
+                if not any(abs(w[1] - y) < near for y in ys):
+                    ys.append(float(np.median([v[1] for v in loose if abs(v[1] - w[1]) < near])))
             words = []
             for yc in ys:                # each line of text read again by itself, close up: that brings out the
-                half = min([1.3 * unit] + [.5 * abs(yc - y) for y in ys if y != yc])      # small syllables
+                half = min([max(1.3 * unit, .75 * tall)] + [.5 * abs(yc - y) for y in ys if y != yc])      # small syllables
                 tight = [w for w in ocr_multi(exe, img, yc - half, yc + half, work, tag, (3, 4, 6)) if re.search('[aeiouyAEIOUY]', w[4]) or w[4] in '-–—']
-                row = [w for w in loose if abs(w[1] - yc) < 1.2 * unit]
+                row = [w for w in loose if abs(w[1] - yc) < near]
                 words += [w[:1] + (yc,) + w[2:] for w in tight]
-                words += [w for w in row if not any(w[2] < t[3] and t[2] < w[3] for t in tight)]   # what only the first look saw
+                words += [w[:1] + (yc,) + w[2:] for w in row if not any(w[2] < t[3] and t[2] < w[3] for t in tight)]   # what only the first look saw
             if 'bars' not in c:
                 c['bars'] = barlines(img, c['staves'], c['x0'], c['x1'], 'RH' in c['roles'], expect=M)
+                c['bars_found'] = len(c['bars']) == M + 1
                 if len(c['bars']) != M + 1:
                     log(f"  ? page {c['page']} system {c['system']}: found {len(c['bars']) - 1} measures on the page but {M} were read; words placed by even spacing")
                     c['bars'] = list(np.linspace(c['x0'], c['x1'], M + 1))
@@ -1028,11 +1306,19 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             bars0 = bars0 if len(bars0) == M + 1 else list(np.linspace(c['x0'], c['x1'], M + 1))
             line = ' '.join(w[4] for w in sorted(above, key=lambda w: w[2]))
             nav += navigation(above, find_segno(img, max(c['top'], top - 9 * unit0), top - .2 * unit0, unit0), bars0, num + 1, unit0)
-            for mm in re.finditer(r'=\s*(?:ca\.?\s*)?(\d{2,3})', line):
-                if 30 <= int(mm.group(1)) <= 240:
-                    num_w = next((w for w in above if mm.group(1) in w[4]), None)
-                    xw = min([w[2] for w in above if num_w and abs(w[1] - num_w[1]) < 1.5 * unit0 and num_w[2] - 32 * unit0 < w[2] <= num_w[2]] or [c['x0']])
-                    marks[max(0, int(np.searchsorted(bars0, xw + 2 * unit0)) - 1)] = float(mm.group(1))
+            rows_t = []                              # line by line: a triplet's "3" on the staff must not come between "=" and its number
+            for w in sorted(above, key=lambda w: w[1]):
+                if rows_t and abs(w[1] - rows_t[-1][0]) < 1.2 * unit0:
+                    rows_t[-1][1].append(w)
+                else:
+                    rows_t.append([w[1], [w]])
+            for _, ws in rows_t:
+                row = ' '.join(w[4] for w in sorted(ws, key=lambda w: w[2]))
+                for mm in re.finditer(r'=\s*(?:ca\.?\s*)?(\d{2,3})', row):
+                    if 30 <= int(mm.group(1)) <= 240:
+                        num_w = next((w for w in ws if mm.group(1) in w[4]), None)
+                        xw = min([w[2] for w in ws if num_w and num_w[2] - 32 * unit0 < w[2] <= num_w[2]] or [c['x0']])
+                        marks[max(0, int(np.searchsorted(bars0, xw + 2 * unit0)) - 1)] = float(mm.group(1))
             if re.search(r'Tempo\s+I\b', line) and tempo:
                 xw = next((w[2] for w in above if w[4].startswith('Tempo')), c['x0'])
                 marks[max(0, int(np.searchsorted(bars0, xw)) - 1)] = float(tempo)
@@ -1063,18 +1349,35 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         # ---- the words of the whole system, put on its notes by where both stand on the page
         sylmap = {}
         for si, role in enumerate(c['roles'][:len(c['read'])]):
-            if role in ('RH', 'LH') or si not in texts or not texts[si][0]:
+            if role in ('RH', 'LH', 'I') or si not in texts or not texts[si][0]:
                 continue
             lines, bars, unit, ys = texts[si]
             for v in (0, 1):
                 row = v if v < len(lines) else 0                 # one line of words serves both voices
-                slots = []
+                slots, per = [], []
                 for j in range(M):
                     stm = c['read'][si]['measures']
                     if j < len(stm) and any(n['midi'] is not None for n in stm[j]['notes']):
                         line = lines_of(stm[j]['notes'], plan[j][0])[v]
-                        slots += [n for n, a_, b_ in line if n is not None and a_ == n['on'] and not n.get('tied_from') and n.get('x') is not None]
+                        per.append((j, [n for n, a_, b_ in line if n is not None and a_ == n['on'] and not n.get('tied_from') and n.get('x') is not None]))
+                        xs_ = [n['x'] for n in per[-1][1]]
+                        if c.get('bars_found') and (any(x < bars[j] - unit or x > bars[j + 1] + unit for x in xs_) or any(b_ <= a_ for a_, b_ in zip(xs_, xs_[1:]))):
+                            for n in per[-1][1]:     # notes out of order or outside their measure: the reader lost its place on the
+                                n['x'] = bars[j] + (.1 + .85 * float(n['on'] / plan[j][0])) * (bars[j + 1] - bars[j])     # page; when a note sounds says where it stands
+                        slots += per[-1][1]
                 got = place_x(slots, lines[row], unit)
+                # A measure with exactly as many syllables under it as it has notes to sing them: one each, in order.
+                # (Where a note stands on the page is the reader's estimate, and can be half a note off; a count is a count.)
+                if c.get('bars_found'):
+                    for j, mine in per:
+                        here = [w for w in lines[row] if bars[j] <= w[0] < bars[j + 1]]
+                        free = [n for n in mine if not n.get('melisma')]
+                        to = free if len(here) == len(free) else mine if len(here) == len(mine) else None
+                        if to and len(here) >= 2:
+                            for n in mine:
+                                got.pop(id(n), None)
+                            for n, w in zip(to, here):
+                                got[id(n)] = w[1]
                 if exe and row < len(ys):                        # a note with no word under it: look there again, close up
                     half = min([1.3 * unit] + [.5 * abs(ys[row] - y) for y in ys if y != ys[row]])
                     taken = sorted(w[0] for w in lines[row])
@@ -1086,7 +1389,8 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                         x_a, x_b = int(max(0, n['x'] - 3.4 * unit)), int(n['x'] + 3.4 * unit)
                         again = ocr_words(exe, img[:, x_a:x_b], ys[row] - half, ys[row] + half, work, 'note', zoom=6)
                         again = [(w[0] + x_a, w[1], w[2] + x_a, w[3] + x_a, w[4]) for w in again]
-                        found = [w for l_ in syllables(again, unit, img) for w in l_ if abs(w[0] - n['x']) < 1.7 * unit]
+                        found = [w for l_ in syllables(again, unit, img) for w in l_ if abs(w[0] - n['x']) < 1.7 * unit and re.fullmatch(r"[A-Za-z']+[-.,;:!?]*", w[1])
+                                 and not any(abs(w[0] - x) < 1.3 * unit for x in taken)]       # not a syllable the first look saw: that one is another note's
                         if found:
                             best = min(found, key=lambda w: abs(w[0] - n['x']))
                             got[id(n)] = best[1]; taken.append(best[0])
@@ -1122,6 +1426,8 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                     continue
                 notes = st['measures'][j]['notes']
                 if not any(n['midi'] is not None for n in notes):
+                    continue
+                if role == 'I':                      # an instrument's staff: not sung (it is in the accompaniment track, if there is one)
                     continue
                 if role in ('RH', 'LH'):
                     out += [f'{name}: ' + ' '.join(toks) for name, toks in piano_lines(layout(notes, length), length, role)]
@@ -1219,9 +1525,13 @@ def main():
     os.makedirs(work, exist_ok=True)
     pages = render_pages(a.pdf, work)
     words = pdf_words(a.pdf)
-    if sum(len(v) for v in words.values()) >= 12 * len(pages):       # a PDF with its words in it: no need to read them off the picture
+    every = [w[4] for v in words.values() for w in v]
+    plain = sum(1 for t in every if re.fullmatch(r"[A-Za-z][A-Za-z'’.,;:!?-]*|[-–—]|\d{1,3}", t))
+    if len(every) >= 12 * len(pages) and plain >= .8 * len(every):   # a PDF with its words in it: no need to read them off the picture
         TEXT['pages'] = words
         print("the words are taken from the PDF's own text")
+    elif len(every) >= 12 * len(pages):                              # text is there, but stored under codes that mean nothing outside the file
+        print("the PDF's own text cannot be read as words (its fonts are stored under private codes): reading the words off the page instead")
     crops = None
     try:                                             # a PDF drawn with a standard music font is read exactly, symbol by symbol
         import vector2score
@@ -1229,7 +1539,7 @@ def main():
     except Exception as e:
         print(f'  (reading the symbols directly did not work: {e}; recognizing the pages instead)')
     if crops is None:
-        crops = read_systems(cut_systems(pages, work, print), print)
+        crops = join_split_systems(read_systems(cut_systems(pages, work, print), print))
     found = None if a.tempo else find_tempo(pages, work)
     tempo = a.tempo or found or 100.
     title = a.title or re.sub(r'[_-]+', ' ', os.path.splitext(os.path.basename(a.pdf))[0]).strip().title()

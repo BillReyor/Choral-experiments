@@ -53,13 +53,15 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   recognizer. Trust your ears over its reports.
 - **Men's chorus only** (TTBB, TTB, soloist or trio over the choir), with piano or unaccompanied.
 - **Reading scans is imperfect.** Typically 96-99% of the notes are right. About one syllable in
-  ten is wrong or missing, more with Tesseract. (A PDF exported from notation software is read
-  exactly instead - but that reader has met only one such file so far, and does not yet follow
-  "8va" lines or first and second endings.)
+  ten is wrong or missing, more with Tesseract. (A PDF exported from current notation software is
+  read exactly instead - but that reader has met only one such file so far, and does not yet
+  follow "8va" lines or first and second endings. Exports from older software, whose fonts are
+  stored under codes of their own, are recognized like scans.)
   Repeats, D.S. and codas are followed; first and second endings are not. Always look through the
   `.score` file it writes.
-- **Words:** English (by dictionary) and church Latin (by rule). Anything else is sung as if it
-  were English.
+- **Words:** English (by dictionary) and church Latin (by rule). A word the dictionary does not
+  have - a name, another language, a misread - is sung as it is spelled, by rough English rules:
+  a near miss, which a `say:` line in the score corrects.
 - **A full choir is harder to understand than a real one** on quick text, though single voices are
   about as clear as real singers.
 - **Tone is the median of a dozen real singers.** A particular voice can differ from it by 10 dB

@@ -342,7 +342,18 @@ def _finish(sc, warn):
                     warn(f'  ! measure {n["m"]} {part}: no syllable for the note on beat '
                          f'{n["beat"] - sc.measures[n["m"]][0] + 1:g}; holding the previous vowel')
                     pick = '_'
+                else:
+                    n['lent'] = True
                 n['lyric'] = pick
+    # A borrowed beginning of a word ("sip-") followed by a note with a word of its own: this voice is not singing
+    # that word.  If it comes straight out of the note before, it is that note's vowel, still held; otherwise the
+    # syllable stands by itself.  (Without this the two halves were glued into a word nobody sings.)
+    for part, notes in sc.parts.items():
+        heads = [(i, n) for i, n in enumerate(notes) if n['lyric'] != '_']
+        for (i, a), (_, b) in zip(heads, heads[1:]):
+            if a.get('lent') and a['lyric'].rstrip('.,;:!?').endswith('-') and not b.get('lent'):
+                held = i and abs(notes[i - 1]['beat'] + notes[i - 1]['dur'] - a['beat']) < 1e-6
+                a['lyric'] = '_' if held else a['lyric'].rstrip('-')
 
     # --- words -> phonemes
     for part, notes in sc.parts.items():

@@ -65,8 +65,10 @@ sings the same words.)
 
 ## Words
 
-Syllables are joined into words and looked up in the CMU pronouncing dictionary. For words it
-does not know, or pronounces differently from how the piece sets them, add a line near the top:
+Syllables are joined into words and looked up in the CMU pronouncing dictionary. A word it does
+not have is looked for under a fuller spelling ("ev'ry", "o'er", "singin'") and otherwise sung as
+it is spelled, by rough English rules - the run prints what it chose. For words it gets wrong, or
+pronounces differently from how the piece sets them, add a line near the top:
 
 ```
 say: heav'nly = HH EH1 V . N L IY0      // CMU phonemes, a dot between sung syllables
