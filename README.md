@@ -98,6 +98,13 @@ less need for it and it faded, leaving English a few of its words: *naff*, *zhoo
 *Piano* is the instrument under the voices here, and the Italian for "softly". *Parlare piano*:
 to speak quietly - which is what Polari was for.
 
+The name is also a play on **player piano**: the piano that plays itself from a roll of punched
+paper. This program is one for a choir - it reads the page and performs it with nobody there.
+Kurt Vonnegut's first novel, [*Player Piano*](https://en.wikipedia.org/wiki/Player_Piano_(novel))
+(1952), makes that instrument the emblem of a world where machines do the work, and it plays in
+the bar where the people they replaced go to drink. The name keeps the book in view: what this
+makes is a practice track, something to learn a part from. The singing stays with the singers.
+
 Gay choruses are the other half of that history: the same people, no longer keeping their voices
 down. The [San Francisco Gay Men's Chorus](https://www.sfgmc.org/our-story), founded by Jon Reed
 Sims in the autumn of 1978 and the first chorus to put the word "gay" in its name, sang in public
