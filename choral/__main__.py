@@ -15,9 +15,11 @@ MUSIC is a score file (docs/score-format.md) or a PDF exported from notation sof
                     to: the tempo and its bends, the hall and the balance are measured from them
   --tune            let a speech recognizer choose how close the microphones are (needs whisper-cli)
   --voice           a recording of 15-30 seconds of someone singing alone: the singers are given that
-                    voice's sound (several recordings, with commas, are shared out among them).  Needs
-                    the optional voice model - docs/how-it-works.md - and takes about half as long as
-                    all the singing lasts.  Use your own voice, or one whose owner has agreed
+                    voice's sound.  Several recordings (with commas, or a folder of them) are seated
+                    like a choir: one named for a part ("Bass 2.wav") sings there, the rest go by how
+                    low each lies.  tools/vocalset_voices.py fetches ten men's voices to start with.
+                    Needs the optional voice model - docs/how-it-works.md - and takes about half as
+                    long as all the singing lasts.  Use your own voice, or one whose owner has agreed
   --language        latin, when a scanned score's words are Latin (English is assumed otherwise)
   --only            write just one version, e.g. --only "Baritone predominant"
 
@@ -175,10 +177,17 @@ def main():
     total = float(np.interp(sc.beats, *clock)) + 4.0
     if track is not None:
         total = max(total, len(track) / R.SR)
-    voices = [v for v in (a.voice or '').split(',') if v]
-    for v in voices:
-        if not os.path.exists(v):
+    voices = []
+    for v in (a.voice or '').split(','):
+        if os.path.isdir(v):                               # a folder of recordings: all of them
+            found = sorted(os.path.join(v, f) for f in os.listdir(v) if f.lower().endswith(('.wav', '.m4a', '.mp3', '.aif', '.aiff', '.flac', '.caf', '.ogg')) and not f.startswith('.'))
+            if not found:
+                raise SystemExit(f'--voice: there are no recordings in {v}')
+            voices += found
+        elif v and not os.path.exists(v):
             raise SystemExit(f'--voice: there is no file {v}')
+        elif v:
+            voices.append(v)
     if voices:
         from . import revoice
         if revoice.command() is None:

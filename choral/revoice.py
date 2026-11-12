@@ -63,13 +63,153 @@ def _write(path, x, sr=SR):
 
 
 def _read(path):
-    with wave.open(path) as w:
-        sr = w.getframerate()
-        x = np.frombuffer(w.readframes(w.getnframes()), '<i2').reshape(-1, w.getnchannels()).mean(1) / 32768
+    """A recording -> mono at 44100 Hz.  A 16-, 24- or 32-bit WAV is read directly; anything else (a phone's .m4a,
+    an .mp3, a floating-point WAV) through ffmpeg, or afconvert on a Mac."""
+    try:
+        with wave.open(path) as w:
+            sr, nc, sw = w.getframerate(), w.getnchannels(), w.getsampwidth()
+            raw = w.readframes(w.getnframes())
+    except (wave.Error, EOFError):
+        tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False).name
+        try:
+            if shutil.which('ffmpeg'):
+                cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-i', path, '-ar', str(SR), '-ac', '1', '-c:a', 'pcm_s16le', tmp]
+            elif shutil.which('afconvert'):
+                cmd = ['afconvert', '-f', 'WAVE', '-d', f'LEI16@{SR}', '-c', '1', path, tmp]
+            else:
+                raise SystemExit(f'cannot read {path}: install ffmpeg, or convert the recording to WAV first')
+            if subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+                raise SystemExit(f'cannot read {path}: it is not a sound file ffmpeg or afconvert knows')
+            return _read(tmp)
+        finally:
+            os.path.exists(tmp) and os.unlink(tmp)
+    if _floats(path):
+        x = np.frombuffer(raw, '<f4' if sw == 4 else '<f8').astype(np.float64)
+    elif sw == 3:                                         # 24 bits: three bytes a sample
+        b = np.frombuffer(raw, np.uint8).reshape(-1, 3).astype(np.int32)
+        x = (b[:, 0] | b[:, 1] << 8 | (b[:, 2] ^ 0x80) - 0x80 << 16) / 2. ** 23
+    else:
+        x = (np.frombuffer(raw, {1: 'u1', 2: '<i2', 4: '<i4'}[sw]).astype(np.float64) - (128 if sw == 1 else 0)) / 2. ** (8 * sw - 1)
+    x = x.reshape(-1, nc).mean(1)
     if sr != SR:
         from scipy.signal import resample_poly
         x = resample_poly(x, SR, sr)
     return x
+
+
+def _floats(path):
+    """Does this WAV hold floating-point samples?  (Python's reader opens some such files without saying.)"""
+    import struct
+    head = open(path, 'rb').read(4096)
+    k = head.find(b'fmt ')
+    if k < 0 or len(head) < k + 10:
+        return False
+    tag = struct.unpack('<H', head[k + 8:k + 10])[0]
+    return tag == 3 or (tag == 0xFFFE and head[k + 32:k + 34] == b'\x03\x00')
+
+
+def _plain(path):
+    """Is this a 16-bit WAV, which any model's loader reads as it is?"""
+    try:
+        with wave.open(path) as w:
+            return w.getsampwidth() == 2
+    except (wave.Error, EOFError):
+        return False
+
+
+_PITCH = {}
+
+
+def pitch_of(path):
+    """How high a recording lies (MIDI number): the middle of everything sung in its first half minute."""
+    if path not in _PITCH:
+        from scipy.signal import resample_poly
+        from . import pitch
+        t, m = pitch.yin(resample_poly(_read(path)[:SR * 30], 1, 2), SR // 2, fmin=60., fmax=700.)
+        m = m[~np.isnan(m)]
+        _PITCH[path] = float(np.median(m)) if len(m) else 60.
+    return _PITCH[path]
+
+
+def asked(path, parts, names=None):
+    """The part a recording's file name asks for, or None: 'bass 2.wav', 'Tenor 1 - Sam.wav', 'BR_x.wav' ..."""
+    import re
+    f = re.sub(r'[\s_]+', ' ', os.path.splitext(os.path.basename(path))[0].lower()).strip()
+    for p in sorted(parts, key=lambda p: -len((names or {}).get(p, p))):          # 'tenor 1' before a shorter name
+        for word in {p.lower(), (names or {}).get(p, p).lower()}:
+            more = r'(?!\d)' if word[-1].isdigit() else r'(?![a-z])'               # 'bass2' and 'tenor1b' yes; 'bassoon' and 'tenor 12' no
+            if re.match(re.escape(word) + more, f) or re.match(re.escape(word.replace(' ', '')) + more, f):
+                return p
+    return None
+
+
+def _by_pitch(order, size, written):
+    """Voices (lowest first) shared among parts, lowest first: {part: [voices]}."""
+    sections = sorted((p for p in size if size[p] > 1), key=written.get) or sorted(size, key=written.get)
+    own = {}
+    for p in size:                                    # one person: whoever's own singing lies nearest these notes
+        if p not in sections:
+            best = min(order, key=lambda f: abs(pitch_of(f) - written[p]))
+            own[p] = [best]
+            if len(order) > 2 * len(sections):
+                order.remove(best)
+    n, k = len(order), len(sections)
+    for r, p in enumerate(sections):
+        own[p] = order[r * n // k:(r + 1) * n // k] if n >= k else [order[int(round(r * (n - 1) / max(k - 1, 1)))]]
+    return own
+
+
+SPREAD, LEAN = .6, .5            # semitones: how far copies of one voice differ in size within a section, and between sections
+
+
+def deal(voices, seats, written, log=print, names=None):
+    """Which voice each singer is given.  seats: (part, singer number) for every singer; written: {part: the middle
+    of its written pitches}.  -> (recording, size) per seat.
+
+    A recording whose file name begins with a part's name ('bass 2.wav', 'Tenor 1 - Sam.wav') sings in that part.
+    The others are seated as a choir seats its people, by how low they sing: put in order from the lowest to the
+    highest (by the pitch of what is sung in each recording), the parts that nobody was named for, lowest first,
+    take them in turn - each its own share when there are at least as many voices as parts, otherwise neighbours
+    share.  A part sung by one person takes the voice whose own singing lies nearest its notes, and keeps it to
+    itself when that still leaves every section two voices.  Within a section the voices go round, so that
+    neighbours differ.  A part left with nobody borrows the voices of the part nearest its notes.
+
+    Size.  One recording given to six singers is one man six times over: a speaker-recognition network scores the
+    six as the same voice (0.98-0.99).  So each further singer with the same recording gets it a little larger or
+    smaller - the recording played up to 3.5% slower or faster, which moves every resonance as a larger or smaller
+    throat and mouth would (size, in semitones; the pitch sung still comes from the engine).  And a voice that has to
+    serve several sections is larger in the lower ones.  A part sung by one person keeps the voice as it is."""
+    size = {}
+    for part, _ in seats:
+        size[part] = size.get(part, 0) + 1
+    own, free = {}, []
+    for f in dict.fromkeys(voices):
+        p = asked(f, size, names)
+        own.setdefault(p, []).append(f) if p else free.append(f)
+    left = {p: size[p] for p in size if p not in own}
+    if free and left:
+        own.update(_by_pitch(sorted(free, key=pitch_of), left, written) if len(free) > 1 else {p: list(free) for p in left})
+    for p in size:
+        if p not in own:
+            own[p] = own[min(own, key=lambda q: abs(written[q] - written[p]))]
+    short = lambda f: os.path.splitext(os.path.basename(f))[0]
+    for p in sorted(own, key=written.get, reverse=True):
+        log('  %-9s %s' % ((names or {}).get(p, p), ', '.join(short(f) for f in own[p])))
+    lean = {}                                         # (part, recording) -> size: larger in the lower of the sections it serves
+    for f in dict.fromkeys(voices):
+        serves = sorted((p for p in own if f in own[p] and size[p] > 1), key=written.get)
+        for r, p in enumerate(serves):
+            lean[p, f] = LEAN * (2 * r / (len(serves) - 1) - 1) if len(serves) > 1 else 0.
+    given, copies = [], {}
+    for p, i in seats:
+        f = own[p][i % len(own[p])]
+        if size[p] == 1:
+            given.append((f, 0.)); continue
+        n = len([j for j in range(size[p]) if own[p][j % len(own[p])] == f])       # how many in this section share the recording
+        k = copies[p, f] = copies.get((p, f), -1) + 1
+        half = min(SPREAD, .2 * (n - 1))
+        given.append((f, round(lean[p, f] + (half * (2 * k / (n - 1) - 1) if n > 1 else 0.), 2)))
+    return given
 
 
 def _fit(y, src):
@@ -81,6 +221,7 @@ def _fit(y, src):
     lags = range(-int(.06 * SR / HOP), int(.06 * SR / HOP) + 1)
     k = max(lags, key=lambda k: float(np.dot(a[max(0, -k):len(a) - max(0, k)], b[max(0, k):len(b) - max(0, -k)]))) * HOP
     y = np.pad(y, (0, k))[k:] if k > 0 else np.pad(y, (-k, 0))[:n]
+    y = y * np.sqrt(np.mean(src ** 2) / (np.mean(y ** 2) + 1e-20))      # first as loud as the original on the whole; then moment by moment
     # the engine shaped every note's loudness against real singers; the model has ideas of its own.  The engine's are kept.
     g = np.clip(_env(src, .06) / _env(y, .06), 10 ** (-30 / 20), 10 ** (10 / 20))
     out = y * np.interp(np.arange(n), (np.arange(len(g)) + .5) * HOP, gf(g, .02 * SR / HOP))
@@ -89,34 +230,86 @@ def _fit(y, src):
     return out
 
 
+def _sized(ref, size, work, made):
+    """The recording at another size (semitones; + = a smaller voice): played that much faster, written into `work`."""
+    if not size and _plain(ref):
+        return os.path.abspath(ref)
+    if (ref, size) not in made:
+        from fractions import Fraction
+        from scipy.signal import resample_poly
+        fr = Fraction(2 ** (-size / 12)).limit_denominator(200)
+        made[ref, size] = os.path.join(work, 'voice%03d.wav' % len(made))
+        x = _read(ref)
+        _write(made[ref, size], resample_poly(x, fr.numerator, fr.denominator) if size else x)
+    return made[ref, size]
+
+
+CACHE = os.path.join(ROOT, '.svc', 'cache')
+CACHE_MAX = 4e9                    # bytes; the oldest go first
+
+
+def _kept(job, cmd):
+    """Where the result of this very job is kept: the same singing, the same voice, the same model, the same draw."""
+    import hashlib
+    h = hashlib.sha1(json.dumps([cmd, job.get('seed', 0)]).encode())
+    for f in (job['source'], job['reference']):
+        h.update(open(f, 'rb').read())
+    return os.path.join(CACHE, h.hexdigest() + '.wav')
+
+
+def _trim():
+    files = sorted((os.path.join(CACHE, f) for f in os.listdir(CACHE)), key=os.path.getmtime)
+    total = sum(os.path.getsize(f) for f in files)
+    while files and total > CACHE_MAX:
+        total -= os.path.getsize(files[0]); os.unlink(files.pop(0))
+
+
 def revoice(tracks, voices, log=print, seed=0):
-    """tracks: one dry mono track (at 44100 Hz) per singer.  voices: one reference recording per track.
-    -> the tracks again, in those voices."""
+    """tracks: one dry mono track (at 44100 Hz) per singer.  voices: for each track a reference recording, or
+    (recording, size) as deal() gives them.  -> the tracks again, in those voices."""
     cmd = command()
     if cmd is None:
         raise SystemExit('No voice-conversion model is set up (looked for .svc/command.json): see docs/how-it-works.md, "A real voice\'s sound".')
     work = tempfile.mkdtemp(prefix='choral_revoice_')
     try:
-        jobs, where = [], []
-        for i, (x, ref) in enumerate(zip(tracks, voices)):
+        jobs, where, made = [], [], {}
+        voices = [v if isinstance(v, tuple) else (v, 0.) for v in voices]
+        for i, (x, (ref, size)) in enumerate(zip(tracks, voices)):
             x = np.asarray(x, np.float64)
+            ref = _sized(ref, size, work, made)
             for k, (a, b) in enumerate(stretches(x)):
                 seg = x[a:b]; peak = float(np.abs(seg).max()) or 1.
                 src = os.path.join(work, f's{i:03d}_{k:03d}.wav')
                 _write(src, seg / peak * .8)
-                jobs.append(dict(source=src, reference=os.path.abspath(ref), out=src[:-4] + '_v.wav', seed=seed + i))
+                jobs.append(dict(source=src, reference=ref, out=src[:-4] + '_v.wav', seed=seed + i))
                 where.append((i, a, b))
         total = sum(b - a for _, a, b in where) / SR
-        log(f're-voicing {len(tracks)} singers: {total / 60:.0f} minutes of singing in {len(jobs)} stretches, in {len(set(voices))} voice(s) ...')
-        jf = os.path.join(work, 'jobs.json')
-        json.dump(jobs, open(jf, 'w'))
-        r = subprocess.run(cmd + [jf], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        for line in r.stdout.splitlines():
-            if 're-voiced' in line or 'loaded' in line:
-                log(line.rstrip())
+        log(f're-voicing {len(tracks)} singers: {total / 60:.0f} minutes of singing in {len(jobs)} stretches, in {len(set(v for v, _ in voices))} voice(s) ...')
+        os.makedirs(CACHE, exist_ok=True)
+        kept = [_kept(j, cmd) for j in jobs]             # the engine sings a piece the same way every time: a second
+        todo = [j for j, f in zip(jobs, kept) if not os.path.exists(f)]         # rendering finds its stretches converted
+        if len(todo) < len(jobs):
+            log(f'  {len(jobs) - len(todo)} of the {len(jobs)} stretches were converted before and are reused')
+        said, code = '', 0
+        if todo:
+            jf = os.path.join(work, 'jobs.json')
+            json.dump(todo, open(jf, 'w'))
+            with open(os.path.join(work, 'errors.txt'), 'w+') as err:
+                r = subprocess.Popen(cmd + [jf], stdout=subprocess.PIPE, stderr=err, text=True)
+                for line in r.stdout:                     # said as it happens: this is the long step
+                    if 're-voiced' in line or 'model loaded' in line:
+                        log(line.rstrip())
+                code = r.wait()
+                err.seek(0); said = err.read()
+        for j, f in zip(jobs, kept):
+            if os.path.exists(f):
+                os.utime(f); j['out'] = f
+            elif os.path.exists(j['out']):
+                shutil.copy(j['out'], f + '.part'); os.replace(f + '.part', f)
+        _trim()
         missing = [j for j in jobs if not os.path.exists(j['out'])]
-        if r.returncode or missing:
-            raise SystemExit('The voice-conversion model failed' + (f' ({len(missing)} of {len(jobs)} stretches missing)' if missing else '') + ':\n' + r.stderr[-1500:])
+        if code or missing:
+            raise SystemExit('The voice-conversion model failed' + (f' ({len(missing)} of {len(jobs)} stretches missing)' if missing else '') + ':\n' + said[-1500:])
         out = [np.zeros(len(x), np.float32) for x in tracks]
         for j, (i, a, b) in zip(jobs, where):
             out[i][a:b] += _fit(_read(j['out']), np.asarray(tracks[i][a:b], np.float64)).astype(np.float32)

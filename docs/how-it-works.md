@@ -12,7 +12,8 @@
 | `choral/presets.py` | Estimates what differs from piece to piece - tempo and its bends, hall, how close the microphones are, how loud the accompaniment sits - from practice tracks, from a speech recognizer, or from the score alone. |
 | `choral/timing.py` | Finds where every beat of the score falls in the recordings: a first, steady fit from one isolated voice, then a follower that tracks the written piano attacks through the accompaniment track and every isolated voice's notes together (position and tempo both), plus the checks that say how well the result fits - singers on pitch, voices against the accompaniment. |
 | `choral/reference.py` | Takes a set of practice tracks apart (balanced, accompaniment, "part predominant" or "part muted") into voices alone, accompaniment alone and one part alone, and says how cleanly they separated. |
-| `choral/revoice.py` | Optional (`--voice`): hands every simulated singer's track to an outside voice-conversion model, which returns it in the voice of a short recording of a real singer, and puts the result back where the original was - lined up with it, and as loud as it at every moment. |
+| `choral/revoice.py` | Optional (`--voice`): seats the recordings of real voices among the parts, hands every simulated singer's track to an outside voice-conversion model, which returns it in the voice of its recording, and puts the result back where the original was - lined up with it, and as loud as it at every moment. |
+| `tools/vocalset_voices.py` | Fetches ten men's voices from the public VocalSet collection and names each for the part it sings, as voices for `--voice`. |
 | `choral/hear.py` | The speech recognizer used as a stand-in for ears: English directly; other languages through the multilingual model, told the piece's vocabulary. |
 | `tools/scan2score.py` | Reads a score from page images (a scan, or any PDF the shape reader cannot read): cuts each page into systems, has the open-source recognition engine `homr` read the notes - a system whose reading does not match the staves on the page is read again in parts - decides which staves are voices and which the piano (by the names printed beside them - "T 1", "Bar.", "Cl.", "Keybd." - where there are any, otherwise by counting; an instrument's staff is read and left out), adds a staff the engine did not find, corrects a clef it misread (a part keeps its clef through a piece), splits two voices sharing a staff, finds the barlines, follows repeats, D.S. and codas, and puts the words under the notes: from the PDF's own text if it has one, otherwise by text recognition (macOS's, or Tesseract). |
 | `tools/vector2score.py` | Reads the notes of a notation-software PDF exactly, from the symbols it is drawn with: any PDF in a standard (SMuFL) music font - Bravura, Leland and the like, as exported by MuseScore, Dorico, Sibelius and recent Finale - and Finale's older Maestro font, whose characters it translates into the standard's (also where a PDF maker has stored them as Greek letters). Staff lines give the pitch of each notehead; stems make chords and tell two voices on a staff apart; beams, flags, dots and tuplet numbers give the note values; accidentals last to the barline; curves are ties or slurs. It checks itself (do the measures add up?) and steps aside if they do not. |
@@ -69,11 +70,41 @@ singer's dry track is cut into its stretches of singing and given to a voice-con
 together with a recording of a real voice, and comes back as that voice singing the same notes and
 words at the same moments. `choral/revoice.py` lines each stretch up with its original (the model
 may be a few milliseconds off) and gives it the original's loudness moment by moment, so the
-shape the engine gave each note is kept. Several recordings can be named; they are shared out so
-that neighbours in a section, and the same seat in two sections, have different voices.
+shape the engine gave each note is kept.
 
-**Whose voice.** Fifteen to thirty seconds of one person singing alone, without accompaniment. Use
-your own, or that of someone who has agreed to it - not a singer lifted from a practice track.
+**Whose voice.** Fifteen to thirty seconds of one person singing alone, without accompaniment - a
+phone's recording will do, in any common format (WAV, m4a, mp3 ...; other than WAV needs ffmpeg,
+or a Mac). Use your own, or that of someone who has agreed to it - not a singer lifted from a
+practice track.
+
+**Several voices** (`--voice a.wav,b.wav` or `--voice FOLDER`) are seated the way a choir seats its
+people. A recording whose file name begins with a part's name - `Bass 2.wav`, `Tenor 1 - Sam.wav`,
+`solo.wav` - sings in that part. The rest are put in order by the pitch of what is sung in them and
+shared out among the remaining parts, lowest to the basses; a part sung by one person takes the
+voice that lies nearest its notes. Within a section the voices go round, so neighbours differ. The
+run prints who was seated where.
+
+**More singers than voices.** One recording given to six singers is one man six times: a
+speaker-recognition network scores the six as the same voice (0.98-0.99), however differently the
+engine's six sang. So every further singer who gets the same recording gets it a little larger or
+smaller: the recording is played up to 3.5% slower or faster before the model hears it, which moves
+every resonance the way a larger or smaller throat and mouth would (the pitch sung still comes
+from the engine). In a test, six sizes of one man spread wider than that (0.9 semitone either
+way) scored 0.87-0.98 against each other - relatives, not strangers (two different men score
+0.3-0.8) - and sang the notes and words as well as before. A
+voice that has to serve several sections is larger in the lower ones, so one voice alone still
+gives darker basses than tenors. A soloist keeps the voice as recorded.
+
+**Voices to start with.** `python tools/vocalset_voices.py` writes ten men's voices into
+`.svc/voices`, already named for their parts, from
+[VocalSet](https://zenodo.org/records/1193957) (Wilkins, Seetharaman, Wahl and Pardo, ISMIR 2018;
+Creative Commons Attribution 4.0): professional singers recorded alone for research. It fetches
+only the ten clips it needs (about 30 MB), or reads them from the archive if you give it one. Then
+`--voice .svc/voices`. Those men all sing the same songs in the same key, so pitch could not seat
+them; they are seated by the size of the voice instead - how low its resonances lie, measured on
+the songs they share - and the solos go to the one whose held notes came out cleanest. To move a
+man to another part, rename his file; to drop him, delete it. Anything published that was made
+with these voices should carry the credit.
 
 **The model.** `revoice.py` only needs a command that takes a list of jobs
 (`{"source": wav, "reference": wav, "out": wav}`) and writes each `out`; the command is the JSON
@@ -92,7 +123,11 @@ plus a driver of about a hundred lines that loads the model once and runs the jo
 project's own functions. Seed-VC is under the GPL-3.0 and the driver follows its code, so the
 driver is kept with the installed model, not in this repository. The first run fetches about
 2.3 GB of model files. On an Apple M-series machine it converts about twice as fast as real time
-(ten refinement steps, which measured the same as thirty).
+(ten refinement steps, which measured the same as thirty): a three-minute piece for four parts of
+twelve is an hour and a half of singing, so about 50 minutes; with `--singers 4`, about 15. Running
+several copies of the model side by side gains nothing - the graphics chip is already full. What
+has been converted is kept (`.svc/cache`, up to 4 GB): the engine sings a piece the same way every
+time, so rendering it again - for another part's rehearsal tracks, say - takes no conversion.
 
 ## What gets estimated for each piece
 

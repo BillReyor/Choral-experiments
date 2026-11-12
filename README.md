@@ -35,11 +35,14 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   singer's notes that are on pitch where the timing puts them, how closely the voices sit on the
   accompaniment, and where the simulated voice differs most from the real one.
 - **--tune** lets a speech recognizer choose how close the microphones are (needs whisper.cpp).
-- **--voice VOICE.wav** gives the singers the sound of a real voice: 15-30 seconds of someone
-  singing alone - you, or someone who has agreed to it. This is the one thing here that is not
-  done in code: an outside voice-conversion model, installed separately
-  ([docs/how-it-works.md](docs/how-it-works.md)), re-voices each simulated singer, keeping the
-  notes, words and timing the engine sang.
+- **--voice VOICE.wav** (or several, or a folder of them) gives the singers the sound of real
+  voices: 15-30 seconds each of someone singing alone - you, or people who have agreed to it.
+  Several voices are seated like a choir, the low ones in the low parts.
+  `tools/vocalset_voices.py` fetches ten men's voices from a public research collection to start
+  with. This is the one thing here that is not done in code: an outside voice-conversion model,
+  installed separately ([docs/how-it-works.md](docs/how-it-works.md)), re-voices each simulated
+  singer, keeping the notes, words and timing the engine sang. It is slow - a three-minute piece
+  takes 15 to 50 minutes, by the size of the choir - but only the first time for a piece.
 
 ## Install
 

@@ -738,3 +738,101 @@ asked them. And the model has its own share in what is sung now: it moves more i
 (15 cents against 9), and what it does to consonants is judged only by the recognizer.
 
 None of these numbers says the result would pass for a recording.
+
+**Men's voices.** Offered the choice between recording himself and other voices, the listener chose
+other voices. The ones found: VocalSet (Wilkins, Seetharaman, Wahl and Pardo, ISMIR 2018;
+Creative Commons Attribution 4.0) - twenty professional singers recorded alone for research,
+eleven of them men, each singing the same scales, arpeggios and three songs in many manners. Ten
+are used (the eleventh is a countertenor), and of each only fourteen seconds of one song sung
+plainly: eight seconds described a voice slightly less well, twenty-two no better, and a longer
+recording leaves the model less room for the singing, so it also costs time.
+
+*Who sings what.* The plan had been to seat voices by pitch - the lowest recording to the basses.
+These men all sing the same songs in the same key, so pitch says nothing. What tells a bass from
+a tenor there is the size of the voice: a longer throat and mouth put every resonance lower by the
+same ratio, which on a logarithmic frequency axis is a shift. Measured on three songs, each man
+against the average of the others, the ten spread over 3.2 semitones (-1.5 to +1.75), and each of
+a man's three songs lies within 0.45 semitone of his average, most within 0.2. The largest two
+sing bass, the smallest three first tenor. It carries through: the same line re-voiced in all ten
+keeps their order (rank agreement 0.83-0.93 on four lines), at half to two thirds of the spread on
+the three lower lines and a seventh of it on the first tenors' high one. Since the program cannot
+know any of this from a recording, a recording can now simply be named for its part
+(`Bass 2.wav`); those without such a name are still seated by pitch.
+
+*Auditions.* One engine singer per part, re-voiced in each of the ten: every man holds the written
+pitch everywhere, down to the basses' lowest note (typically 4-12 cents off, as the engine is).
+Words on the three lower lines: 77-90% for every man (the engine's own singer: 87%). On the first
+tenors' line one run spread from 50% to 83% and a second run, with a different engine singer,
+from 73% to 87%: the recognizer on one voice cannot rank voices. Only two men were at the bottom
+both times. What did separate them was how clean a held note comes out. Three of the ten return
+breathier than they went in: held notes 0.90-0.92 periodic at the written pitch against 0.95-0.98
+for the rest and 0.97 for the engine; the level sags 12-13 dB inside a note against 8-11 (the
+engine: 7); the pitch tracker loses the middle of 12-17 held notes of 31 against 5-10, on two
+draws alike - a property of the voice, not of chance. They sing in sections. The solos went to a
+man of a baritone's size from among the clean ones, whose words were also the best by a little
+(89-91%; all ten between 74% and 91%, the engine's soloist 97%).
+
+*Is it him?* A speaker-recognition network (the one the model itself describes voices with) scores
+a man's own recordings against each other at 0.73-0.96 and against other men at 0.3-0.83. The
+re-voiced solo scores 0.73-0.83 against other recordings of the man it was given, and less
+against other men in two cases of three; in the third it scores a little higher against another
+man (0.78 against 0.75) - the one the engine's own voice happens to resemble most. The sound is
+taken from the recording, but not all of it.
+
+*One man six times.* Six engine baritones - six different simulated singers - given the same
+recording score 0.98-0.99 against each other: one man multitracked, whatever the engine did. With
+two or three recordings for a section of twelve that is what a section would be. So every further
+singer on the same recording now gets it slightly larger or smaller: the recording is played a
+little slower or faster before the model hears it. Six sizes of one man over 0.9 semitone either
+way score 0.87-0.98 against each other and sing the notes and the words as before (typically 11
+cents off; the six together 83% of the words against 80%). The program uses up to 0.6 semitone
+(3.5%). They are relatives, not strangers; ten men are still ten men.
+
+*Time.* Three copies of the model side by side convert twelve clips in 163 s; one copy, 152 s. The
+graphics chip is the limit (of every 8 s spent: 4.7 the refinement, 2.0 turning the result into
+sound, 1.2 finding the pitch).
+
+*What the first re-voiced renderings got wrong.* Putting a re-voiced stretch back "as loud as the
+original at every moment" limits how far the loudness may be corrected (-30 to +10 dB), so that
+silence is not amplified into noise. That limit was applied against the level the stretch happened
+to be stored at for the model, not against its own average - and a section singer's track needed
+more than the limit allowed. So every re-voiced section singer came back 3 dB quiet, his loudest
+moments held back most, and the soloist stood 2 dB further out of the choir than the engine had
+put him. It had been checked on one clip, which was stored at the model's scale and passed.
+What found it was the dullest possible comparison, made late: one singer's level before and after
+(-1.7 against -4.7 dB). A stretch is now first made as loud as its original on the whole, then
+moment by moment: twelve baritones measure -1.9 against -1.7 dB alone and 9.3 against 9.3 together.
+Everything re-voiced before this, the earlier excerpts included, has the fault.
+
+*An octave that was not sung.* In that section three of twelve re-voiced singers measured an
+octave high on one note - an "o" on B flat, whose second harmonic falls on the vowel's resonance.
+The spectrum has the written pitch and its third harmonic in all twelve, 20-50 dB above what lies
+between harmonics: the pitch tracker was fooled, not the listener. It does show a real difference:
+on that note a re-voiced voice's fundamental lies 10-18 dB under its second harmonic, the engine's
+2-6. Real voices ring harder on a vowel's resonance than the model does.
+
+*Kept.* The engine sings a piece the same way every time, so a converted stretch is kept
+(`.svc/cache`, up to 4 GB, oldest out first) and a later rendering of the piece - for another
+part's rehearsal tracks, another balance - finds it done.
+
+*The piece.* The tenth piece in the ten men's voices, four singers to a part, beside the engine's
+own voices at the same size, same piano and hall. Words the recognizer gets in the full mix (and
+from the voices without piano):
+
+| | engine voices | ten men |
+|---|---|---|
+| the solo verse | 97% (97%) | 86% (86%) |
+| the solo over the choir | 29% (65%) | 65% (76%) |
+| the choir's verse | 91% (94%) | 75% (97%) |
+| the last chorus | 78% (69%) | 64% (75%) |
+
+One reading each, of 17 to 36 words, so a few points mean nothing. Without the piano the choir
+reads as well as before; with the piano, 14-16 points lower; the soloist alone 11 points lower;
+the soloist over the choir higher. The balance is the engine's again - soloist
+2.5 dB under the choir's verse (engine 2.3), piano 5.1 dB under the choir (5.2). Sixteen minutes
+for the piece at this size; with twelve to a part, forty-nine singers and an hour and a half of
+singing, fifty-three.
+
+What none of this says is whether it sounds like a men's chorus: that is for a listener. The ten
+are trained soloists singing an Italian song alone in a studio, not choristers; there are ten of
+them; and nothing here has been set beside a recording of a real choir.

@@ -122,7 +122,7 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None):
     """Every singer of every section -> {section: array (3, N, 2)}: what the main microphone pair
     hears, what goes to the hall, and the leaders' close mics.  tune: voice settings for this piece
     (keys as in voice.apply_fit).  voices: recordings of real voices for the singers to be re-voiced in
-    (choral/revoice.py), dealt out among the singers of each section in turn."""
+    (choral/revoice.py), shared out by how low each lies: the lowest to the basses, the highest to the first tenors."""
     t0 = time.time()
     voice.set_clock(*clock)
     voice.PER_SECTION = singers
@@ -136,8 +136,8 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None):
             from . import revoice
             done = list(pool.imap(voice.render_singer, tasks))
             log('voices sung in %.0fs' % (time.time() - t0))
-            order = {s: k for k, s in enumerate(dict.fromkeys(t[0] for t in tasks))}
-            given = [voices[(t[1] + order[t[0]]) % len(voices)] for t in tasks]      # neighbours in a section, and the same seat in two sections, differ
+            mid = lambda ns: float(np.median(np.repeat([np.mean(n[2]) for n in ns], [max(1, int(round(8 * n[1]))) for n in ns]))) if ns else 60.   # the middle of its notes, by how long each lasts
+            given = revoice.deal(voices, [(t[0], t[1]) for t in tasks], {t[0]: mid(t[2]) for t in tasks}, log, NAMES)   # low voices to the low sections
             new = revoice.revoice([d[4] for d in done], given, log)
             arriving = [(d[0], d[1], d[2], d[3], m) for d, m in zip(done, new)]
         else:
