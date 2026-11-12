@@ -40,8 +40,8 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
 
 | For | You need |
 |---|---|
-| Everything above from a `.score` file or a notation-software PDF | Python 3.10+, `pip install -r requirements.txt` |
-| Scans, photocopies, PDFs in an unfamiliar music font | the [homr](https://github.com/liebharc/homr) recognition engine beside the project: `python3.12 -m venv .venv-omr && .venv-omr/bin/pip install "homr[cpu]"` (AGPL; it is called as a separate program) |
+| Everything above from a `.score` file or a PDF exported from notation software (MuseScore, Dorico, Sibelius, Finale): read exactly, in seconds | Python 3.10+, `pip install -r requirements.txt` |
+| Scans and photocopies | the [homr](https://github.com/liebharc/homr) recognition engine beside the project: `python3.12 -m venv .venv-omr && .venv-omr/bin/pip install "homr[cpu]"` (AGPL; it is called as a separate program) |
 | Words from a scan | nothing on macOS (with the Xcode command-line tools); elsewhere [Tesseract](https://tesseract-ocr.github.io/). A PDF that carries its text needs neither. |
 | Audio other than WAV | `ffmpeg` (or macOS's `afconvert`) |
 | `--tune`, and the listening checks in `tools/` | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) and a model, named in `WHISPER_MODEL` |
@@ -53,7 +53,9 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   recognizer. Trust your ears over its reports.
 - **Men's chorus only** (TTBB, TTB, soloist or trio over the choir), with piano or unaccompanied.
 - **Reading scans is imperfect.** Typically 96-99% of the notes are right. About one syllable in
-  ten is wrong or missing, more with Tesseract.
+  ten is wrong or missing, more with Tesseract. (A PDF exported from notation software is read
+  exactly instead - but that reader has met only one such file so far, and does not yet follow
+  "8va" lines or first and second endings.)
   Repeats, D.S. and codas are followed; first and second endings are not. Always look through the
   `.score` file it writes.
 - **Words:** English (by dictionary) and church Latin (by rule). Anything else is sung as if it

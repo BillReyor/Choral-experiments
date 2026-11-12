@@ -482,4 +482,36 @@ So the current reader stays. The use for a second reader is as a second opinion 
 where two independent readings agree, the note can be trusted without a recording to check it
 against. That is not built.
 
+**Reading a notation-software PDF exactly.** The eighth piece's PDF is not a picture. Every
+notehead, rest, accidental, flag and clef in it is a character of a music font at an exact place,
+and every staff line, stem, barline and beam is a line. Its font, like nearly all current ones,
+follows one standard (SMuFL) that gives each symbol the same code in every font. So nothing needs
+recognizing: `tools/vector2score.py` reads the notes off, and hands them on in the same form a
+recognized page takes, so that everything after the notes is shared.
+
+It was built against the page reader's version of the same piece, and wherever the two differed
+the picture was looked at. In the voice parts they differ in about twenty measures of 130, and
+the symbol reader is right in each one looked at: a double sharp the page reader took for a
+natural; an eighth rest and three sung notes it missed entirely; ties it dropped; the last
+measure of the piece, which it lost. What had to be got right along the way:
+
+- a barline and a stem can both run exactly from the top line to the bottom line: barlines are
+  drawn heavier, and stand on most staves at once;
+- accidentals stand in columns left of a whole cluster of noteheads (a chord, a second pushed
+  to the other side of the stem, another voice set a little apart), not next to their own note;
+- two voices on a staff: notes that sound together stand one above the other, so each measure is
+  read column by column with each voice's next moment kept; a chord on one stem at a moment when
+  the other voice is due too belongs to both, and one voice may point its stems now up, now down;
+- a notehead belongs to the stem that ends at its own height (two voices a second apart share
+  one vertical line for their two stems);
+- every note of a dotted chord has its own dot: what counts is how many dots stand side by side;
+- a triplet's bracket is drawn as thin filled shapes, and cue-size notes are not sung.
+
+On this piece: 130 measures, every one the right length; 471 of 479 staff-measures add up by
+themselves (the rest are piano flourishes in fives and sevens); voices within 60 ms of the
+accompaniment in 117 of 117 stretches. It reads in two seconds instead of a minute and a half and
+needs neither the recognition engine nor text recognition. If a PDF's symbols do not add up as
+music, it says so and the pages are recognized instead. Not handled yet: "8va" lines, first and
+second endings - and it has met exactly one file.
+
 None of these numbers says the result would pass for a recording.

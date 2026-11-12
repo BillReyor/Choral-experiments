@@ -1050,7 +1050,10 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                     totals += [v for v in by_voice.values() if v > 0]
             labels = [st['measures'][j]['time'] for st in c['read'] if j < len(st['measures']) and st['measures'][j]['time']]
             as_len = lambda lab: Fraction(int(lab.split('/')[0]) * 4, int(lab.split('/')[1]))
-            if totals:
+            exact = [st['measures'][j].get('len') for st in c['read'] if j < len(st['measures'])]
+            if exact and all(exact):                 # read from the PDF's own symbols: the length is known, not counted
+                length = exact[0]
+            elif totals:
                 best = max(set(totals), key=lambda v: (totals.count(v), v == length, v))
                 if best != length and (totals.count(best) >= 2 or any(as_len(l) == best for l in labels)):
                     length = best
@@ -1219,7 +1222,14 @@ def main():
     if sum(len(v) for v in words.values()) >= 12 * len(pages):       # a PDF with its words in it: no need to read them off the picture
         TEXT['pages'] = words
         print("the words are taken from the PDF's own text")
-    crops = read_systems(cut_systems(pages, work, print), print)
+    crops = None
+    try:                                             # a PDF drawn with a standard music font is read exactly, symbol by symbol
+        import vector2score
+        crops = vector2score.read(a.pdf, log=print)
+    except Exception as e:
+        print(f'  (reading the symbols directly did not work: {e}; recognizing the pages instead)')
+    if crops is None:
+        crops = read_systems(cut_systems(pages, work, print), print)
     found = None if a.tempo else find_tempo(pages, work)
     tempo = a.tempo or found or 100.
     title = a.title or re.sub(r'[_-]+', ' ', os.path.splitext(os.path.basename(a.pdf))[0]).strip().title()
