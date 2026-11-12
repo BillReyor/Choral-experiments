@@ -89,6 +89,13 @@ analysis (`pip install pyworld`) into its colour, its breath and its pitch, and 
 
 Consonants and rests stay the model's. This was made for a soloist; a listener then preferred
 the whole chorus rebuilt as well, at some cost to how well a section's words are understood.
+
+A part sung by one person has its consonants put right too, because alone they are heard. The
+model's are weaker than the engine's, so each is raised to the engine's strength, by at most
+10 dB. And the model sings through a stop - the d of "do" came out with no closure and almost no
+click - so where the engine is closed before a stop the voice is brought down to it, and the
+click of the release is the engine's own, above 2 kHz. Section singers get neither: twelve
+clicks a few milliseconds apart make the words harder to follow, not easier.
 Without pyworld the model's own sound is kept, its pitch nudged back onto the engine's and its
 loudness made to follow the engine's, and the run says that held notes will be rougher.
 

@@ -739,7 +739,7 @@ asked them. And the model has its own share in what is sung now: it moves more i
 
 None of these numbers says the result would pass for a recording.
 
-**Men's voices.** Offered the choice between recording himself and other voices, the listener chose
+**Men's voices.** Offered the choice between recording their own voice and other voices, the listener chose
 other voices. The ones found: VocalSet (Wilkins, Seetharaman, Wahl and Pardo, ISMIR 2018;
 Creative Commons Attribution 4.0) - twenty professional singers recorded alone for research,
 eleven of them men, each singing the same scales, arpeggios and three songs in many manners. Ten
@@ -1091,4 +1091,24 @@ against 8) and the choir sits 1 dB lower against the piano. Of the baritones' tw
 are the rebuilding itself and the rest the steadying of held vowels (rebuilt with no steadying:
 67%; with any of it: 57-60%). Bringing the consonants back to the engine's strength, which the
 old putting-back did as a side effect, gives the soloist six more words in seventy and the
-sections nothing; it is written and switched off, since nobody has heard it.
+sections nothing.
+
+*The soloist's consonants.* So the listener heard it: the solo with its consonants raised to the
+engine's strength by up to 5 dB and by up to 10 (56 and 59 of the 70 words to a recognizer,
+against 53 with none), and chose 10 - "but the D", at the start of one phrase, "seems to be
+dropped from all clips". It was, in every version since the voices arrived. Where the engine
+closes a d for a moment 30-40 dB under the vowel and lets it go with a click 24 dB under, the
+model sings through the closure (a murmur 14 dB under) and softens the click to 44 dB under; the
+rebuilding, which takes a hummed closure for sung tone, smooths away what is left. No setting of
+level brings back a click that is not there. So a rebuilt soloist's stops are put right against
+the engine's own sound: where the engine is closed just before a rise, the voice is brought down
+to it (never up), and where the engine's sound above 2 kHz leaps 15 dB in 15 ms and the voice's
+does not, the engine's click is laid in. "D is there, good." He now reads 57 of 70 - the rebuild
+had left him 53, and before it he had 58.
+
+Neither change is made for section singers. With both, twelve baritones read 50% and the first
+tenors 67%, against 57% and 73% without: a click from each of twelve men a few milliseconds apart
+is a smear, not a consonant. And the chorus the listener chose was the one without them. The
+piece as it now renders was laid against the two renders the listener approved: its solo verse is
+the approved soloist's and its choir verse and last chorus the approved chorus's (correlation
+1.0000 each; level within 0.1 dB).

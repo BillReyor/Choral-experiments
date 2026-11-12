@@ -369,12 +369,14 @@ CALM = .01             # seconds over which a rebuilt voice's colour and loudnes
 STILL = .08            # ... over which its pitch is steadied inside a held note (0: the engine's own, flutter and all)
 LEVEL_HELD = .3        # ... and its loudness
 HELD_CHANGE = 1.5      # dB in 20 ms: an engine colour changing faster than this is a syllable changing, not a held vowel
-CONS = 0.              # dB: the most a consonant of a rebuilt voice is raised to the engine's strength (0: left as the model made it;
-                       # 10 gives a soloist 6 more words in 70 - not yet heard by anyone, so not yet on)
+STOPS = True           # put the stops right in a rebuilt voice (see _stops)
+CONS = 10.             # dB: the most a consonant of a rebuilt soloist is raised to the engine's strength: a listener chose 10 over 5 and
+                       # none (59, 56, 53 of his 70 words to a recognizer).  Neither this nor _stops is done for section singers: the
+                       # chorus was chosen without them, and a section's words read worse with them (50% against 57, 67 against 73)
 CALM_HELD = .12        # ... over which its colour is steadied inside a held note
 
 
-def _rebuild(y, src):
+def _rebuild(y, src, alone=False):
     """A re-voiced stretch (lined up with its original) with its sung tone built again: the model's vowel colour,
     sounded at the engine's pitch.  Needs the WORLD analysis/synthesis (pip install pyworld); returns None without
     it.  Made for a voice heard alone; a listener then preferred the whole chorus this way too, though a section
@@ -449,21 +451,59 @@ def _rebuild(y, src):
     z = pw.synthesize(f0, sp, ap, SR, fp)[:n]
     z = np.pad(z, (0, max(0, n - len(z))))
     keep = np.interp(np.arange(n), t * SR, gf(voiced.astype(float), 1.6))    # 8 ms from the one to the other
-    if CONS:                                                       # the model's consonants, brought to the strength the engine gave them
+    if CONS and alone:                                             # a soloist's consonants, brought to the strength the engine gave them
         sung = keep > .5
         if sung.sum() > SR // 10 and (~sung).sum() > SR // 20:
             whole = np.sqrt(np.mean(src[sung] ** 2) / (np.mean(z[sung] ** 2) + 1e-20))        # the two on one scale, by their sung parts
             g = np.clip(_env(src, .02) / (whole * _env(y, .02) + 1e-12), 10 ** (-6 / 20), 10 ** (CONS / 20))
             y = y * np.interp(np.arange(n), (np.arange(len(g)) + .5) * HOP, gf(g, .01 * SR / HOP))
-    return keep * z + (1 - keep) * y
+    out = keep * z + (1 - keep) * y
+    return _stops(out, src, keep) if STOPS and alone else out
+
+
+def _stops(out, src, keep):
+    """A rebuilt stretch with its stops put right - the d of "do", the b of "but".
+
+    A stop is a moment of near silence (with a hum, for b d g) and then a click.  The model sings through the first
+    and softens the second: where the engine has a closure 30-40 dB under the vowel and a click 24 dB under it, the
+    model gives a murmur 14 dB under and a click 44 dB under - "the D seems to be dropped", a listener said - and the
+    rebuilding, which takes a hummed closure for sung tone, smooths away what is left.  So, measured against the
+    engine with the two on one scale: where the engine is in a closure (20 dB or more under the sound that follows
+    within 120 ms) the stretch is turned down to the engine's level, and where the engine has a click (its sound
+    above 2 kHz jumping 15 dB in 15 ms) that the stretch lacks by 6 dB or more, the engine's click is added."""
+    from scipy.signal import butter, sosfiltfilt
+    from scipy.ndimage import maximum_filter1d
+    n = len(src)
+    sung = keep > .5
+    if sung.sum() < SR // 10:
+        return out
+    whole = np.sqrt(np.mean(src[sung] ** 2) / (np.mean(out[sung] ** 2) + 1e-20))       # the engine's scale over the stretch's
+    up = lambda v: np.interp(np.arange(n), (np.arange(len(v)) + .5) * HOP, v)
+    es, eo = _env(src, .008), _env(out, .008) * whole
+    m = min(len(es), len(eo)); es, eo = es[:m], eo[:m]
+    fps = SR / HOP
+    ahead = maximum_filter1d(es, int(.12 * fps), origin=-int(.06 * fps))                 # the loudest the engine gets in the next 120 ms
+    closed = (es < ahead * 10 ** (-20 / 20)) & (ahead > es.max() * 10 ** (-30 / 20))
+    g = np.where(closed, np.clip(es / (eo + 1e-12), 10 ** (-30 / 20), 1.), 1.)
+    out = out * up(gf(g, .003 * fps))
+    hp = butter(4, 2000., 'hp', fs=SR, output='sos')
+    hs, ho = sosfiltfilt(hp, src), sosfiltfilt(hp, out)
+    cs, co = _env(hs, .003)[:m], _env(ho, .003)[:m] * whole
+    k = int(.015 * fps)
+    jump = np.r_[np.zeros(k), cs[k:] / (cs[:-k] + 1e-9 * cs.max())]
+    click = (jump > 10 ** (15 / 20)) & (cs > es.max() * 10 ** (-45 / 20)) & (cs > co * 10 ** (6 / 20))
+    if click.any():
+        w = np.clip(gf(maximum_filter1d(click.astype(float), int(.02 * fps), origin=-int(.008 * fps)), .002 * fps) * 1.5, 0, 1)   # from the click on for 20 ms, soft-edged
+        out = out + up(w) * hs / whole
+    return out
 
 
 def _fit_job(job):
-    path, src, rebuilt = job
-    return _fit(_read(path), np.asarray(src, np.float64), rebuilt).astype(np.float32)
+    path, src, rebuilt, alone = job
+    return _fit(_read(path), np.asarray(src, np.float64), rebuilt, alone).astype(np.float32)
 
 
-def _fit(y, src, rebuilt=False):
+def _fit(y, src, rebuilt=False, alone=False):
     """A re-voiced stretch, put where its original was: the same length, lined up with it, and as loud at every moment."""
     n = len(src)
     y = np.pad(y, (0, max(0, n - len(y))))[:n]
@@ -472,7 +512,7 @@ def _fit(y, src, rebuilt=False):
     lags = range(-int(.06 * SR / HOP), int(.06 * SR / HOP) + 1)
     k = max(lags, key=lambda k: float(np.dot(a[max(0, -k):len(a) - max(0, k)], b[max(0, k):len(b) - max(0, -k)]))) * HOP
     y = np.pad(y, (0, k))[k:] if k > 0 else np.pad(y, (-k, 0))[:n]
-    z = _rebuild(y, src) if rebuilt else None                     # the sung tone built again at the engine's pitch
+    z = _rebuild(y, src, alone) if rebuilt else None              # the sung tone built again at the engine's pitch
     if z is not None:                                             # (its loudness is steadied there, note by note; made to follow the
         return z * np.sqrt(np.mean(src ** 2) / (np.mean(z ** 2) + 1e-20))      # engine's moment by moment, it was heard to fade oddly)
     y = _repitch(y, src)
@@ -570,10 +610,11 @@ def _trim():
         total -= os.path.getsize(files[0]); os.unlink(files.pop(0))
 
 
-def revoice(tracks, voices, log=print, seed=0, rebuild=True):
+def revoice(tracks, voices, log=print, seed=0, rebuild=True, alone=None):
     """tracks: one dry mono track (at 44100 Hz) per singer.  voices: for each track a reference recording, or
     (recording, size) as deal() gives them.  rebuild: whether each voice's sung tone is built again at the engine's
     pitch (_rebuild; needs pyworld - without it the pitch and loudness are put back on the model's own sound).
+    alone: for each track, whether it is a voice heard by itself, whose consonants are then put right as well.
     -> the tracks again, in those voices."""
     cmd = command()
     if cmd is None:
@@ -629,7 +670,7 @@ def revoice(tracks, voices, log=print, seed=0, rebuild=True):
         out = [np.zeros(len(x), np.float32) for x in tracks]
         from multiprocessing import Pool, cpu_count
         with Pool(min(8, cpu_count())) as pool:
-            fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32), bool(rebuild)) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
+            fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32), bool(rebuild), bool(alone and alone[i])) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
             for (i, a, b, ka, kb), y in zip(where, fitted):
                 w = np.ones(kb - ka, np.float32)         # pieces cut from one stretch are crossed over: in 12 ms where
                 top = float(np.abs(tracks[i]).max())     # it is quiet, in 40 ms where the cut had to be made in a held note
