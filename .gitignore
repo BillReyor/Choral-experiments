@@ -238,3 +238,6 @@ models/
 *.preset.json
 *.timing.json
 .venv-omr/
+
+# The optional voice-conversion model (third-party code and weights; see docs/how-it-works.md)
+.svc/

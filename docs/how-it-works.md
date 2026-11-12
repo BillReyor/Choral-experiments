@@ -12,6 +12,7 @@
 | `choral/presets.py` | Estimates what differs from piece to piece - tempo and its bends, hall, how close the microphones are, how loud the accompaniment sits - from practice tracks, from a speech recognizer, or from the score alone. |
 | `choral/timing.py` | Finds where every beat of the score falls in the recordings: a first, steady fit from one isolated voice, then a follower that tracks the written piano attacks through the accompaniment track and every isolated voice's notes together (position and tempo both), plus the checks that say how well the result fits - singers on pitch, voices against the accompaniment. |
 | `choral/reference.py` | Takes a set of practice tracks apart (balanced, accompaniment, "part predominant" or "part muted") into voices alone, accompaniment alone and one part alone, and says how cleanly they separated. |
+| `choral/revoice.py` | Optional (`--voice`): hands every simulated singer's track to an outside voice-conversion model, which returns it in the voice of a short recording of a real singer, and puts the result back where the original was - lined up with it, and as loud as it at every moment. |
 | `choral/hear.py` | The speech recognizer used as a stand-in for ears: English directly; other languages through the multilingual model, told the piece's vocabulary. |
 | `tools/scan2score.py` | Reads a score from page images (a scan, or any PDF the shape reader cannot read): cuts each page into systems, has the open-source recognition engine `homr` read the notes - a system whose reading does not match the staves on the page is read again in parts - decides which staves are voices and which the piano (by the names printed beside them - "T 1", "Bar.", "Cl.", "Keybd." - where there are any, otherwise by counting; an instrument's staff is read and left out), adds a staff the engine did not find, corrects a clef it misread (a part keeps its clef through a piece), splits two voices sharing a staff, finds the barlines, follows repeats, D.S. and codas, and puts the words under the notes: from the PDF's own text if it has one, otherwise by text recognition (macOS's, or Tesseract). |
 | `tools/vector2score.py` | Reads the notes of a notation-software PDF exactly, from the symbols it is drawn with: any PDF in a standard (SMuFL) music font - Bravura, Leland and the like, as exported by MuseScore, Dorico, Sibelius and recent Finale - and Finale's older Maestro font, whose characters it translates into the standard's (also where a PDF maker has stored them as Greek letters). Staff lines give the pitch of each notehead; stems make chords and tell two voices on a staff apart; beams, flags, dots and tuplet numbers give the note values; accidentals last to the barline; curves are ties or slurs. It checks itself (do the measures add up?) and steps aside if they do not. |
@@ -56,6 +57,42 @@ Where the words come from: the PDF's own text when it has one (exact; nothing to
 otherwise text recognition - macOS's built-in one, or [Tesseract](https://tesseract-ocr.github.io/)
 on Linux and Windows (`SCAN_OCR=tesseract` forces it; it gets fewer syllables right, see the
 journal).
+
+## A real voice's sound (optional)
+
+The engine's singers are a model of a larynx and a mouth. By every measure taken here they sing
+like the real singers they were fitted to - tone, how notes begin and end, how straight they hold
+a pitch - and they are still heard as synthetic. What is left is the texture of the method itself.
+
+`--voice VOICE.wav` changes the sound and nothing else. The engine sings as before; then each
+singer's dry track is cut into its stretches of singing and given to a voice-conversion model
+together with a recording of a real voice, and comes back as that voice singing the same notes and
+words at the same moments. `choral/revoice.py` lines each stretch up with its original (the model
+may be a few milliseconds off) and gives it the original's loudness moment by moment, so the
+shape the engine gave each note is kept. Several recordings can be named; they are shared out so
+that neighbours in a section, and the same seat in two sections, have different voices.
+
+**Whose voice.** Fifteen to thirty seconds of one person singing alone, without accompaniment. Use
+your own, or that of someone who has agreed to it - not a singer lifted from a practice track.
+
+**The model.** `revoice.py` only needs a command that takes a list of jobs
+(`{"source": wav, "reference": wav, "out": wav}`) and writes each `out`; the command is the JSON
+list in `.svc/command.json` (or in the file `CHORAL_REVOICE` names). The one used so far is
+[Seed-VC](https://github.com/Plachtaa/seed-vc)'s singing model, set up like this:
+
+```
+git clone https://github.com/Plachtaa/seed-vc .svc/seed-vc
+python3.12 -m venv .svc/venv
+.svc/venv/bin/pip install torch==2.6.0 torchaudio==2.6.0 numpy==1.26.4 scipy==1.13.1 librosa==0.10.2 \
+    soundfile transformers==4.46.3 "huggingface-hub>=0.28.1" munch einops pyyaml tqdm matplotlib \
+    descript-audio-codec==1.0.0
+```
+
+plus a driver of about a hundred lines that loads the model once and runs the jobs with that
+project's own functions. Seed-VC is under the GPL-3.0 and the driver follows its code, so the
+driver is kept with the installed model, not in this repository. The first run fetches about
+2.3 GB of model files. On an Apple M-series machine it converts about twice as fast as real time
+(ten refinement steps, which measured the same as thirty).
 
 ## What gets estimated for each piece
 

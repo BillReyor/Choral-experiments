@@ -118,10 +118,11 @@ def loud(x):
     return float(np.sqrt(np.percentile(blk, 90)) + 1e-12)
 
 
-def sing(sc, clock, singers=12, log=print, tune=None):
+def sing(sc, clock, singers=12, log=print, tune=None, voices=None):
     """Every singer of every section -> {section: array (3, N, 2)}: what the main microphone pair
     hears, what goes to the hall, and the leaders' close mics.  tune: voice settings for this piece
-    (keys as in voice.apply_fit)."""
+    (keys as in voice.apply_fit).  voices: recordings of real voices for the singers to be re-voiced in
+    (choral/revoice.py), dealt out among the singers of each section in turn."""
     t0 = time.time()
     voice.set_clock(*clock)
     voice.PER_SECTION = singers
@@ -131,7 +132,17 @@ def sing(sc, clock, singers=12, log=print, tune=None):
     stems = {sect: np.zeros((3, N, 2), np.float32) for sect in voice.SECT if sc.parts[sect]}
     geo = np.random.default_rng(99)
     with Pool(min(10, cpu_count())) as pool:
-        for sect, x, y, star, mono in pool.imap_unordered(voice.render_singer, tasks):
+        if voices:                                     # every singer first, then all of them to the voice model together
+            from . import revoice
+            done = list(pool.imap(voice.render_singer, tasks))
+            log('voices sung in %.0fs' % (time.time() - t0))
+            order = {s: k for k, s in enumerate(dict.fromkeys(t[0] for t in tasks))}
+            given = [voices[(t[1] + order[t[0]]) % len(voices)] for t in tasks]      # neighbours in a section, and the same seat in two sections, differ
+            new = revoice.revoice([d[4] for d in done], given, log)
+            arriving = [(d[0], d[1], d[2], d[3], m) for d, m in zip(done, new)]
+        else:
+            arriving = pool.imap_unordered(voice.render_singer, tasks)
+        for sect, x, y, star, mono in arriving:
             dry, send, spot = stems[sect]
             if sect in SINGLE:
                 mono = mono * (SOLO_GAIN if sect == 'SOLO' else .75 * SOLO_GAIN)
@@ -146,7 +157,7 @@ def sing(sc, clock, singers=12, log=print, tune=None):
             if star:
                 th = (np.clip(x / 4.5, -1, 1) * .6 + 1) * np.pi / 4
                 spot[:, 0] += mono * np.cos(th); spot[:, 1] += mono * np.sin(th)
-    log('voices sung in %.0fs' % (time.time() - t0))
+    log(('voices sung and re-voiced in %.0fs' if voices else 'voices sung in %.0fs') % (time.time() - t0))
     return stems
 
 

@@ -14,6 +14,10 @@ MUSIC is a score file (docs/score-format.md) or a PDF exported from notation sof
                     track per part named in --part, separated by commas).  They are only listened
                     to: the tempo and its bends, the hall and the balance are measured from them
   --tune            let a speech recognizer choose how close the microphones are (needs whisper-cli)
+  --voice           a recording of 15-30 seconds of someone singing alone: the singers are given that
+                    voice's sound (several recordings, with commas, are shared out among them).  Needs
+                    the optional voice model - docs/how-it-works.md - and takes about half as long as
+                    all the singing lasts.  Use your own voice, or one whose owner has agreed
   --language        latin, when a scanned score's words are Latin (English is assumed otherwise)
   --only            write just one version, e.g. --only "Baritone predominant"
 
@@ -109,6 +113,7 @@ def main():
     ap.add_argument('--preset', help='a preset file to use instead of NAME.preset.json')
     ap.add_argument('--language', help='the language of the words when a scan is read (latin, or leave out for English)')
     ap.add_argument('--fresh', action='store_true', help='ignore a saved preset and estimate again')
+    ap.add_argument('--voice', help='recording(s) of a real voice for the singers to sound like')
     ap.add_argument('--reread', action='store_true', help='read the PDF again even if a score read from it earlier is there (one corrected by hand is kept)')
     a = ap.parse_args()
     log = lambda *s: print(*s, flush=True)
@@ -170,7 +175,15 @@ def main():
     total = float(np.interp(sc.beats, *clock)) + 4.0
     if track is not None:
         total = max(total, len(track) / R.SR)
-    stems = R.sing(sc, (*clock, total), P['singers'], log, tune=R.tune_of(P))
+    voices = [v for v in (a.voice or '').split(',') if v]
+    for v in voices:
+        if not os.path.exists(v):
+            raise SystemExit(f'--voice: there is no file {v}')
+    if voices:
+        from . import revoice
+        if revoice.command() is None:
+            raise SystemExit('--voice needs the optional voice model, which is not set up here: see docs/how-it-works.md, "A real voice\'s sound".')
+    stems = R.sing(sc, (*clock, total), P['singers'], log, tune=R.tune_of(P), voices=voices or None)
     if ref_voices is not None and ('hall_from' not in saved or a.fresh):
         got = presets.match_hall(stems, P, ref_voices, log)
         P.update(got, **({'hall_from': 'recording'} if got else {}))

@@ -694,4 +694,47 @@ recognized like a scan; three notes on one staff for two parts lose the middle o
 printed touching, without their hyphen, arrive as one word on one note; "8va" lines and first and
 second endings.
 
+**A real voice's sound.** After the tenth piece the listener asked whether anything could
+*radically* improve the voice. The honest answer was: not inside this method. One more candidate
+was checked first - vibrato, on the thought that a soloist's might simply be missing. It is not:
+on held notes the real singers on hand swing by 4 to 8 cents (median), the simulated ones by 5 to
+7. (The real ones let a clear vibrato bloom on 5-25% of their held notes, the simulated on 1-3%;
+small.) Tone, note shapes, entries, steadiness and now vibrato all match by measurement, and the
+voice is still heard as synthetic. What is left is the texture of a rule-built voice, for which
+there is no number here.
+
+So the sound was taken from elsewhere, and only the sound. A voice-conversion model (Seed-VC's
+singing model; an outside program, installed apart from this repository) takes each simulated
+singer's dry track and a short recording of a real voice, and returns the track in that voice.
+`choral/revoice.py` cuts every singer's part into its stretches of singing, hands them over, and
+puts what comes back in place: lined up with the original (the model was 0-10 ms off) and at the
+original's loudness moment by moment, so that the note shapes fitted to real singers survive. It is
+an option, `--voice`; without it nothing has changed and the program is still all code.
+
+Measured on the tenth piece, engine voice against re-voiced:
+
+| | engine voice | re-voiced |
+|---|---|---|
+| a soloist alone: words the recognizer hears | 97% | 89-94% |
+| each note against the written pitch (typical) | 6 cents | 7-9 cents |
+| four baritones: each off the written pitch (typical) | 6 cents | 8 cents |
+| four baritones: apart from each other on a note (typical) | 6 cents | 9 cents |
+| four baritones together: words of the section | 72% | 91% |
+| the soloist's words in the full mix with piano | 81% | 87% |
+
+Ten refinement steps measured the same as the model's default thirty and convert twice as fast as
+real time on an Apple M5: a piece with thirty minutes of singing (seventeen singers) takes a
+quarter of an hour. Putting the stretches back had at first taken longer than converting them -
+loudness was being smoothed sample by sample over minutes of sound.
+
+The listener's verdict on a like-for-like excerpt (same piano, same hall): "Yes, clearly" more
+like a real person. That, not the table, is the result; the table only says that nothing the
+engine does well was lost on the way, and that a section came out easier to understand.
+
+What this is not yet: a men's chorus. The only voices tried are the model's own anonymous sample
+voices, which are high ones; a section in real men's voices - the user's own, and those of singers
+who agree - has not been heard. The singers on the practice tracks are not used as voices: nobody
+asked them. And the model has its own share in what is sung now: it moves more inside a note
+(15 cents against 9), and what it does to consonants is judged only by the recognizer.
+
 None of these numbers says the result would pass for a recording.
