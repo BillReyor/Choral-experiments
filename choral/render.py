@@ -45,6 +45,8 @@ NAMES = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass', 'SOLO
          'TR1': 'Trio tenor 1', 'TR2': 'Trio tenor 2', 'TR3': 'Trio baritone'}
 SINGLE = ('SOLO', 'TR1', 'TR2', 'TR3')    # parts sung by one person
 SOLO_GAIN = 3.2                        # one close-miked soloist carries like a section
+REVOICED_CONS = 1.33                   # consonants of a singer who is to be re-voiced: this much longer (see sing)
+LONG_CONS = SINGLE                     # ... for these parts
 
 
 def clock_for(sc, timing=None, absolute=False):
@@ -133,7 +135,10 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
     voice.set_clock(*clock)
     voice.PER_SECTION = singers
     N = voice.CLOCK['n']
-    tasks = [(sect, i, engine_notes(sc, sect), clock, tune) for sect in voice.SECT if sc.parts[sect]
+    tune = dict(tune or {}, CDUR=voice.CDUR)                                   # (said every time: a worker keeps what the last singer set)
+    slow = dict(tune, CDUR=voice.CDUR * REVOICED_CONS)                         # the model blurs consonants: given longer ones, a re-voiced
+    tasks = [(sect, i, engine_notes(sc, sect), clock, slow if voices and sect in LONG_CONS else tune)      # soloist is understood as well as the engine's
+             for sect in voice.SECT if sc.parts[sect]
              for i in ((1,) if sect in SINGLE else range(singers))]            # singer 1 is a section leader: on a close mic
     stems = {sect: np.zeros((3, N, 2), np.float32) for sect in voice.SECT if sc.parts[sect]}
     geo = np.random.default_rng(99)

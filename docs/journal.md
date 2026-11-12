@@ -943,3 +943,23 @@ No measurement here says where a soloist should sit, so the listener was given t
 times - the soloist 35 ms earlier, as sung, 35 ms and 70 ms later - and chose 70 ms later. A part
 sung by one person is now placed that far back (`solo_late`), in pieces whose beat comes from the
 page; where it was measured from a recording, the singers stay where the recording puts them.
+
+*Consonants, at last.* Everything tried on the model's side had left the soloist's words where
+they were. What moved them was on the engine's side: the model blurs the consonants it is given,
+so it is given longer ones. Over the whole solo (72 words), four draws each:
+
+| | words understood |
+|---|---|
+| the engine's own soloist | 66-67 |
+| re-voiced, the engine's usual consonants | 60, 61, 61, 63 |
+| re-voiced, consonants a third longer | 67, 65, 67, 63 |
+
+A sixth longer gives 64 and 64; a half longer 65 and 62; two thirds longer 67 and 64: the gain is
+there from a third on and does not grow. As a twelve-to-a-part render draws him: 59 and 60 of 70
+with the usual consonants, 63 and 65 with the longer. A re-voiced section of twelve baritones is
+understood the same either way (87% of its words), so only parts sung by one person get them. The
+loudness, pitch and timing the result is held to are those of the same longer-consonant singing.
+
+One warning about the yardstick: the same recognizer, on the soloist's four measures over the
+humming choir in the full mix, has read 18% to 76% across versions whose soloist alone reads
+16 of 17 words. A mix-level reading of a short passage decides nothing by itself.

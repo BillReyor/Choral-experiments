@@ -79,6 +79,11 @@ at the same moments. `choral/revoice.py` then makes each piece the engine's agai
 - **Loudness**: it is made as loud as the original, first on the whole and then moment by moment,
   so the shape the engine gave each note is kept.
 
+One thing is done before the model, not after it: a part sung by one person is sung by the
+engine with consonants a third longer than usual when it is to be re-voiced. The model blurs
+consonants; given longer ones, a re-voiced soloist is understood about as well as the engine's own
+(a re-voiced section is understood the same either way, and is left alone).
+
 The pieces are at most 15 seconds long and are cut at rests and breaths. A model works on one
 window of sound at a time (half a minute less the recording of the voice, here) and joins windows
 by crossing one rendering over into another; a piece that fits one window has no such join in it.
