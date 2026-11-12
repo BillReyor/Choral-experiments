@@ -906,3 +906,15 @@ what holds it back; the vowel itself arrives late, and moving it would mean shif
 time, which is not built. The price of pieces that fit one window: they are shorter than a window,
 so the recording of the voice is worked through more often, and the piece took 39 minutes instead
 of 16.
+
+*Speed, and chance.* Pieces of every length cost more than their length: the graphics chip
+prepares the model anew for each new length, about two seconds a piece (eight pieces of one
+length: 50 s; eight of different lengths: 61 s). The driver now pads each piece to a whole second,
+every recording of a voice is cut to the same 13 seconds whatever size it is played at, and pieces
+run up to 14 seconds: the soloist's minute of singing converts in 44 s again. None of this touches
+the words: over the whole solo (72 words) seven runs with different piece lengths, 13 or 14
+seconds of the voice, and different draws read 83-88%, in no order; the engine's own soloist reads
+92%. Keeping the clearest of three takes of each phrase would give 89%: the takes stumble over the
+same words. So the recognizer's gap is small and what a listener calls bad enunciation is mostly
+not in it - it is in how the model moves from one voiced sound to the next, which nothing tried
+here changes.

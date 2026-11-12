@@ -79,10 +79,10 @@ at the same moments. `choral/revoice.py` then makes each piece the engine's agai
 - **Loudness**: it is made as loud as the original, first on the whole and then moment by moment,
   so the shape the engine gave each note is kept.
 
-The pieces are at most 14 seconds long and are cut at rests and breaths. A model works on one
+The pieces are at most 15 seconds long and are cut at rests and breaths. A model works on one
 window of sound at a time (half a minute less the recording of the voice, here) and joins windows
 by crossing one rendering over into another; a piece that fits one window has no such join in it.
-Of a recording of a voice, the first 14 seconds are used.
+Of a recording of a voice, the first 13 seconds are used.
 
 **Whose voice.** Fifteen to thirty seconds of one person singing alone, without accompaniment - a
 phone's recording will do, in any common format (WAV, m4a, mp3 ...; other than WAV needs ffmpeg,

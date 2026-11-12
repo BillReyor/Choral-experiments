@@ -39,8 +39,8 @@ def _env(x, seconds):
     return np.sqrt(gf(p, max(seconds * SR / HOP, .5), mode='constant') + 1e-14)
 
 
-LONGEST, HARD = 11., 14.   # seconds of singing handed over in one piece: aimed at, and never more than
-VOICE_SECONDS = 14.        # how much of a recording of a voice the model is given
+LONGEST, HARD = 14., 15.   # seconds of singing handed over in one piece: aimed at, and never more than
+VOICE_SECONDS = 13.        # how much of a recording of a voice the model is given
 
 
 def stretches(x, sr=SR, floor=-48., gap=1.5, pad=.3):
@@ -337,14 +337,16 @@ def _sized(ref, size, work, made):
         from fractions import Fraction
         from scipy.signal import resample_poly
         x = _read(ref)
-        if len(x) > VOICE_SECONDS * SR:                   # more leaves the model less room to work in, and tells it no more
-            x = x[:int(VOICE_SECONDS * SR)].copy(); x[-SR // 20:] *= np.linspace(1, 0, SR // 20)
-        elif not size and _plain(ref):
+        if not size and _plain(ref) and len(x) <= VOICE_SECONDS * SR:
             made[ref, size] = os.path.abspath(ref)
             return made[ref, size]
         fr = Fraction(2 ** (-size / 12)).limit_denominator(200)
+        if size:
+            x = resample_poly(x, fr.numerator, fr.denominator)
+        if len(x) > VOICE_SECONDS * SR:                   # more leaves the model less room to work in, and tells it no more;
+            x = x[:int(VOICE_SECONDS * SR)].copy(); x[-SR // 20:] *= np.linspace(1, 0, SR // 20)       # and one length for all sizes
         made[ref, size] = os.path.join(work, 'voice%03d.wav' % len(made))
-        _write(made[ref, size], resample_poly(x, fr.numerator, fr.denominator) if size else x)
+        _write(made[ref, size], x)
     return made[ref, size]
 
 
