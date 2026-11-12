@@ -83,6 +83,22 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   the piano staves: no other instrument, and no pianist's judgement.
 - **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece.
 
+## Credits
+
+- **Voices.** The men's voices that `tools/vocalset_voices.py` fetches for `--voice` are from
+  [VocalSet](https://zenodo.org/records/1193957): Julia Wilkins, Prem Seetharaman, Alison Wahl
+  and Bryan Pardo, "VocalSet: A Singing Voice Dataset", ISMIR 2018, licensed
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Fourteen seconds of each of nine of
+  its singers, with the silences cut out, serve as references for voice conversion. None of the
+  recordings are in this repository. **Anything you share that was sung with these voices - a rehearsal track included -
+  must carry this credit.**
+- **Voice conversion** (`--voice`) is done by [Seed-VC](https://github.com/Plachtaa/seed-vc)
+  (GPL-3.0), installed separately and run as its own program; none of its code is here.
+- **Reading scans** is done by [homr](https://github.com/liebharc/homr) (AGPL-3.0), likewise
+  installed and run separately.
+- **Listening checks** use [whisper.cpp](https://github.com/ggerganov/whisper.cpp) (MIT) with
+  OpenAI's Whisper models; **pronunciation** uses the CMU Pronouncing Dictionary.
+
 ## More
 
 - [docs/how-it-works.md](docs/how-it-works.md) - what each file does, how PDFs are read, what is
