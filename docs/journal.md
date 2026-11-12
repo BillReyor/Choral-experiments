@@ -603,4 +603,79 @@ recovered from a handful of symbols that are unmistakable by position (a clef at
 every staff, a time signature after it). Until then such files go the slower way, which this
 piece has made a good deal sturdier.
 
+**The tenth piece: a PDF and nothing else** (a slow ballad for a soloist, men's choir in two to
+four parts and piano; six pages, 46 measures, exported from Finale in its older Maestro font). No
+recording was given: whatever a recording used to supply - tempo, where the music waits, how
+loud the piano is - had to come from the page.
+
+*The first run* went through, and was wrong in ways a listener would hear at once. The earlier
+reader for this font, built around the first pieces, left 127 staff-measures "to fix by hand" and
+was rightly rejected; the pages were then recognized like a scan. That found all 46 measures, but
+the tempo was a guess of 100 where the print says "Rubato" and then "Moderately slow", the solo
+was an octave too high (its clef has an 8 under it, which a recognized page does not tell), and
+the fermatas and rallentandos were not there at all.
+
+*Reading the old font exactly.* `tools/vector2score.py` reads symbols by their standard codes;
+Maestro predates the standard. A table of some fifty of its characters now translates them. This
+file's maker had stored the font as a "symbol" font, so the characters come out as Greek letters
+and mathematical signs, each one place too low; the displacement that makes the page's characters
+music is found by trying. Four things about how this software draws had to be learned:
+
+- its barlines are no heavier than its stems: they are told by where they stand (from top line
+  to bottom line, on most staves at once);
+- a whole note beside stemmed notes belongs to the other voice, and so does one beside a rest
+  set high or low for a voice;
+- a triplet's number is a letter of a text font, not a music symbol;
+- a cue-size note in a chord (an optional high octave) is not the sung note.
+
+174 of 175 staff-measures then add up; the last is a piano measure printed a beat short. It reads
+in two seconds.
+
+*Is it right?* There is no recording, but there are two independent readings. They agree on 91%
+of the voices' notes and differ in 14 measures. Four of those were looked at on the page. Two
+faults of the symbol reader's own showed up there and were fixed: the cue-size note, and a lower
+voice that jumped to the upper voice's note while it should rest. With those fixed, every
+disputed note in the four measures goes the symbol reader's way: two voices' rhythms told apart,
+a double-dotted note, the lower tie of two tied notes. The other ten measures were not looked at;
+most differ in that same lower tie. The same changes altered two measures of the
+eighth piece, both checked against the page and both now right (a whole note under two moving
+half notes; two tenor voices that had been merged into one). Because the two voices of a staff
+are known for certain when the symbols are read, each now keeps its own line, silent where it
+rests; a recognized page still gets "highest sounding, lowest sounding".
+
+*What a PDF alone needs.*
+
+- **Tempo in words.** With no metronome mark, a heading such as "Moderately slow" or "Andante" is
+  looked up in a table ("Moderately slow" 72, "Andante" 76, "Rubato" 63): conventions, not a
+  measurement.
+- **Holding and slowing.** The score format had one tempo per stretch and nothing else. It now
+  has `stretch:` - so many beats take so many times as long - and the reader writes it: a fermata
+  adds a beat to a beat and a half to the moment all its signs share; from a "rall." the music
+  slows step by step to about three quarters until the next "a tempo" (deeper at the very end).
+- **The solo's octave** comes from its clef; **the title** from the largest words on the first
+  page; **each word's place** from its own letters (several syllables can share one run of text,
+  and their hyphens were being lost); a vowel drawn out in print ("Ooo") is the vowel.
+
+*The result*, as far as it can be measured without the real thing: 2 minutes 43; the recognizer
+hears 93% of the solo's words by itself (99% of the letters) and 77-79% in the full mix with
+choir and piano. The real practice track of the ninth piece scored 76% by the same yardstick.
+Whether it is musical is not something these numbers say: the piano plays the printed notes
+evenly, and every hold and every slowing has the same depth.
+
+*A fault found on the way.* A score read from a PDF is kept beside it and used again, so that
+corrections made by hand survive. But `--fresh` only measures the recordings again; it does not
+read the PDF again. The audio of the ninth piece had therefore been rendered from the reading
+made before that piece's own fixes - the report described the new reading, the sound was the old
+one. Scores the program reads are now signed: one that nobody has edited is read again when the
+reader has changed, and `--reread` asks for it outright. The ninth piece was rendered again: its
+baritone is on pitch against the real one in 99% of notes at the steady fit (97% before).
+
+Earlier pieces: the three graded scans read as before (pitch and length 95.8 / 96.6 / 96.9%); the
+fifth, seventh and ninth pieces' readings are identical to the previous reader's.
+
+Not done: a Finale PDF that stores its font under private numbers (the ninth piece) is still
+recognized like a scan; three notes on one staff for two parts lose the middle one; two syllables
+printed touching, without their hyphen, arrive as one word on one note; "8va" lines and first and
+second endings.
+
 None of these numbers says the result would pass for a recording.

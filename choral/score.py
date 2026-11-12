@@ -28,6 +28,7 @@ class Score:
         self.parts = {k: [] for k in ('T1', 'T2', 'BR', 'BS', 'SOLO', 'TR1', 'TR2', 'TR3')}   # dicts: beat, dur, midi, tie, lyric, flags
         self.piano = []                                           # dicts: beat, dur, midi, hand, flags
         self.tempo = []                                           # (beat, bpm)
+        self.stretch = []                                         # (beat, length, factor): a fermata, a step of a rallentando
         self.timing = None                                        # measured beat -> second map, if any
         self.language = 'english'
         self.printed = None                                       # performed measure -> printed measure, when a play: order is given
@@ -196,6 +197,10 @@ def parse(text, warn=print, base='.'):
         elif head == 'tempo':
             close()
             sc.tempo.append((beat0, float(rest)))
+        elif head == 'stretch':                       # "stretch: 3 2 1.8" - from beat 3 of the next measure, 2 beats take 1.8 times as long
+            close()
+            at, span, factor = (float(v) for v in rest.split())
+            sc.stretch.append((beat0 + at - 1, span, factor))
         elif head == 'dynamic':                       # one level for a piece that prints none
             close()
             sc.marks['voice'].append((beat0, rest)); sc.marks['piano'].append((beat0, rest))

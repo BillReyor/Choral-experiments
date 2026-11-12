@@ -332,10 +332,14 @@ def lines_of(notes, length):
     pts = sorted({Fraction(0), length} | {n['on'] for n in notes} | {n['on'] + n['ql'] for n in notes})
     pts = [p for p in pts if 0 <= p <= length]
     out = []
-    for pick in (max, min):
+    # Read from the symbols themselves, the two voices of a staff are known for certain (stems up, stems down): each
+    # line is then its own voice, silent where that voice rests.  A recognized page's voices are not to be relied on:
+    # there the upper line is whatever sounds highest, the lower whatever sounds lowest.
+    known = bool(notes) and all(n.get('exact') for n in notes) and all(any(n['midi'] is not None and n['voice'] == v for n in notes) for v in ('1', '2'))
+    for pick, voice in ((max, '1'), (min, '2')):
         line = []
         for a, b in zip(pts, pts[1:]):
-            live = [n for n in notes if n['midi'] is not None and n['on'] <= a < n['on'] + n['ql']]
+            live = [n for n in notes if n['midi'] is not None and n['on'] <= a < n['on'] + n['ql'] and (not known or n['voice'] == voice)]
             n = None
             if live:
                 best = pick(x['midi'] for x in live)
@@ -524,35 +528,58 @@ def pdf_words(pdf, zoom=2.6):
     out = {}
     for i, page in enumerate(pymupdf.open(pdf)):
         words = []
-        for b in page.get_text('dict')['blocks']:
+        for b in page.get_text('rawdict')['blocks']:
             for l in b.get('lines', []):
                 for sp in l['spans']:
-                    t = sp['text'].strip()
+                    t = ''.join(c['c'] for c in sp['chars']).strip()
                     if not t or any(0xE000 <= ord(ch) <= 0xF8FF for ch in t) or re.search('Bravura|Maestro|Petrucci|Opus|Emmentaler|Leland|Sonata', sp['font']):
                         continue
-                    x0, y0, x1, y1 = (v * zoom for v in sp['bbox'])
-                    parts = t.split()
-                    if len(parts) > 1:                   # several words in one run: share its width out by their lengths
-                        total = sum(len(q) for q in parts) + len(parts) - 1
-                        at = x0
-                        for q in parts:
-                            w = (x1 - x0) * len(q) / total
-                            words.append(((2 * at + w) / 2, (y0 + y1) / 2, at, at + w, q))
-                            at += w + (x1 - x0) / total
-                    else:
-                        words.append(((x0 + x1) / 2, (y0 + y1) / 2, x0, x1, t))
+                    cur = []                             # one run of text may hold a whole line of syllables, each set under its
+                    def flush():                         # own note: every word is measured from its own letters
+                        if cur:
+                            x0 = min(c['bbox'][0] for c in cur) * zoom; x1 = max(c['bbox'][2] for c in cur) * zoom
+                            y0 = min(c['bbox'][1] for c in cur) * zoom; y1 = max(c['bbox'][3] for c in cur) * zoom
+                            words.append(((x0 + x1) / 2, (y0 + y1) / 2, x0, x1, ''.join(c['c'] for c in cur)))
+                            cur.clear()
+                    for c in sp['chars']:
+                        if not c['c'].strip():
+                            flush(); continue
+                        if cur and c['bbox'][0] - cur[-1]['bbox'][2] > .3 * sp['size']:
+                            flush()
+                        cur.append(c)
+                        if c['c'] in '-–—' and len(cur) > 1:     # "al-le-lu-ia" in one run: each syllable, with its hyphen
+                            flush()
+                    flush()
         # A hyphen is a text object of its own, standing between two syllables: hang it on the syllable before it,
         # which is how the rest of the reader expects to find it.
         hyph = [w for w in words if w[4] in ('-', '–', '—')]
         rest = [list(w) for w in words if w[4] not in ('-', '–', '—')]
         for h in hyph:
-            before = [w for w in rest if abs(w[1] - h[1]) < .6 * (h[3] - h[2] + 8) + 6 and w[3] <= h[2] + 2]
+            before = [w for w in rest if abs(w[1] - h[1]) < .6 * (h[3] - h[2] + 8) + 6 and w[3] <= h[2] + 2 + .5 * (h[3] - h[2])]
             if before:
                 w = max(before, key=lambda w: w[3])
                 if h[2] - w[3] < 60 * zoom and not w[4].endswith('-'):
                     w[4] += '-'
         out[i + 1] = [tuple(w) for w in rest]
     return out
+
+
+def pdf_title(pdf):
+    """The piece's name as the PDF prints it: the largest words in the upper third of the first page, if they read as words."""
+    import pymupdf
+    page = pymupdf.open(pdf)[0]
+    spans = [sp for b in page.get_text('dict')['blocks'] for l in b.get('lines', []) for sp in l['spans']
+             if sp['text'].strip() and sp['bbox'][1] < page.rect.height / 3 and not re.search('Bravura|Maestro|Petrucci|Opus|Emmentaler|Leland|Sonata', sp['font'])]
+    if not spans:
+        return None
+    big = max(sp['size'] for sp in spans)
+    if big < 1.3 * float(np.median([sp['size'] for sp in spans])) and len(spans) > 3:
+        return None
+    line = sorted((sp for sp in spans if sp['size'] > .95 * big), key=lambda sp: (round(sp['bbox'][1] / big), sp['bbox'][0]))
+    title = re.sub(r'\s+', ' ', ' '.join(sp['text'].strip() for sp in line)).strip()
+    words = title.split()
+    ok = 1 <= len(words) <= 12 and len(title) <= 80 and all(re.fullmatch(r"[A-Za-z0-9'’!?,.:&()-]+", w) for w in words) and sum(ch.isalpha() for ch in title) >= 3
+    return title if ok else None
 
 
 def on_page(n, img=None):
@@ -1185,6 +1212,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         for c in lone:
             c['read'] = []
     out, num, cur_time, length = [], 0, None, Fraction(4)
+    paces, mlen, holds, worded = set(), {}, {}, False       # "rall."/"a tempo" marks; each measure's length; fermatas; a tempo given in words
     imgs = {}
     def read_texts(c, img, M):
         texts = {}
@@ -1302,8 +1330,11 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         if exe:                                      # tempo marks printed above the system: "= ca. 69", "Tempo I"
             top = c['staves'][0][0]; unit0 = (c['staves'][0][1] - top) / 4
             above = ocr_words(exe, img, max(c['top'], top - 9 * unit0), top - .3 * unit0, work, f"{c['page']}_{c['system']}_t", zoom=2)
-            bars0 = barlines(img, c['staves'], c['x0'], c['x1'], 'RH' in c['roles'])
-            bars0 = bars0 if len(bars0) == M + 1 else list(np.linspace(c['x0'], c['x1'], M + 1))
+            if c.get('bars') is not None and len(c['bars']) == M + 1:
+                bars0 = list(c['bars'])                  # known exactly
+            else:
+                bars0 = barlines(img, c['staves'], c['x0'], c['x1'], 'RH' in c['roles'])
+                bars0 = bars0 if len(bars0) == M + 1 else list(np.linspace(c['x0'], c['x1'], M + 1))
             line = ' '.join(w[4] for w in sorted(above, key=lambda w: w[2]))
             nav += navigation(above, find_segno(img, max(c['top'], top - 9 * unit0), top - .2 * unit0, unit0), bars0, num + 1, unit0)
             rows_t = []                              # line by line: a triplet's "3" on the staff must not come between "=" and its number
@@ -1322,6 +1353,28 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             if re.search(r'Tempo\s+I\b', line) and tempo:
                 xw = next((w[2] for w in above if w[4].startswith('Tempo')), c['x0'])
                 marks[max(0, int(np.searchsorted(bars0, xw)) - 1)] = float(tempo)
+            before = [o for o in crops if o['page'] == c['page'] and o['staves'] and o['staves'][-1][1] < top]      # the system above, on this page
+            ceiling = max([o['staves'][-1][1] + 2.5 * unit0 for o in before] + [top - 16 * unit0, 0])
+            high = ocr_words(exe, img, ceiling, max(ceiling, top - .3 * unit0), work, 'tempo') if TEXT['pages'] else []
+            rows_h = {}                              # a heading may stand well above the staff: a PDF's own text costs nothing to look through
+            for w in high:
+                rows_h.setdefault(round(w[1] / (1.2 * unit0)), []).append(w)
+            for ws in [ws for _, ws in rows_t] + list(rows_h.values()):      # no number, but a word for it
+                if not re.search(r'=\s*(?:ca\.?\s*)?\d{2,3}', ' '.join(w[4] for w in ws)):
+                    for xw, bpm in tempo_words(ws):
+                        marks.setdefault(max(0, int(np.searchsorted(bars0, xw + 2 * unit0)) - 1), bpm); worded = True
+            # "rall." ... "a tempo", wherever in the system they are printed (each staff may carry its own copy)
+            if TEXT['pages']:
+                inside = sorted(ocr_words(exe, img, c['top'], c['bot'], work, 'pace'), key=lambda w: (round(w[1] / (2 * unit0)), w[2]))
+                for k_, w in enumerate(inside):
+                    t_ = w[4].lower().strip('.,')
+                    kind = 'slow' if t_ in ('rall', 'rit', 'ritard', 'riten', 'ritenuto', 'rallentando', 'ritardando') else \
+                        'back' if t_ == 'tempo' and k_ and inside[k_ - 1][4].lower() == 'a' and 0 <= w[2] - inside[k_ - 1][3] < 3 * unit0 else None
+                    if kind:
+                        xw = inside[k_ - 1][2] if kind == 'back' else w[2]
+                        j_ = min(max(0, int(np.searchsorted(bars0, xw + unit0)) - 1), M - 1)
+                        ons = [n['on'] for st in c['read'] if j_ < len(st['measures']) for n in st['measures'][j_]['notes'] if n.get('x') is not None and n['x'] >= xw - 2.5 * unit0]
+                        paces.add((num + j_ + 1, min(ons) if ons else None, kind))
         plan = []
         for j in range(M):
             # How long is this measure?  Count it: the total most voices agree on.  (The printed time signature is
@@ -1415,6 +1468,15 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 out.append('time: ' + t)
             if j in marks and (num > 1 or marks[j] != tempo):
                 out.append(f'tempo: {marks[j]:g}')
+            mlen[num] = length
+            ferm = sorted({(Fraction(a_), Fraction(a_) + Fraction(b_)) for st in c['read'] if j < len(st['measures']) for a_, b_ in st['measures'][j].get('fermata', [])})
+            while ferm:                              # signs over notes that sound together are one fermata: it lasts while all of them sound
+                a_, b_ = ferm.pop(0)
+                while ferm and ferm[0][0] < b_:
+                    a2, b2 = ferm.pop(0); a_, b_ = max(a_, a2), min(b_, b2)
+                if b_ > a_:
+                    extra = min(max(1.2 * float(b_ - a_), 1.), 1.6)          # a fermata adds about a beat, a beat and a half
+                    holds.setdefault(num, []).append((float(a_) + 1, float(b_ - a_), 1 + extra / float(b_ - a_)))
             out.append(f'== {num}')
             if any(st['measures'][j].get('rep_start') for st in c['read'] if j < len(st['measures'])):
                 rep_starts.add(num)
@@ -1459,6 +1521,8 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                             syl[v] = got
                 dyn = ('!' + st['measures'][j]['dyn'] + ' ') if st['measures'][j].get('dyn') in ('pp', 'p', 'mp', 'mf', 'f', 'ff') else ''
                 shift = 1 if (role in ('TEN', 'T1', 'T2', 'TRIO') or role == 'ALL') and st['clef'] == 'F' else 0
+                if role == 'SOLO' and st.get('octave') == -1:        # a clef with an 8 under it (known when the symbols are read exactly)
+                    shift = -1
                 tu, tl = tokens(up, syl[0], shift if role != 'ALL' else 1 if st['clef'] == 'F' else 0), tokens(lo, syl[1], 0 if role == 'ALL' else shift)
                 same = [x.split('=')[0] for x in tokens(up)] == [x.split('=')[0] for x in tokens(lo)]
                 if role == 'SOLO':
@@ -1476,9 +1540,41 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                     last[(role, v)] = (where[v], n_['midi']) if n_ is not None and b_ == length and n_['on'] + n_['ql'] >= length else (None, None)
     first_time = next((l[6:] for l in out if l.startswith('time: ')), '4/4')
     unit = {'2': 2., '8': 1.5 if int(first_time.split('/')[0]) % 3 == 0 else 1.}.get(first_time.split('/')[1], 1.)
-    if unit != 1 and marked:        # a metronome mark counts the beat: half notes in 2/2, dotted quarters in 6/8
+    # ---- slowing down: from each "rall." to the "a tempo" that follows it (or for two measures; to the end if it is the last)
+    start, total = {}, Fraction(0)
+    for n_ in range(1, num + 1):
+        start[n_] = total; total += mlen.get(n_, Fraction(4))
+    spots = sorted({(start[m_] + (on_ if on_ is not None else 0), kind) for m_, on_, kind in paces if m_ in start})
+    slowing = False
+    for i_, (a_, kind) in enumerate(spots):
+        if kind != 'slow' or slowing:                # (each staff may print its own "rall.": the first one counts)
+            slowing = slowing and kind == 'slow'
+            continue
+        slowing = True
+        later = [b_ for b_, k_ in spots[i_ + 1:] if b_ > a_ and k_ == 'back']
+        last = not later and total - a_ <= 12
+        b_ = min([later[0]] if later else [total if last else a_ + 8], key=float)
+        b_ = min(b_, a_ + 12)
+        step = Fraction(1) if b_ - a_ >= 3 else Fraction(1, 2)
+        n_steps = max(1, int((b_ - a_) / step))
+        for k_ in range(n_steps):
+            s0 = a_ + k_ * step; s1 = b_ if k_ == n_steps - 1 else s0 + step
+            factor = 1 + (.6 if last else .3) * (k_ + 1) / n_steps
+            for m_ in range(1, num + 1):               # a step is written measure by measure
+                lo_, hi_ = max(s0, start[m_]), min(s1, start[m_] + mlen[m_])
+                if hi_ > lo_:
+                    holds.setdefault(m_, []).append((float(lo_ - start[m_]) + 1, float(hi_ - lo_), round(factor, 3)))
+    for m_, hs in holds.items():
+        at_ = out.index(f'== {m_}')
+        out[at_:at_] = ['stretch: %g %g %g' % h for h in sorted(hs)]
+    if unit != 1 and (marked or worded):        # a metronome mark counts the beat: half notes in 2/2, dotted quarters in 6/8
         tempo *= unit
         out = [re.sub(r'^tempo: (\S+)$', lambda m_: 'tempo: %g' % (float(m_.group(1)) * unit), l) for l in out]
+    one = out.index('== 1') if '== 1' in out else 0
+    opening = [i_ for i_, l in enumerate(out[:one]) if re.match(r'^tempo: \S+$', l)]
+    if opening:                                      # a tempo found at the very beginning is the piece's tempo
+        tempo = float(out[opening[-1]].split()[1])
+        out = [l for i_, l in enumerate(out) if i_ not in opening]
     head = [f'title: {title}', f'tempo: {tempo:g}', f"time: {first_time}", 'key: 0',
             'transpose: TEN -12', 'transpose: TRIO -12'] + ([f'language: {language}'] if language else []) + ['']
     first = next((i for i, l in enumerate(out) if l.startswith('time: ')), None)
@@ -1494,6 +1590,32 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         elif any(w.startswith('ds') for w, _ in nav) and not any(w == 'segno' for w, _ in nav):
             log('  ! a D.S. is printed but its sign was not found: add a  play:  line to the score by hand')
     return '\n'.join(head + out) + '\n'
+
+
+TEMPO_WORDS = sorted({'very slow': 48, 'very slowly': 48, 'moderately slow': 72, 'moderately slowly': 72, 'slowly': 60, 'slow': 60, 'tenderly': 69,
+                      'gently': 76, 'flowing': 88, 'freely': 63, 'rubato': 63, 'ballad': 66, 'moderately fast': 120, 'moderately bright': 120,
+                      'moderately': 96, 'moderate': 96, 'medium': 100, 'very fast': 168, 'fast': 144, 'bright': 132, 'brightly': 132, 'lively': 132,
+                      'briskly': 132, 'with spirit': 126, 'majestically': 84, 'grave': 42, 'largo': 48, 'larghetto': 60, 'lento': 54, 'adagio': 63,
+                      'andantino': 84, 'andante': 76, 'moderato': 104, 'allegretto': 112, 'allegro': 128, 'vivace': 152, 'presto': 176,
+                      'maestoso': 84}.items(), key=lambda kv: -len(kv[0]))
+
+
+def tempo_words(ws):
+    """A tempo given in words at the head of a line of text ("Moderately slow", "Andante") -> [(x, beats a minute)].
+    It has to begin with a capital, as such a heading does and a word of the lyrics rarely does."""
+    out = []
+    ws = sorted((w for w in ws if not w[4].strip('.').isdigit()), key=lambda w: w[2])
+    if len(ws) > 4:                                  # a heading stands by itself; a line of many words is something else
+        return out
+    i = 0
+    while i < len(ws):
+        text = re.sub(r'[^a-z ]', '', ' '.join(w[4] for w in ws[i:i + 3]).lower())
+        hit = next(((p, v) for p, v in TEMPO_WORDS if text == p or text.startswith(p + ' ')), None) if ws[i][4][:1].isupper() else None
+        if hit:
+            out.append((ws[i][2], float(hit[1]))); i += len(hit[0].split())
+        else:
+            i += 1
+    return out
 
 
 def find_tempo(pages, work):
@@ -1520,6 +1642,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('pdf'); ap.add_argument('out'); ap.add_argument('--work', help='folder for page images and intermediate files')
     ap.add_argument('--tempo', type=float); ap.add_argument('--title'); ap.add_argument('--language')
+    ap.add_argument('--exact-only', action='store_true', help='read the notes from the PDF\'s own symbols or not at all (exit code 3)')
     a = ap.parse_args()
     work = a.work or os.path.splitext(a.out)[0] + '.scan'
     os.makedirs(work, exist_ok=True)
@@ -1538,13 +1661,18 @@ def main():
         crops = vector2score.read(a.pdf, log=print)
     except Exception as e:
         print(f'  (reading the symbols directly did not work: {e}; recognizing the pages instead)')
+    if crops is None and a.exact_only:
+        sys.exit(3)
     if crops is None:
         crops = join_split_systems(read_systems(cut_systems(pages, work, print), print))
     found = None if a.tempo else find_tempo(pages, work)
     tempo = a.tempo or found or 100.
-    title = a.title or re.sub(r'[_-]+', ' ', os.path.splitext(os.path.basename(a.pdf))[0]).strip().title()
-    open(a.out, 'w').write(assemble(crops, pages, work, title, tempo, a.language, print, marked=found is not None))
-    print(f'wrote {a.out}: {sum(len(c["read"][0]["measures"]) for c in crops if c["read"])} measures from {len(crops)} systems, tempo {tempo:g}')
+    title = a.title or (pdf_title(a.pdf) if TEXT['pages'] else None) or re.sub(r'[_-]+', ' ', os.path.splitext(os.path.basename(a.pdf))[0]).strip().title()
+    text = assemble(crops, pages, work, title, tempo, a.language, print, marked=found is not None)
+    open(a.out, 'w').write(text)
+    began = re.search(r'^tempo: (\S+)', text, re.M)
+    print(f'wrote {a.out}: {sum(len(c["read"][0]["measures"]) for c in crops if c["read"])} measures from {len(crops)} systems, tempo {began.group(1) if began else tempo}'
+          + ('' if found or 'tempo: ' in text.split('== 1')[-1] or (began and float(began.group(1)) != 100.) else ' (none is printed: 100 is a guess - set  tempo:  in the score)'))
 
 
 if __name__ == '__main__':

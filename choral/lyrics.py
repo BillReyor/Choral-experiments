@@ -20,7 +20,7 @@ ONSETS = {tuple(x.split()) for x in """
 # Words a singer does not pronounce the way the dictionary's first entry says.
 FIXED = {
     'a': [['AH0']], 'to': [['T', 'UW1']], 'of': [['AH1', 'V']], 'and': [['AE1', 'N', 'D']],
-    'ye': [['Y', 'IY1']], 'oh': [['OW1']], 'o': [['OW1']], 'ah': [['AA1']], 'oo': [['UW1']],
+    'ye': [['Y', 'IY1']], 'oh': [['OW1']], 'o': [['OW1']], 'ah': [['AA1']], 'oo': [['UW1']], 'ooh': [['UW1']], 'aah': [['AA1']], 'ahh': [['AA1']],
 }
 # Drum and bell syllables.  Singers do not hold the vowel on these: they close early and hum the
 # rest of the note on the m or ng ("pummm", "dinnng").  '+' marks that: everything after it is held.
@@ -186,6 +186,9 @@ def pronounce(word, nsyl, overrides, next_word=None, warn=print):
         cands = [[['DH', 'IY0']]] if nxt[:1] in 'aeio' else [[['DH', 'AH0']]]
     else:
         prons = FIXED.get(w) or _cmu().get(w) or _cmu().get(w.replace("'", ''))
+        if not prons:                          # a vowel drawn out in print: "Ooo", "oooh", "aaah"
+            short = re.sub(r'(.)\1{2,}', r'\1\1', w)
+            prons = FIXED.get(short) or _cmu().get(short) if short != w else None
         if not prons:                          # a prefix "a-" glued on: "a-feeding", "a-stray"
             if w.startswith('a') and _cmu().get(w[1:]):
                 prons = [['AH0'] + p for p in _cmu()[w[1:]]]

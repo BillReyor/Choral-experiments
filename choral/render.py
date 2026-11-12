@@ -57,13 +57,15 @@ def clock_for(sc, timing=None, absolute=False):
     elif timing:
         beats = np.array([0., sc.beats]); secs = timing['offset'] + beats * 60 / timing['bpm']
     else:
-        pts = sorted(sc.tempo)
+        pts = sorted(sc.tempo, key=lambda t: t[0])     # (of two marks at one place the later one in the file counts)
+        holds = [(a, a + n, f) for a, n, f in getattr(sc, 'stretch', []) if n > 0]
+        cuts = sorted({0., float(sc.beats)} | {float(b) for b, _ in pts if 0 < b < sc.beats} |
+                      {float(min(max(x, 0.), sc.beats)) for a, b, f in holds for x in (a, b)})
         beats, secs = [0.], [LEAD_IN]
-        bpm = pts[0][1]
-        for b, new in pts + [(sc.beats, pts[-1][1])]:
-            if b > beats[-1]:
-                secs.append(secs[-1] + (b - beats[-1]) * 60 / bpm); beats.append(b)
-            bpm = new
+        for a, b in zip(cuts, cuts[1:]):               # between two cuts one tempo holds, slowed by every stretch that covers it
+            bpm = [v for at, v in pts if at <= a + 1e-9][-1] if any(at <= a + 1e-9 for at, v in pts) else pts[0][1]
+            slow = float(np.prod([f for h0, h1, f in holds if h0 <= a + 1e-9 and b <= h1 + 1e-9] or [1.]))
+            secs.append(secs[-1] + (b - a) * 60 / bpm * slow); beats.append(b)
         beats, secs = np.array(beats), np.array(secs)
     if timing and not absolute:
         secs = secs - secs[0] + LEAD_IN

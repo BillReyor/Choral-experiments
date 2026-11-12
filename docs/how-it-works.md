@@ -14,8 +14,8 @@
 | `choral/reference.py` | Takes a set of practice tracks apart (balanced, accompaniment, "part predominant" or "part muted") into voices alone, accompaniment alone and one part alone, and says how cleanly they separated. |
 | `choral/hear.py` | The speech recognizer used as a stand-in for ears: English directly; other languages through the multilingual model, told the piece's vocabulary. |
 | `tools/scan2score.py` | Reads a score from page images (a scan, or any PDF the shape reader cannot read): cuts each page into systems, has the open-source recognition engine `homr` read the notes - a system whose reading does not match the staves on the page is read again in parts - decides which staves are voices and which the piano (by the names printed beside them - "T 1", "Bar.", "Cl.", "Keybd." - where there are any, otherwise by counting; an instrument's staff is read and left out), adds a staff the engine did not find, corrects a clef it misread (a part keeps its clef through a piece), splits two voices sharing a staff, finds the barlines, follows repeats, D.S. and codas, and puts the words under the notes: from the PDF's own text if it has one, otherwise by text recognition (macOS's, or Tesseract). |
-| `tools/vector2score.py` | Reads the notes of a notation-software PDF exactly, from the symbols it is drawn with: any PDF in a standard (SMuFL) music font - Bravura, Leland and the like, as exported by MuseScore, Dorico, Sibelius and recent Finale. Staff lines give the pitch of each notehead; stems make chords and tell two voices on a staff apart; beams, flags, dots and tuplet numbers give the note values; accidentals last to the barline; curves are ties or slurs. It checks itself (do the measures add up?) and steps aside if they do not. |
-| `tools/pdf2score.py` | The same idea for older Finale exports in the Maestro font. |
+| `tools/vector2score.py` | Reads the notes of a notation-software PDF exactly, from the symbols it is drawn with: any PDF in a standard (SMuFL) music font - Bravura, Leland and the like, as exported by MuseScore, Dorico, Sibelius and recent Finale - and Finale's older Maestro font, whose characters it translates into the standard's (also where a PDF maker has stored them as Greek letters). Staff lines give the pitch of each notehead; stems make chords and tell two voices on a staff apart; beams, flags, dots and tuplet numbers give the note values; accidentals last to the barline; curves are ties or slurs. It checks itself (do the measures add up?) and steps aside if they do not. |
+| `tools/pdf2score.py` | An earlier reader for Finale's Maestro font, built around the first pieces; now only tried when the exact reader steps aside. |
 | `tools/fit.py` | Fits the piano, or the voice, to a recording by rendering on the recording's own timing and comparing mel spectrograms, one setting at a time, with held-out passages as the test. |
 | `tools/listen.py` | Uses a speech recognizer as ears: transcribes a render and reports how many of the score's words came through. |
 | `tools/check_part.py`, `tools/check_mix.py` | Check a transcription against a recording: pitch-track one isolated part, or test every written note against a recording of all voices. |
@@ -30,12 +30,14 @@
 ## Reading a score from a PDF
 
 A PDF exported from notation software is not a picture: every notehead is a character of a music
-font at an exact place. Where that font is a standard one (`tools/vector2score.py`) or Finale's
-older Maestro (`tools/pdf2score.py`), the notes are read off exactly and at once, and the words
-come from the PDF's own text. Any other PDF - a scan, a photocopy - has its pages rendered and
+font at an exact place. Where that font is a standard one or Finale's older Maestro
+(`tools/vector2score.py`), the notes are read off exactly and at once, and the words come from
+the PDF's own text. Any other PDF - a scan, a photocopy - has its pages rendered and
 recognized (`tools/scan2score.py`, about half a minute a page). Either way a `.score` file is
 written beside the PDF and the program sings from that, so a misread note or word can be corrected
-by hand and the next run uses the correction.
+by hand and the next run uses the correction. The file is signed: if nobody has edited it and the
+reader has changed since, the PDF is read again (`--reread` asks for that outright), so an old
+reading is never kept merely because it is there.
 
 Scans need a music-recognition engine. This project uses [homr](https://github.com/liebharc/homr)
 (AGPL-licensed, so it is installed beside the project and called as a separate program, not

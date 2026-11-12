@@ -33,24 +33,95 @@ DIGITS = {0xE080 + i: i for i in range(10)}                # time signature
 TUPLET = {0xE880 + i: i for i in range(10)}
 DYNAMICS = {0xE520: 'p', 0xE522: 'f', 0xE52A: 'pp', 0xE52B: 'pp', 0xE52C: 'mp', 0xE52D: 'mf', 0xE52F: 'ff', 0xE530: 'ff'}
 SHARPS, FLATS = 'fcgdaeb', 'beadgcf'
+TEXT_DIGIT = 0x10000                                       # + n: a tuplet's number that is not a music symbol but a letter of a text font
+FERMATA = (0xE4C0, 0xE4C1)                                 # above, below
+LOW_CLEFS = (0xE052, 0xE064)                               # a clef with an 8 under it: sung an octave lower than written
+COMMON, CUT = 0xE08A, 0xE08B                               # the C that stands for 4/4, and the barred one for 2/2
+
+# ---- music fonts from before the standard (Finale's Maestro and Petrucci, Adobe's Sonata: one layout, on the letters
+# of an ordinary keyboard) - each of their characters, as the standard's code for the same symbol
+LEGACY_FONTS = ('maestro', 'petrucci', 'sonata')
+LEGACY = {0x26: 0xE050, 0x56: 0xE052, 0x3F: 0xE062, 0x74: 0xE064,                                   # & V ? t: treble, treble an octave down, bass clefs
+          0xCF: 0xE0A4, 0xFA: 0xE0A3, 0x77: 0xE0A2, 0x57: 0xE0A0, 0xC0: 0xE0A9,                     # noteheads: black, half, whole, double whole, x
+          0xB7: 0xE4E3, 0xEE: 0xE4E4, 0xCE: 0xE4E5, 0xE4: 0xE4E6, 0xC5: 0xE4E7, 0xA8: 0xE4E8,       # rests: whole, half, quarter, eighth, 16th, 32nd
+          0x6A: 0xE240, 0x4A: 0xE241, 0x72: 0xE242, 0x52: 0xE243,                                   # j J r R: flags
+          0x62: 0xE260, 0x6E: 0xE261, 0x23: 0xE262, 0xDC: 0xE263, 0xBA: 0xE264,                     # b n #, double sharp, double flat
+          0x2E: 0xE1E7, 0x6B: 0xE1E7,                                                               # the dot after a note
+          0x70: 0xE520, 0x66: 0xE522, 0x50: 0xE52C, 0x46: 0xE52D, 0xB9: 0xE52B, 0xC4: 0xE52F,       # p f P F: piano, forte, mp, mf; pp, ff
+          0x55: 0xE4C0, 0x75: 0xE4C1,                                                               # U u: fermatas
+          0x63: COMMON, 0x43: CUT, **{0x30 + i: 0xE080 + i for i in range(10)}}                     # time signatures
+# Some PDF makers store such a font as a "symbol" font, and its characters then come out as Greek letters and
+# mathematical signs: the Symbol encoding's character for each code from 0x20 to 0x7E.
+_SYMBOL = dict(zip(' !\u2200#\u2203%&\u220b()\u2217+,\u2212./0123456789:;<=>?\u2245\u0391\u0392\u03a7\u0394\u0395\u03a6\u0393\u0397\u0399\u03d1\u039a\u039b\u039c\u039d\u039f'
+                   '\u03a0\u0398\u03a1\u03a3\u03a4\u03a5\u03c2\u03a9\u039e\u03a8\u0396[\u2234]\u22a5_\uf8e5\u03b1\u03b2\u03c7\u03b4\u03b5\u03c6\u03b3\u03b7\u03b9\u03d5\u03ba\u03bb\u00b5\u03bd\u03bf'
+                   '\u03c0\u03b8\u03c1\u03c3\u03c4\u03c5\u03d6\u03c9\u03be\u03c8\u03b6{|}\u223c', range(0x20, 0x7F)))
+_SYMBOL.update({'\u2206': 0x44, '\u2126': 0x57, '\u03bc': 0x6D})
+
+
+def _legacy_code(ch, shift):
+    """A character of an old music font, as text extraction gives it -> the font's own code for it."""
+    if ch in _SYMBOL:
+        return _SYMBOL[ch] + shift
+    try:
+        return ch.encode('mac_roman')[0]
+    except (UnicodeEncodeError, IndexError):
+        return None
+
+
+def legacy_shift(doc):
+    """Is this PDF drawn with one of the old music fonts - and if so, how far are its low codes displaced?  (One PDF
+    maker writes every code below 0x80 one too low.)  The right answer is the one under which the characters on the
+    pages are music symbols.  -> the displacement, or None if there is no such font."""
+    seen = collections.Counter()
+    for page in doc:
+        for b in page.get_text('rawdict')['blocks']:
+            for l in b.get('lines', []):
+                for s in l['spans']:
+                    if any(f in s['font'].lower() for f in LEGACY_FONTS):
+                        seen.update(c['c'] for c in s['chars'] if c['c'].strip())
+    if sum(seen.values()) < 20:
+        return None
+    score = {sh: sum(n for ch, n in seen.items() if _legacy_code(ch, sh) in LEGACY) for sh in (0, 1, -1)}
+    return max(score, key=lambda sh: (score[sh], -abs(sh)))
 SEMIS = [0, 2, 4, 5, 7, 9, 11]
 
 
-def _page(page):
-    """One PDF page -> (music symbols [(code, x, y, size)], drawings sorted into kinds)."""
+def _page(page, shift=None):
+    """One PDF page -> (music symbols [(code, x, y, size)], drawings sorted into kinds).  shift: see legacy_shift."""
     glyphs = []
     for b in page.get_text('rawdict')['blocks']:
         for l in b.get('lines', []):
             for s in l['spans']:
+                old = shift is not None and any(f in s['font'].lower() for f in LEGACY_FONTS)
+                word = ''.join(c['c'] for c in s['chars']).strip()
+                if shift is not None and not old and word in ('3', '5', '6', '7') and (s['flags'] & 2 or 'italic' in s['font'].lower()):
+                    c = next(c for c in s['chars'] if c['c'].strip())      # a triplet's number, which this software sets in a text font
+                    glyphs.append((TEXT_DIGIT + int(word), c['origin'][0], c['origin'][1], s['size']))
+                    continue
                 for c in s['chars']:
-                    if 0xE000 <= ord(c['c']) <= 0xF8FF:
+                    if old:
+                        code = LEGACY.get(_legacy_code(c['c'], shift))
+                        if code:
+                            glyphs.append((code, c['origin'][0], c['origin'][1], s['size']))
+                    elif 0xE000 <= ord(c['c']) <= 0xF8FF:
                         glyphs.append((ord(c['c']), c['origin'][0], c['origin'][1], s['size']))
     long_, short, vert, beams, curves = [], [], [], [], []
     for d in page.get_drawings():
         r = d['rect']; kinds = {it[0] for it in d['items']}
         if 'c' in kinds:
-            if r.width > 3:
-                curves.append((r.x0, r.y0, r.x1, r.y1))
+            # one drawing may hold several curves (the two ties of an octave, drawn in one stroke): each closed outline by itself
+            runs, last = [], None
+            for it in d['items']:
+                pts = [(p.x, p.y) for p in it[1:] if hasattr(p, 'x')]
+                if not pts:
+                    continue
+                if last is None or abs(pts[0][0] - last[0]) + abs(pts[0][1] - last[1]) > .5:
+                    runs.append([])
+                runs[-1] += pts; last = pts[-1]
+            for run in runs:
+                xs = [p[0] for p in run]; ys = [p[1] for p in run]
+                if max(xs) - min(xs) > 3:
+                    curves.append((min(xs), min(ys), max(xs), max(ys)))
         elif r.height < 1.5 and r.width > 100:
             long_.append((r.y0, r.x0, r.x1))
         elif r.height < 1.5 and r.width > 1.5:
@@ -166,7 +237,10 @@ def _timed(events, length, W, sp, both=True):
     # One voice may point its stems now up, now down.  There are two voices only if an up-stem and a down-stem sound
     # together somewhere, or if there is more in the measure than one voice can hold.
     two = any(any(e['up'] is True for e in evs) and any(e['up'] is False for e in evs) for _, evs in cols) or \
-        (any(e['up'] is True for e in events) and any(e['up'] is False for e in events) and sum(val(e) for e in events if e['dur'] is not None) > length)
+        (any(e['up'] is True for e in events) and any(e['up'] is False for e in events) and sum(val(e) for e in events if e['dur'] is not None) > length) or \
+        any(any(e['up'] is None and not e.get('rest') for e in evs) and any(e['up'] is not None for e in evs) for _, evs in cols) or \
+        (sum(val(e) for e in events) > length and        # more than one voice can hold, and a rest set high or low beside a whole note
+         any(any(e.get('rest') and abs(e['y'] - e['mid']) >= 1.2 * sp for e in evs) and any(e['up'] is None and not e.get('rest') for e in evs) for _, evs in cols))
     due = {1: Fraction(0), 2: Fraction(0)}
     out = []
     for _, evs in cols:
@@ -180,7 +254,12 @@ def _timed(events, length, W, sp, both=True):
             continue
         side = {}                                     # which voice a rest or stemless note is drawn for (0 = both)
         for e in free:
-            side[id(e)] = 0 if abs(e['y'] - e['mid']) < 1.2 * sp or not e.get('rest') else (1 if e['y'] < e['mid'] else 2)
+            if e.get('rest'):
+                side[id(e)] = 0 if abs(e['y'] - e['mid']) < 1.2 * sp else (1 if e['y'] < e['mid'] else 2)
+        for e in free:
+            if not e.get('rest'):                     # a stemless note beside the other voice's note or rest is not that voice's; alone, it is for both
+                one = bool(ups) or any(side.get(id(o)) == 1 for o in free); other = bool(downs) or any(side.get(id(o)) == 2 for o in free)
+                side[id(e)] = 2 if one and not other else 1 if other and not one else 0
         v1 = ups + [e for e in free if side[id(e)] == 1]; v2 = downs + [e for e in free if side[id(e)] == 2]
         shared = [e for e in free if side[id(e)] == 0]
         if v1 and v2 or shared:
@@ -215,6 +294,7 @@ def _staff_events(st, lo, hi, glyphs, vert_stems, beams, x0, x1, bars, size0):
     mine = [(c, x, y, sz) for c, x, y, sz in glyphs if lo <= y < hi and x0 - 2 < x < x1 + 2]
     big = lambda sz: sz > .8 * size0
     clefs = sorted((x, CLEFS[c]) for c, x, y, sz in mine if c in CLEFS and st['top'] - sp < y < st['bot'] + sp)
+    low = any(c in LOW_CLEFS for c, x, y, sz in mine if c in CLEFS and st['top'] - sp < y < st['bot'] + sp and x < x0 + 12 * sp)
     heads = [dict(c=c, x=x, y=y, k=int(round((y - st['top']) / (sp / 2))), val=HEADS[c], small=not big(sz)) for c, x, y, sz in mine if c in HEADS]
     rests = [(c, x, y, not big(sz)) for c, x, y, sz in mine if c in RESTS and st['top'] - 3 * sp < y < st['bot'] + 3 * sp]
     first_x = min([h['x'] for h in heads] + [r[1] for r in rests] + [bars[1] if len(bars) > 1 else x1])
@@ -227,6 +307,7 @@ def _staff_events(st, lo, hi, glyphs, vert_stems, beams, x0, x1, bars, size0):
             num = [vv for xx, yy, vv in tdig if abs(yy - y) < .5 * sp and abs(xx - x) < 2.5 * sp]
             if den and (not tsigs or x - tsigs[-1][0] > 2.5 * sp):
                 tsigs.append((x, f"{int(''.join(map(str, num)))}/{int(''.join(str(vv) for xx, vv in den))}"))
+    tsigs = sorted(tsigs + [(x, '4/4' if c == COMMON else '2/2') for c, x, y, sz in mine if c in (COMMON, CUT) and st['top'] - sp < y < st['bot'] + sp])
     # ---- accidentals: each belongs to the notehead at its height just to its right, if there is one
     accs = [dict(x=x, y=y, k=int(round((y - st['top']) / (sp / 2))), a=ACCS[c]) for c, x, y, sz in mine if c in ACCS and big(sz)]
     # (Noteheads sounding together stand in a cluster - a chord, a second pushed to the other side of the stem, another
@@ -318,7 +399,8 @@ def _staff_events(st, lo, hi, glyphs, vert_stems, beams, x0, x1, bars, size0):
         d = None if c == 0xE4E3 else Fraction(RESTS[c]) * {0: 1, 1: Fraction(3, 2)}.get(nd, Fraction(7, 4))
         events.append(dict(x=x, heads=[], stem=None, up=None, rest=True, dur=d, y=y, mid=mid, small=small))
     dyn = sorted((x, DYNAMICS[c]) for c, x, y, sz in mine if c in DYNAMICS)
-    return dict(st=st, lo=lo, hi=hi, W=W, clefs=clefs, heads=heads, accs=accs, events=events, tsigs=tsigs, keys_here=keys_here, first_x=first_x, dyn=dyn)
+    return dict(st=st, lo=lo, hi=hi, W=W, clefs=clefs, heads=heads, accs=accs, events=events, tsigs=tsigs, keys_here=keys_here, first_x=first_x, dyn=dyn,
+                low=low)
 
 
 def read(pdf, zoom=2.6, log=print):
@@ -328,8 +410,9 @@ def read(pdf, zoom=2.6, log=print):
     doc = pymupdf.open(pdf)
     crops, heads_seen = [], 0
     time, length = None, Fraction(4)
+    shift = legacy_shift(doc)
     for pn, page in enumerate(doc, 1):
-        glyphs, long_, short, vert, beams, curves = _page(page)
+        glyphs, long_, short, vert, beams, curves = _page(page, shift)
         staves = _staves(long_)
         if not staves:
             continue
@@ -348,7 +431,9 @@ def read(pdf, zoom=2.6, log=print):
             # ...and that are drawn heavier than a stem, or stand at the same place on most staves (a stem can fill a staff too)
             cand = [v for v in vert if ytop - 1 < v[1] and v[2] < ybot + 1 and fits(v)]
             covers = lambda x: sum(1 for st in sysm if any(abs(v[0] - x) < .5 and v[1] < st['top'] + .9 and v[2] > st['bot'] - .9 for v in cand))
-            is_bar = lambda v: fits(v) and (v[3] > 1.3 * stem_w if stem_w else True) and covers(v[0]) >= max(1, int(np.ceil(.6 * len(sysm))))
+            heavy = [v[3] for v in cand if covers(v[0]) >= max(1, int(np.ceil(.6 * len(sysm))))]
+            by_weight = bool(stem_w) and bool(heavy) and float(np.median(heavy)) > 1.3 * stem_w      # some software draws barlines no heavier than stems
+            is_bar = lambda v: fits(v) and (v[3] > 1.3 * stem_w if by_weight else True) and covers(v[0]) >= max(1, int(np.ceil(.6 * len(sysm))))
             bars = []
             for x in sorted(v[0] for v in cand if is_bar(v)):
                 if bars and x - bars[-1] < 2.2 * sp0:
@@ -368,9 +453,12 @@ def read(pdf, zoom=2.6, log=print):
             # ---- tuplets: a small number over (or under) a group.  It belongs to the staff whose notes are nearest;
             # the bracket or the beam says how far it reaches.
             for c, x, y, sz in glyphs:
-                if c not in TUPLET or not (ytop - 6 * sp0 <= y <= ybot + 6 * sp0 and x0 < x < x1) or TUPLET[c] not in (3, 5, 6, 7):
+                as_text = TEXT_DIGIT < c < TEXT_DIGIT + 10
+                if not (c in TUPLET or as_text) or not (ytop - 6 * sp0 <= y <= ybot + 6 * sp0 and x0 < x < x1):
                     continue
-                n = TUPLET[c]
+                n = c - TEXT_DIGIT if as_text else TUPLET[c]
+                if n not in (3, 5, 6, 7) or (as_text and x < min(f['first_x'] for f in info)):       # (a measure number at the head of the system)
+                    continue
                 def nearest(f):                    # how far the number is from this staff's notes (heads or stem ends)
                     near = [e for e in f['events'] if abs(e['x'] + f['W'] / 2 - x) < 6 * f['W']]
                     return min((min(abs(e['y'] - y), abs(e.get('free', e['y']) - y)) for e in near), default=1e9)
@@ -395,6 +483,8 @@ def read(pdf, zoom=2.6, log=print):
                         if min(xs) - W <= x <= max(xs) + W and min(abs(y - min(ys)), abs(y - max(ys))) < 4.5 * sp0 and max(xs) - min(xs) > 1.5 * W:
                             if reach is None or max(xs) - min(xs) > reach[1] - reach[0]:
                                 reach = (min(xs) - 1.4 * W, max(xs) + .7 * W)
+                if as_text and reach is None:          # a lone number with neither bracket nor beam may be anything (a fingering, a verse)
+                    continue
                 cand_e = [e for e in f['events'] if not e.get('trip') and e['dur'] is not None]
                 centre = lambda e: e['x'] + W / 2
                 grp = [e for e in cand_e if reach[0] <= centre(e) <= reach[1]] if reach else sorted(cand_e, key=lambda e: abs(centre(e) - x))[:n]
@@ -459,13 +549,15 @@ def read(pdf, zoom=2.6, log=print):
                     for vi in (1, 2):
                         for _, on, e in sorted((t for t in timed if t[0] == vi), key=lambda t: (t[1], t[2]['x'])):
                             ql = val(e)
+                            e.setdefault('at', (mi, on, ql))
                             if e.get('rest'):
-                                notes.append(dict(on=on, ql=Fraction(0) if e['dur'] is None else ql, midi=None, name=None, voice=str(vi), chord=False, x=None, tie=False, slur=[]))
+                                notes.append(dict(on=on, ql=Fraction(0) if e['dur'] is None else ql, midi=None, name=None, voice=str(vi), chord=False, x=None, tie=False, slur=[],
+                                                  exact=True))
                             else:
-                                for j, h in enumerate(sorted(e['heads'], key=lambda h: h['k'])):
+                                for j, h in enumerate(sorted([h for h in e['heads'] if not h['small']] or e['heads'], key=lambda h: h['k'])):     # (a cue-size note in a chord is an option, not sung)
                                     midi, name = _pitch(h['k'], *alt[id(h)])
                                     notes.append(dict(on=on, ql=ql, midi=midi, name=name, voice=str(vi), chord=j > 0, x=(h['x'] + W / 2) * zoom,
-                                                      tie=bool(h.get('tie')), slur=list(h.get('slur', []))))
+                                                      tie=bool(h.get('tie')), slur=list(h.get('slur', [])), exact=True))
                     ends = [n['on'] + (n['ql'] if n['ql'] else length) for n in notes]
                     m = dict(len=None, time=None, notes=notes, end=max(ends) if ends else None, nominal=length)
                     if any(bars[mi] - 1 <= x < bars[mi + 1] for x, t in f['tsigs']):
@@ -474,7 +566,17 @@ def read(pdf, zoom=2.6, log=print):
                     if d_here:
                         m['dyn'] = d_here[0]
                     measures.append(m)
-                read_staves.append(dict(clef=f['clefs'][0][1] if f['clefs'] else 'G', measures=measures))
+                read_staves.append(dict(clef=f['clefs'][0][1] if f['clefs'] else 'G', octave=-1 if f['low'] else 0, measures=measures))
+            # ---- fermatas: each stands over (or under) one note or rest; the music waits there
+            for c, x, y, sz in glyphs:
+                if c in FERMATA and ytop - 8 * sp0 < y < ybot + 8 * sp0 and x0 < x < x1:
+                    cx = x + 1.1 * sp0                 # the sign is about two spaces wide, centred on its note
+                    near = [(abs(e['y'] - y), si, e) for si, f in enumerate(info) for e in f['events']
+                            if 'at' in e and not e['small'] and abs(e['x'] + (0 if e.get('rest') else f['W'] / 2) - cx) < 1.6 * sp0 and f['lo'] - 3 * sp0 < y < f['hi'] + 3 * sp0]
+                    if near:
+                        _, si, e = min(near, key=lambda t: t[0])
+                        mi, on, ql = e['at']
+                        read_staves[si]['measures'][mi].setdefault('fermata', []).append((on, ql))
             for mi in range(nmeas):                    # the measure is as long as most staves fill it - never longer than its time signature
                 ends = [stf['measures'][mi]['end'] for stf in read_staves if stf['measures'][mi]['end']]
                 nominal = read_staves[0]['measures'][mi]['nominal']

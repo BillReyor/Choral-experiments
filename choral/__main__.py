@@ -27,21 +27,56 @@ PARTS = {'tenor1': 'T1', 't1': 'T1', 'tenor2': 'T2', 't2': 'T2', 'baritone': 'BR
          'trio1': 'TR1', 'trio2': 'TR2', 'trio3': 'TR3'}
 
 
-def read_music(path, log, language=None):
+STAMP = re.compile(r'^// read from the PDF by reader (\w+), text (\w+)')
+
+
+def _digest(data):
+    import hashlib
+    return hashlib.sha1(data if isinstance(data, bytes) else data.encode()).hexdigest()[:10]
+
+
+def _stamp(out, reader):
+    """Sign a score the program has just read, so that a later run can tell whether anyone has corrected it since."""
+    text = open(out).read().rstrip('\n') + '\n'
+    open(out, 'w').write(text + f'// read from the PDF by reader {reader}, text {_digest(text)} - correct anything here: a corrected score is kept as it is\n')
+
+
+def read_music(path, log, language=None, again=False):
     """A .score file as it is; a PDF through the reader that suits it: tools/pdf2score.py when the notes are
-    drawn as shapes (exported from notation software), tools/scan2score.py when the pages are pictures."""
+    drawn as shapes (exported from notation software), tools/scan2score.py when the pages are pictures.
+    A score read from the PDF earlier is used again - unless nobody has touched it and the reader has changed
+    since (or `again` asks for it): a reading that could now be better is not kept out of habit."""
     if not path.lower().endswith('.pdf'):
         return path
     out = os.path.splitext(path)[0] + '.score'
-    if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(path):
-        log(f'using {out}, read from this PDF earlier (delete it to read the PDF again)')
-        return out
     tools = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools')
+    reader = _digest(b''.join(open(os.path.join(tools, f), 'rb').read() for f in ('scan2score.py', 'vector2score.py', 'pdf2score.py')))
+    if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(path):
+        text = open(out).read()
+        body, _, last = text.rstrip('\n').rpartition('\n')
+        m = STAMP.match(last)
+        untouched = bool(m) and _digest(body + '\n') == m.group(2)
+        if again and (untouched or not m):
+            log(f'reading the PDF again, as asked ({out} is replaced)')
+        elif again:
+            log(f'{out} has been corrected by hand since it was read: kept (delete it to read the PDF again)'); return out
+        elif untouched and m.group(1) != reader:
+            log(f'the reader has changed since {out} was read, and nobody has edited that score: reading the PDF again')
+        else:
+            log(f'using {out}, read from this PDF earlier (delete it, or say --reread, to read the PDF again)')
+            return out
     import pymupdf
     doc = pymupdf.open(path)
     drawn = sum(len(p.get_drawings()) for p in doc) / max(len(doc), 1)
     fonts = {f[3] for p in doc for f in p.get_fonts()}
-    if drawn > 200 and any('Maestro' in f for f in fonts):      # an older Finale export: its own reader
+    if drawn > 200 and any('Maestro' in f for f in fonts):      # an older Finale export
+        # first the reader that takes the notes off the symbols and checks that its measures add up ...
+        r = subprocess.run([sys.executable, os.path.join(tools, 'scan2score.py'), path, out, '--exact-only'] + (['--language', language] if language else []))
+        if r.returncode == 0 and os.path.exists(out):
+            log(f'read {path} -> {out}  (check it: a misread note or word is easier to fix there than to hear)')
+            _stamp(out, reader)
+            return out
+        # ... then the older one made for this font, which guesses more
         r = subprocess.run([sys.executable, os.path.join(tools, 'pdf2score.py'), path, out], capture_output=True, text=True)
         sung = 0
         if r.returncode == 0 and os.path.exists(out):
@@ -51,6 +86,7 @@ def read_music(path, log, language=None):
                 sung = 0
         if sung >= 8:
             log(r.stdout.strip()); log(f'read {path} -> {out}')
+            _stamp(out, reader)
             return out
         if os.path.exists(out):
             os.remove(out)
@@ -61,6 +97,7 @@ def read_music(path, log, language=None):
     if r.returncode or not os.path.exists(out):
         raise SystemExit('Could not read the music out of this PDF.')
     log(f'read {path} -> {out}  (check it: a misread note or word is easier to fix there than to hear)')
+    _stamp(out, reader)
     return out
 
 
@@ -72,10 +109,11 @@ def main():
     ap.add_argument('--preset', help='a preset file to use instead of NAME.preset.json')
     ap.add_argument('--language', help='the language of the words when a scan is read (latin, or leave out for English)')
     ap.add_argument('--fresh', action='store_true', help='ignore a saved preset and estimate again')
+    ap.add_argument('--reread', action='store_true', help='read the PDF again even if a score read from it earlier is there (one corrected by hand is kept)')
     a = ap.parse_args()
     log = lambda *s: print(*s, flush=True)
     t0 = time.time()
-    path = read_music(a.music, log, a.language)
+    path = read_music(a.music, log, a.language, a.reread)
     sc = scoremod.load(path, warn=log)
     same = lambda p, q: [(n['beat'], n['dur'], n['midi']) for n in sc.parts[p]] == [(n['beat'], n['dur'], n['midi']) for n in sc.parts[q]]
     groups = []                                    # (name, [sections]) for every part asked for

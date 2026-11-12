@@ -113,6 +113,16 @@ TEN: f4/e=* f4/e=* f4/q.=* g4/e a4/e b4/e
 under their own name. The reader reports any syllables left over at the end of a system, which is
 how a miscounted melisma shows up.
 
+## Holding and slowing
+
+```
+stretch: 3 2 1.8          // from beat 3 of the next measure, two beats take 1.8 times as long
+```
+
+A fermata is one such line; a rallentando is a row of them, each a little slower than the last.
+The reader writes them from the fermatas and the "rall." ... "a tempo" it finds in a PDF. They
+are ignored when the timing comes from a recording.
+
 ## Timing measured from a recording
 
 `tempo:` gives one tempo. A piece that slows down, pauses or holds its last chord can instead

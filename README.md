@@ -53,10 +53,10 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   recognizer. Trust your ears over its reports.
 - **Men's chorus only** (TTBB, TTB, soloist or trio over the choir), with piano or unaccompanied.
 - **Reading scans is imperfect.** Typically 96-99% of the notes are right. About one syllable in
-  ten is wrong or missing, more with Tesseract. (A PDF exported from current notation software is
-  read exactly instead - but that reader has met only one such file so far, and does not yet
-  follow "8va" lines or first and second endings. Exports from older software, whose fonts are
-  stored under codes of their own, are recognized like scans.)
+  ten is wrong or missing, more with Tesseract. (A PDF exported from notation software is read
+  exactly instead, from its own symbols - in a current music font or Finale's older Maestro. That
+  reader has met two such files so far, and does not yet follow "8va" lines or first and second
+  endings. A PDF that stores its music font under private numbers is recognized like a scan.)
   Repeats, D.S. and codas are followed; first and second endings are not. Always look through the
   `.score` file it writes.
 - **Words:** English (by dictionary) and church Latin (by rule). A word the dictionary does not
@@ -68,6 +68,10 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   in places.
 - **Timing follows the accompaniment track** when there is one. Where the score as read does not
   match the recording (a misread ending, a cut), the run says so and the timing there is a guess.
+- **From a PDF alone, the pacing is by rule.** A metronome mark is followed; a tempo given in words
+  ("Moderately slow") is looked up in a table; a fermata adds about a beat, a "rall." slows to
+  about three quarters until the next "a tempo". The accompaniment is the built-in piano playing
+  the piano staves: no other instrument, and no pianist's judgement.
 - **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece.
 
 ## More
