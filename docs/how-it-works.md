@@ -66,11 +66,23 @@ like the real singers they were fitted to - tone, how notes begin and end, how s
 a pitch - and they are still heard as synthetic. What is left is the texture of the method itself.
 
 `--voice VOICE.wav` changes the sound and nothing else. The engine sings as before; then each
-singer's dry track is cut into its stretches of singing and given to a voice-conversion model
-together with a recording of a real voice, and comes back as that voice singing the same notes and
-words at the same moments. `choral/revoice.py` lines each stretch up with its original (the model
-may be a few milliseconds off) and gives it the original's loudness moment by moment, so the
-shape the engine gave each note is kept.
+singer's dry track is cut into pieces of singing and given to a voice-conversion model together
+with a recording of a real voice, and comes back as that voice singing the same notes and words
+at the same moments. `choral/revoice.py` then makes each piece the engine's again in three ways:
+
+- **Time**: it is lined up with its original (the model may be a few milliseconds off).
+- **Pitch**: the model is told the pitch only in coarse steps (15 to 43 cents wide in a man's
+  range) and sings somewhere inside the step - a held note wavers, and singers on one note
+  disagree. The engine's pitch is exact, so the re-voiced piece is played as many cents slower
+  or faster as it is off, moment by moment; when that has run a whole period of the voice ahead
+  or behind, one period is dropped or repeated.
+- **Loudness**: it is made as loud as the original, first on the whole and then moment by moment,
+  so the shape the engine gave each note is kept.
+
+The pieces are at most 14 seconds long and are cut at rests and breaths. A model works on one
+window of sound at a time (half a minute less the recording of the voice, here) and joins windows
+by crossing one rendering over into another; a piece that fits one window has no such join in it.
+Of a recording of a voice, the first 14 seconds are used.
 
 **Whose voice.** Fifteen to thirty seconds of one person singing alone, without accompaniment - a
 phone's recording will do, in any common format (WAV, m4a, mp3 ...; other than WAV needs ffmpeg,

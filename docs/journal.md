@@ -836,3 +836,73 @@ singing, fifty-three.
 What none of this says is whether it sounds like a men's chorus: that is for a listener. The ten
 are trained soloists singing an Italian song alone in a studio, not choristers; there are ten of
 them; and nothing here has been set beside a recording of a real choir.
+
+**"Better, but they sound like bad singers."** The listener's verdict on the ten men: more real
+than anything before, and bad singing - notes that waver, a weak or strained tone, sloppy words
+and rhythm (the words worst on the solo), a tempo that seems to speed up and slow down. Not out
+of tune. Each was measured on the re-voiced tracks against the engine's own and against the men's
+own recordings.
+
+*Wavering: the model is told the pitch only roughly.* It takes the pitch in 256 steps from 50 to
+1100 Hz - 15 cents wide at a first tenor's top notes, 27 at the G below middle C, 43 at a bass's
+low A - and sings somewhere inside the step it is given. Inside a held note the re-voiced pitch
+drifts 6-8 cents (the engine's singers, and real choristers: 3-4); each note sits 6 cents from
+the note of the engine singer it was made from; twelve baritones are 11 cents apart on a note (the
+engine's twelve: 7). The engine's pitch is known exactly, so each re-voiced stretch is now put
+back on it: the two are tracked, and the re-voiced one is played that many cents slower or faster
+wherever both are sung; when that has run a whole period of the voice ahead or behind, one period
+is dropped or repeated. After it: drift 3-4 cents, 0.5 cents from the engine singer (92% of notes
+within 10 cents, before 63%), the twelve 7 cents apart, words and timing unchanged.
+
+*A glitch every sixteen seconds.* The model works on a window of sound at a time - half a minute
+less the recording of the voice - and makes a longer stretch in windows, crossing them over where
+they meet: mid-phrase, two different renderings at once, the level 7-8 dB down for a tenth of a
+second. With stretches of 24 s on average that was one such moment per stretch, in every singer.
+Singing is now handed over in pieces that fit one window, cut at the last rest or breath the limit
+allows (36-99 dB down); only the final held chord, longer than a window, is cut in a held note.
+
+*Tone.* Two guesses did not survive. References made from each tenor's own singing in the first
+tenors' range (the song lies an octave lower) bring a re-voiced line no nearer to his own tone up
+there (4.0-6.7 dB apart either way) and cost words, having no consonants in them. And the men's
+mix is not short of ring against the real choristers on hand. What did measure: every man sings
+the song twice, normally and "straight", holding his vibrato back, and the straight one had been
+used. From his normal singing a re-voiced line has 2-5 dB more ring in six voices of nine and
+keeps its words as well or better in eight, no less steady. The sections use it now. The
+soloist keeps the straight one: alone, his words came through better from it.
+
+*Words.* The engine's soloist is understood 97%, the re-voiced one 89-94%, and the recognizer
+trips over the same words in every voice: an l lost, a final p, "sat" heard as "set". Thirty and
+fifty refinement steps instead of ten, holding the model harder or looser to the voice, references
+sung in English, the engine's own hisses and clicks put back in place of the model's (they were
+only 3 dB weaker): none of it raised the number. Following the engine's loudness every 60 ms, 150
+or 300, or not at all, did not either. This softness is the model's own, in how it forms voiced
+sounds, and is still there.
+
+*Timing.* A re-voiced track follows its original within 25 ms in every two-second window, mostly
+within 10, so the
+tempo a listener hears is the one read from the page: "Rubato" over the introduction, "Moderately
+slow" from the third measure, four printed rallentandos with their "a tempo". How deep a
+rallentando goes is a guess here (to 1.3 times as slow, in steps, and straight back). Note by
+note there is something: one note in seven of the re-voiced solo reaches its pitch 30-60 ms later
+than the engine's does, and twelve re-voiced baritones start a note 18 ms apart where the engine's
+start 11 ms apart.
+
+*The piece again*, four to a part, with the pitch put back, no joins, and the sections' voices
+taken from the men's normal singing. The soloist, taken out exactly as the render makes him:
+
+| the soloist's first verse | engine | re-voiced before | re-voiced now |
+|---|---|---|---|
+| pitch against the engine's, moment by moment: within 30 cents | - | 64-70% of the time | 84% |
+| drift inside a held note | 3.8 cents | 7.3 | 3.9 |
+| notes reaching their pitch more than 30 ms late | - | 6-7 of 42 | none |
+| words | 97% | 86-91% | 86% |
+
+The balance is unchanged (soloist 2.5 dB under the choir's verse, piano 4.8-6.2 dB under the
+voices), and so are the words, in the mix as alone. What is left of the rhythm complaint, by
+measurement: in one note in five of the whole solo (20 of 93) the sound builds more than 30 ms
+later than the engine's, mostly more than 60, after every kind of consonant. Letting the loudness
+match raise a quiet moment further (16 or 24 dB instead of 10) changes nothing - the limit is not
+what holds it back; the vowel itself arrives late, and moving it would mean shifting sound in
+time, which is not built. The price of pieces that fit one window: they are shorter than a window,
+so the recording of the voice is worked through more often, and the piece took 39 minutes instead
+of 16.

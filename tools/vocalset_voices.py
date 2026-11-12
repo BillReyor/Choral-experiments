@@ -4,9 +4,14 @@
 
 VocalSet - Wilkins, Seetharaman, Wahl and Pardo, "VocalSet: A Singing Voice Dataset", ISMIR 2018,
 https://zenodo.org/records/1193957, Creative Commons Attribution 4.0 - is twenty professional singers recorded alone
-for research.  This takes fourteen seconds of one plainly sung song from each of ten of its men.  Give it the archive
-if you have it; without one it fetches just those ten clips from zenodo.org (about 30 MB of the archive's 2 GB).  The clips
-are the singers' work: keep the credit above with anything you publish that was made with them.
+for research.  This takes fourteen seconds of one song from each of ten of its men.  Give it the archive if you have
+it; without one it fetches just those ten clips from zenodo.org (about 30 MB of the archive's 2 GB).  The clips are
+the singers' work: keep the credit above with anything you publish that was made with them.
+
+Which singing.  Each man sings the song twice: as he normally would, and "straight" - told to hold his vibrato back.
+The sections get the normal singing: a line re-voiced from it has 2-5 dB more ring (2.4-3.6 kHz) in six voices of
+nine and keeps its words as well or better in eight.  The soloist gets the straight one: alone, his words came
+through better from it (91% twice, against 83% and 91%).  Either way the notes sung are the engine's, not his.
 
 Who sings which part.  The men all sing the same songs in the same key, so pitch does not tell a bass from a tenor
 here.  The size of the voice does: a larger throat and mouth put every resonance lower by the same ratio.  SHIFT is
@@ -19,7 +24,7 @@ import os, io, argparse, wave, zipfile, urllib.request
 import numpy as np
 
 URL = 'https://zenodo.org/api/records/1193957/files/VocalSet.zip/content'
-CLIP = 'FULL/male%d/excerpts/straight/m%d_caro_straight.wav'
+SONG = 'caro'                      # the song all of them sing: fourteen seconds of it
 #        man  part        SHIFT
 SEATS = [(8, 'Bass', -1.49), (4, 'Bass', -1.30), (3, 'Baritone', -.76), (10, 'Solo', -.69), (2, 'Baritone', .03),
          (1, 'Tenor 2', .36), (11, 'Tenor 2', .39), (5, 'Tenor 1', .77), (7, 'Tenor 1', .95), (6, 'Tenor 1', 1.75)]
@@ -76,7 +81,9 @@ def main():
     z = zipfile.ZipFile(a.archive or io.BufferedReader(remote, 1 << 20))
     os.makedirs(a.out, exist_ok=True)
     for man, part, _ in SEATS:
-        with wave.open(io.BytesIO(z.read(CLIP % (man, man)))) as w:
+        manner = 'straight' if part == 'Solo' else 'vibrato'           # (a few of the archive's files are misnamed: found by song)
+        clip = next(n for n in z.namelist() if n.startswith('FULL/male%d/excerpts/%s/' % (man, manner)) and SONG in n.lower() and n.lower().endswith('.wav'))
+        with wave.open(io.BytesIO(z.read(clip))) as w:
             sr, nc, sw = w.getframerate(), w.getnchannels(), w.getsampwidth()
             x = np.frombuffer(w.readframes(w.getnframes()), {2: '<i2', 4: '<i4'}[sw]).reshape(-1, nc).mean(1) / 2. ** (8 * sw - 1)
         if sr != SR:
