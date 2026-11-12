@@ -84,6 +84,33 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   the piano staves: no other instrument, and no pianist's judgement.
 - **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece.
 
+## The name
+
+*Palare* is one spelling of [Polari](https://wp.lancs.ac.uk/fabulosa/whats-polari/) (from the
+Italian *parlare*, "to talk"): the slang gay men in Britain spoke among themselves, picked up from
+the theatre, the fairground and the merchant navy, in the years when being found out could mean
+prison. It let two men talk about their lives in a pub or on a bus without anyone around them
+following. The whole country heard it, mostly without knowing what it was hearing, from Julian
+and Sandy on the BBC's *Round the Horne* in the 1960s. After the law changed in 1967 there was
+less need for it and it faded, leaving English a few of its words: *naff*, *zhoosh*, *camp*,
+*drag*.
+
+*Piano* is the instrument under the voices here, and the Italian for "softly". *Parlare piano*:
+to speak quietly - which is what Polari was for.
+
+Gay choruses are the other half of that history: the same people, no longer keeping their voices
+down. The [San Francisco Gay Men's Chorus](https://www.sfgmc.org/our-story), founded by Jon Reed
+Sims in the autumn of 1978 and the first chorus to put the word "gay" in its name, sang in public
+for the first time on the steps of City Hall on 27 November 1978, at the candlelight vigil on
+the night Harvey Milk and George Moscone were killed. Its tour of nine cities in 1981 left new
+choruses behind it. [GALA Choruses](https://en.wikipedia.org/wiki/GALA_Choruses), the
+association they formed in 1982, now has more than two hundred member choruses and over ten
+thousand singers. Through the AIDS years they went on singing while they buried their own; the
+San Francisco chorus remembers the more than three hundred members it lost as its "fifth
+section".
+
+This program was written to help one such chorus learn its notes.
+
 ## Credits
 
 - **Voices.** The men's voices that `tools/vocalset_voices.py` fetches for `--voice` are from
