@@ -673,6 +673,22 @@ baritone is on pitch against the real one in 99% of notes at the steady fit (97%
 Earlier pieces: the three graded scans read as before (pitch and length 95.8 / 96.6 / 96.9%); the
 fifth, seventh and ninth pieces' readings are identical to the previous reader's.
 
+*What a listener heard at once, and no number of mine had said.*
+
+- **"There was no music in the accompaniment."** The built-in piano was mixed 12 dB under the
+  voices: a default set before any real mix had been measured. The seven real practice mixes
+  measured since have their accompaniment at 0.44 to 0.94 of the choir's level, 0.51 in the
+  middle; the default is now 0.5, about 5 dB under the voices. The piano's tone was not at
+  fault: band by band it lies inside the spread of the eight real accompaniment recordings. The
+  sign had been in my own figures, unread - "balanced" and "voices only" measured within 0.2 dB
+  of each other. A piece's saved settings now hold only what was measured or chosen for that
+  piece, so that a default that improves reaches the pieces that never had a recording.
+- **A word with the wrong vowel.** For words spelled alike and said differently the dictionary
+  lists both readings without saying which is which, and the engine took the first: the verb's
+  vowel on a plural noun. A table of some twenty such words now gives the reading a song usually
+  means, with the word before or after deciding a few. It corrects two earlier pieces as well,
+  where a verb had been sung as its adjective through a whole refrain, and a noun as its verb.
+
 Not done: a Finale PDF that stores its font under private numbers (the ninth piece) is still
 recognized like a scan; three notes on one staff for two parts lose the middle one; two syllables
 printed touching, without their hyphen, arrive as one word on one note; "8va" lines and first and

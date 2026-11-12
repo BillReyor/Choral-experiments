@@ -61,7 +61,8 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   `.score` file it writes.
 - **Words:** English (by dictionary) and church Latin (by rule). A word the dictionary does not
   have - a name, another language, a misread - is sung as it is spelled, by rough English rules:
-  a near miss, which a `say:` line in the score corrects.
+  a near miss, which a `say:` line in the score corrects. Words spelled alike and said differently
+  ("lives", "tears", "read") follow a short table of what a song usually means.
 - **A full choir is harder to understand than a real one** on quick text, though single voices are
   about as clear as real singers.
 - **Tone is the median of a dozen real singers.** A particular voice can differ from it by 10 dB

@@ -79,6 +79,28 @@ def to_engine(syl):
     return ' '.join(out)
 
 
+# ---- words spelled alike and said differently.  The dictionary lists both readings and does not say which is which.
+# A song nearly always means one of them; for a few, the word before or after says otherwise.
+#   word: (the usual reading in a song, the other one, words before it that call for the other, words after it that do)
+ALIKE = {
+    'lives': ('L AY1 V Z', 'L IH1 V Z', 'he she it who that which god christ jesus lord love hope spirit redeemer savior saviour still ever never always there', ''),
+    'live': ('L IH1 V', None, '', ''),
+    'wind': ('W IH1 N D', None, '', ''), 'winds': ('W IH1 N D Z', None, '', ''),
+    'tear': ('T IH1 R', 'T EH1 R', "to will shall would could can cannot can't don't they we you", 'apart down away'),
+    'tears': ('T IH1 R Z', None, '', ''),
+    'read': ('R IY1 D', 'R EH1 D', "have has had was were been be i've we've you've they've having", ''),
+    'lead': ('L IY1 D', None, '', ''), 'leads': ('L IY1 D Z', None, '', ''),
+    'wound': ('W UW1 N D', None, '', ''),
+    'bass': ('B EY1 S', None, '', ''),
+    'sow': ('S OW1', None, '', ''),
+    'minute': ('M IH1 N AH0 T', None, '', ''),
+    'present': ('P R EH1 Z AH0 N T', 'P R IY0 Z EH1 N T', 'to we i they you shall will let now', ''),
+    'presents': ('P R EH1 Z AH0 N T S', None, '', ''),
+    'close': ('K L OW1 S', 'K L OW1 Z', 'to', 'your the my his her their our it them a every all'),
+    'use': ('Y UW1 Z', 'Y UW1 S', 'the no of little good some any much its their his her', ''),
+}
+
+
 # ---- a word the dictionary does not have: a name, a word from another language, a misprint
 _SPELL = [  # letters -> sounds, the longest match first; '$' is the end of the word, '^' its beginning
     ('eigh', 'EY'), ('augh', 'AO'), ('ough', 'OW'), ('tion$', 'SH AH N'), ('sion$', 'ZH AH N'), ('eus$', 'IY AH S'), ('ous$', 'AH S'),
@@ -176,11 +198,15 @@ def _near(w):
     return None
 
 
-def pronounce(word, nsyl, overrides, next_word=None, warn=print):
+def pronounce(word, nsyl, overrides, next_word=None, warn=print, prev_word=None):
     """Return nsyl engine syllables for a word."""
     w = word.strip("'") if word not in overrides else word
     if word in overrides:
         cands = [overrides[word]]
+    elif w in ALIKE:
+        usual, other, before, after = ALIKE[w]
+        swap = other and ((prev_word or '').strip("'").lower() in before.split() or (next_word or '').strip("'").lower() in after.split())
+        cands = [syllabify((other if swap else usual).split())]
     elif w == 'the':
         nxt = (next_word or 'x').lstrip("'")
         cands = [[['DH', 'IY0']]] if nxt[:1] in 'aeio' else [[['DH', 'AH0']]]

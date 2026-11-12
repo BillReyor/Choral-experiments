@@ -134,8 +134,11 @@ def main():
     # ---- the piece's preset: saved, or estimated from the score, then from whatever recordings there are
     pfile = a.preset or os.path.splitext(path)[0] + '.preset.json'
     P = dict(R.PRESET, **presets.from_score(sc))
+    usual = dict(P)                                # what the program would choose for this score with nothing else to go on
     log(f"the quick syllables last {P['quick_syllable']}s: starting from leaders' mics {P['spot']}, hall {P['hall']}")
     saved = json.load(open(pfile)) if os.path.exists(pfile) and not a.fresh else {}
+    if saved.get('backing') == .22 and 'timing' not in saved:      # (an earlier version saved its own defaults: this one was never measured)
+        saved.pop('backing')
     P.update(saved)
     if a.singers:
         P['singers'] = a.singers
@@ -173,7 +176,8 @@ def main():
         P.update(got, **({'hall_from': 'recording'} if got else {}))
     if a.tune:
         P.update(presets.tune_for_words(stems, sc, clock, P, keep_hall=P.get('hall_from') == 'recording', log=log))
-    json.dump(P, open(pfile, 'w'), indent=1)
+    # only what was measured or chosen for this piece is kept: a default that improves later should reach it
+    json.dump({k: v for k, v in P.items() if k not in usual or usual[k] != v}, open(pfile, 'w'), indent=1)
     log(f"preset: leaders' mics {P['spot']}, hall {P['hall']} ({P['hall_rt']}s), accompaniment {P['backing']}, note decay {P.get('note_decay', 0.)}, swell {P.get('swell', 'by rule')}  -> {pfile}")
 
     # ---- mix and write

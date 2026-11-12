@@ -377,7 +377,8 @@ def _finish(sc, warn):
             if sc.language == 'latin' and word not in sc.say:
                 prons = latin.pronounce([s for _, s in w])
             else:
-                prons = lyrics.pronounce(word, len(w), sc.say, nxt, warn)
+                prv = ''.join(s for _, s in words[i - 1]) if i else None
+                prons = lyrics.pronounce(word, len(w), sc.say, nxt, warn, prv)
             for (n, _), syl in zip(w, prons):
                 n['phon'] = syl
         for n in notes:
