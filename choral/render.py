@@ -149,7 +149,7 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
             log('voices sung in %.0fs' % (time.time() - t0))
             mid = lambda ns: float(np.median(np.repeat([np.mean(n[2]) for n in ns], [max(1, int(round(8 * n[1]))) for n in ns]))) if ns else 60.   # the middle of its notes, by how long each lasts
             given = revoice.deal(voices, [(t[0], t[1]) for t in tasks], {t[0]: mid(t[2]) for t in tasks}, log, NAMES)   # low voices to the low sections
-            new = revoice.revoice([d[4] for d in done], given, log, alone=[t[0] in SINGLE for t in tasks])     # a soloist's tone is built again: see revoice._rebuild
+            new = revoice.revoice([d[4] for d in done], given, log)
             arriving = [(d[0], d[1], d[2], d[3], m) for d, m in zip(done, new)]
         else:
             arriving = pool.imap_unordered(voice.render_singer, tasks)

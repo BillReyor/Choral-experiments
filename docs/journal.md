@@ -1081,3 +1081,14 @@ Four times on the way the numbers said a real voice's steadiness had been reache
 listener still heard the fault, and each time the listener's next words - held notes; flutter;
 just after the attack; weird fading - named the measurement that was missing. The numbers decided
 nothing here except which of two things the ear had asked for was actually different.
+
+*And the chorus.* Offered the same rebuilding for the section singers, the listener heard the
+choir's verse and the last chorus both ways and preferred them rebuilt; every singer's tone is
+now built again, not only a soloist's. It has a price, and the listener was told it before
+choosing: a section of twelve is understood less well - baritones 77% of their words before, 57%
+after; first tenors 87% and 73% - while the singers agree in pitch as before (9 cents apart
+against 8) and the choir sits 1 dB lower against the piano. Of the baritones' twenty points, ten
+are the rebuilding itself and the rest the steadying of held vowels (rebuilt with no steadying:
+67%; with any of it: 57-60%). Bringing the consonants back to the engine's strength, which the
+old putting-back did as a side effect, gives the soloist six more words in seventy and the
+sections nothing; it is written and switched off, since nobody has heard it.

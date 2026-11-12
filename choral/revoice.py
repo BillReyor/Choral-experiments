@@ -369,13 +369,16 @@ CALM = .01             # seconds over which a rebuilt voice's colour and loudnes
 STILL = .08            # ... over which its pitch is steadied inside a held note (0: the engine's own, flutter and all)
 LEVEL_HELD = .3        # ... and its loudness
 HELD_CHANGE = 1.5      # dB in 20 ms: an engine colour changing faster than this is a syllable changing, not a held vowel
+CONS = 0.              # dB: the most a consonant of a rebuilt voice is raised to the engine's strength (0: left as the model made it;
+                       # 10 gives a soloist 6 more words in 70 - not yet heard by anyone, so not yet on)
 CALM_HELD = .12        # ... over which its colour is steadied inside a held note
 
 
 def _rebuild(y, src):
     """A re-voiced stretch (lined up with its original) with its sung tone built again: the model's vowel colour,
-    sounded at the engine's pitch.  For a voice heard alone.  Needs the WORLD analysis/synthesis (pip install
-    pyworld); returns None without it.
+    sounded at the engine's pitch.  Needs the WORLD analysis/synthesis (pip install pyworld); returns None without
+    it.  Made for a voice heard alone; a listener then preferred the whole chorus this way too, though a section
+    of twelve is understood less well for it (baritones 77% of their words -> 57%, first tenors 87% -> 73%).
 
     Heard alone, the model's held notes are rough - "a slight spasmodic dysphonia", a listener said, "most apparent
     when the voice model holds a note for an extended period".  Measured as a voice clinic measures it, successive
@@ -446,6 +449,12 @@ def _rebuild(y, src):
     z = pw.synthesize(f0, sp, ap, SR, fp)[:n]
     z = np.pad(z, (0, max(0, n - len(z))))
     keep = np.interp(np.arange(n), t * SR, gf(voiced.astype(float), 1.6))    # 8 ms from the one to the other
+    if CONS:                                                       # the model's consonants, brought to the strength the engine gave them
+        sung = keep > .5
+        if sung.sum() > SR // 10 and (~sung).sum() > SR // 20:
+            whole = np.sqrt(np.mean(src[sung] ** 2) / (np.mean(z[sung] ** 2) + 1e-20))        # the two on one scale, by their sung parts
+            g = np.clip(_env(src, .02) / (whole * _env(y, .02) + 1e-12), 10 ** (-6 / 20), 10 ** (CONS / 20))
+            y = y * np.interp(np.arange(n), (np.arange(len(g)) + .5) * HOP, gf(g, .01 * SR / HOP))
     return keep * z + (1 - keep) * y
 
 
@@ -463,7 +472,7 @@ def _fit(y, src, rebuilt=False):
     lags = range(-int(.06 * SR / HOP), int(.06 * SR / HOP) + 1)
     k = max(lags, key=lambda k: float(np.dot(a[max(0, -k):len(a) - max(0, k)], b[max(0, k):len(b) - max(0, -k)]))) * HOP
     y = np.pad(y, (0, k))[k:] if k > 0 else np.pad(y, (-k, 0))[:n]
-    z = _rebuild(y, src) if rebuilt else None                     # a voice heard alone: its tone built again at the engine's pitch
+    z = _rebuild(y, src) if rebuilt else None                     # the sung tone built again at the engine's pitch
     if z is not None:                                             # (its loudness is steadied there, note by note; made to follow the
         return z * np.sqrt(np.mean(src ** 2) / (np.mean(z ** 2) + 1e-20))      # engine's moment by moment, it was heard to fade oddly)
     y = _repitch(y, src)
@@ -561,10 +570,11 @@ def _trim():
         total -= os.path.getsize(files[0]); os.unlink(files.pop(0))
 
 
-def revoice(tracks, voices, log=print, seed=0, alone=None):
+def revoice(tracks, voices, log=print, seed=0, rebuild=True):
     """tracks: one dry mono track (at 44100 Hz) per singer.  voices: for each track a reference recording, or
-    (recording, size) as deal() gives them.  alone: for each track, whether it is a voice heard by itself (a
-    soloist), whose tone is then built again (_rebuild).  -> the tracks again, in those voices."""
+    (recording, size) as deal() gives them.  rebuild: whether each voice's sung tone is built again at the engine's
+    pitch (_rebuild; needs pyworld - without it the pitch and loudness are put back on the model's own sound).
+    -> the tracks again, in those voices."""
     cmd = command()
     if cmd is None:
         raise SystemExit('No voice-conversion model is set up (looked for .svc/command.json): see docs/how-it-works.md, "A real voice\'s sound".')
@@ -583,14 +593,14 @@ def revoice(tracks, voices, log=print, seed=0, alone=None):
                 where.append((i, a, b, ka, kb))
         total = sum(kb - ka for _, _, _, ka, kb in where) / SR
         log(f're-voicing {len(tracks)} singers: {total / 60:.0f} minutes of singing in {len(jobs)} stretches, in {len(set(v for v, _ in voices))} voice(s) ...')
-        if alone and any(alone):
+        if rebuild:
             try:
                 import warnings
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore')
                     import pyworld
             except Exception:
-                log('  ! pyworld is not installed (pip install pyworld): the soloist\'s held notes will be rougher than they need be')
+                log('  ! pyworld is not installed (pip install pyworld): held notes will be rougher than they need be, a soloist\'s most of all')
         os.makedirs(CACHE, exist_ok=True)
         kept = [_kept(j, cmd) for j in jobs]             # the engine sings a piece the same way every time: a second
         todo = [j for j, f in zip(jobs, kept) if not os.path.exists(f)]         # rendering finds its stretches converted
@@ -619,7 +629,7 @@ def revoice(tracks, voices, log=print, seed=0, alone=None):
         out = [np.zeros(len(x), np.float32) for x in tracks]
         from multiprocessing import Pool, cpu_count
         with Pool(min(8, cpu_count())) as pool:
-            fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32), bool(alone and alone[i])) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
+            fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32), bool(rebuild)) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
             for (i, a, b, ka, kb), y in zip(where, fitted):
                 w = np.ones(kb - ka, np.float32)         # pieces cut from one stretch are crossed over: in 12 ms where
                 top = float(np.abs(tracks[i]).max())     # it is quiet, in 40 ms where the cut had to be made in a held note

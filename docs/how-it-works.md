@@ -68,40 +68,39 @@ a pitch - and they are still heard as synthetic. What is left is the texture of 
 `--voice VOICE.wav` changes the sound and nothing else. The engine sings as before; then each
 singer's dry track is cut into pieces of singing and given to a voice-conversion model together
 with a recording of a real voice, and comes back as that voice singing the same notes and words
-at the same moments. `choral/revoice.py` then makes each piece the engine's again in three ways:
+at the same moments. `choral/revoice.py` then puts each piece back where its original was (the
+model may be a few milliseconds off) and deals with what the model gets wrong.
 
-- **Time**: it is lined up with its original (the model may be a few milliseconds off).
-- **Pitch**: the model is told the pitch only in coarse steps (15 to 43 cents wide in a man's
-  range) and sings somewhere inside the step - a held note wavers, and singers on one note
-  disagree. The engine's pitch is exact, so the re-voiced piece is played as many cents slower
-  or faster as it is off, moment by moment. Playing faster also arrives sooner, a few
-  milliseconds a second; that is set right in the engine's rests and voiceless consonants, not
-  inside a note, where every such correction is heard as a catch in the voice.
-- **Loudness**: it is made as loud as the original, first on the whole and then moment by moment,
-  so the shape the engine gave each note is kept.
+**The sung tone is built again.** The model's held notes are rough: measured cycle by cycle as a
+voice clinic does, they have three times the jitter and twice the shimmer of the same man's own
+recording, however the model is set - a listener called it a slight spasmodic dysphonia, plainest
+on long notes. And the model is told the pitch only in coarse steps (15 to 43 cents wide in a
+man's range), so its pitch wanders. So each singer's sung sound is taken apart with the WORLD
+analysis (`pip install pyworld`) into its colour, its breath and its pitch, and built again:
+
+- **Pitch**: the engine's, read from the engine's own sound cycle by cycle. (A pitch tracker's
+  reading wobbles more than the singer does, and a voice rebuilt on it flutters.)
+- **Colour and breath**: steadied a little everywhere and, inside every vowel the engine holds,
+  steadied as a whole from just after the attack.
+- **Loudness and pitch inside a held vowel**: steadied too.
 - **The top end**: the model's sound has a fizz above 5 kHz that the voice it copies does not
   (on sung notes up to 19 dB too much above 12 kHz). Each singer's track is lowered above
   3.6 kHz by what his sung notes have too much of against the recording of his voice.
 
-**A voice heard alone** is treated differently after the model. Heard by itself, the model's
-held notes are rough: measured cycle by cycle as a voice clinic does, it has three times the
-jitter and twice the shimmer of the same man's own recording, however it is set - a listener called
-it a slight spasmodic dysphonia. So a soloist's sung tone is taken apart with the WORLD analysis
-(`pip install pyworld`) into its colour, its breath and its pitch, and built again: at the
-engine's pitch, read from the engine's own sound cycle by cycle; with the colour steadied a little
-everywhere and, inside every vowel the engine holds, steadied as a whole from just after the
-attack, together with its loudness and pitch. Consonants and rests stay the model's. Without
-pyworld the soloist is put back like a section singer, and the run says so.
-
-One thing is done before the model, not after it: a part sung by one person is sung by the
-engine with consonants a third longer than usual when it is to be re-voiced. The model blurs
-consonants; given longer ones, a re-voiced soloist is understood about as well as the engine's own
-(a re-voiced section is understood the same either way, and is left alone).
+Consonants and rests stay the model's. This was made for a soloist; a listener then preferred
+the whole chorus rebuilt as well, at some cost to how well a section's words are understood.
+Without pyworld the model's own sound is kept, its pitch nudged back onto the engine's and its
+loudness made to follow the engine's, and the run says that held notes will be rougher.
 
 The pieces are at most 15 seconds long and are cut at rests and breaths. A model works on one
 window of sound at a time (half a minute less the recording of the voice, here) and joins windows
 by crossing one rendering over into another; a piece that fits one window has no such join in it.
 Of a recording of a voice, the first 13 seconds are used.
+
+One thing is done before the model, not after it: a part sung by one person is sung by the
+engine with consonants a third longer than usual when it is to be re-voiced. The model blurs
+consonants; given longer ones, a re-voiced soloist is understood about as well as the engine's own
+(a re-voiced section is understood the same either way, and is left alone).
 
 **Whose voice.** Fifteen to thirty seconds of one person singing alone, without accompaniment - a
 phone's recording will do, in any common format (WAV, m4a, mp3 ...; other than WAV needs ffmpeg,

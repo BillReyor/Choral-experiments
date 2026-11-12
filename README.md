@@ -52,7 +52,7 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
 | Scans and photocopies | the [homr](https://github.com/liebharc/homr) recognition engine beside the project: `python3.12 -m venv .venv-omr && .venv-omr/bin/pip install "homr[cpu]"` (AGPL; it is called as a separate program) |
 | Words from a scan | nothing on macOS (with the Xcode command-line tools); elsewhere [Tesseract](https://tesseract-ocr.github.io/). A PDF that carries its text needs neither. |
 | Audio other than WAV | `ffmpeg` (or macOS's `afconvert`) |
-| `--voice` with a soloist | also `pip install pyworld` (it rebuilds a soloist's held notes, which the voice model leaves rough; on a recent Python add `"setuptools<81"`, which pyworld needs to start) |
+| `--voice` | the voice model ([docs/how-it-works.md](docs/how-it-works.md)), and `pip install pyworld`, which rebuilds the sung notes the model leaves rough (on a recent Python add `"setuptools<81"`, which pyworld needs to start) |
 | `--tune`, and the listening checks in `tools/` | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) and a model, named in `WHISPER_MODEL` |
 
 ## Known limitations
@@ -95,7 +95,7 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   must carry this credit.**
 - **Voice conversion** (`--voice`) is done by [Seed-VC](https://github.com/Plachtaa/seed-vc)
   (GPL-3.0), installed separately and run as its own program; none of its code is here.
-- **A soloist's tone** is rebuilt with [WORLD](https://github.com/mmorise/World) (Masanori Morise;
+- **Each re-voiced singer's tone** is rebuilt with [WORLD](https://github.com/mmorise/World) (Masanori Morise;
   modified BSD) through [pyworld](https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder)
   (MIT).
 - **Reading scans** is done by [homr](https://github.com/liebharc/homr) (AGPL-3.0), likewise
