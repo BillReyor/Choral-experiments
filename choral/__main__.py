@@ -18,7 +18,7 @@ MUSIC is a score file (docs/score-format.md) or a PDF exported from notation sof
                     voice's sound.  Several recordings (with commas, or a folder of them) are seated
                     like a choir: one named for a part ("Bass 2.wav") sings there, the rest go by how
                     low each lies.  tools/vocalset_voices.py fetches ten men's voices to start with.
-                    Needs the optional voice model - docs/how-it-works.md - and takes about half as
+                    Needs the optional voice model - docs/how-it-works.md - and takes about a quarter as
                     long as all the singing lasts.  Use your own voice, or one whose owner has agreed
   --language        latin or english, when the program takes the words for the wrong one (it tells Latin by its words)
   --only            write just one version, e.g. --only "Baritone predominant"

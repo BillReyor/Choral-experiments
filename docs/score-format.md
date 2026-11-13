@@ -28,6 +28,7 @@ LH: f2+f3/w
 | `SOLO:` | a soloist: one singer on a close microphone, as loud as a section |
 | `TRIO:` `TR1:` `TR2:` `TR3:` | a trio of soloists: `TRIO:` is the staff its two tenors share (`transpose: TRIO -12` when printed an octave up), `TR3:` its baritone |
 | `RH:` `LH:` | piano right and left hand; `RH2:` `LH2:` for a second voice on the same staff |
+| `IN:` | an instrument's line printed in the score (a clarinet over the choir), at the pitch it sounds: the piano plays it, a little forward of the chords. `IN2:` to `IN4:` for more. Delete the lines to leave the instrument out |
 
 Every line must add up to the length of the measure — the reader refuses the file otherwise,
 which catches most misread rhythms. A line that is absent is a bar of rest.

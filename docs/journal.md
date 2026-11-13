@@ -1112,3 +1112,58 @@ is a smear, not a consonant. And the chorus the listener chose was the one witho
 piece as it now renders was laid against the two renders the listener approved: its solo verse is
 the approved soloist's and its choir verse and last chorus the approved chorus's (correlation
 1.0000 each; level within 0.1 dB).
+
+**Why a render takes an hour.** Asked by the listener while nine pieces were rendering one after
+another, each from its PDF alone. Measured on a four-minute piece: 48 singers, each converted
+alone, are 167 minutes of singing, and the voice model took 77 of the render's 85 minutes; the
+fitting afterwards took 6, and reading the PDF and singing the notes under one. Inside the model,
+on 32 stretches timed stage by stage: the diffusion 55%, the vocoder 29%, the pitch tracker 14%.
+The graphics chip was the limit, as measured before: four copies of the model side by side
+converted the 32 stretches in the time one copy takes.
+
+*What helped.* Half precision in the diffusion and the vocoder: 0.60 of the time. It is how the
+model's own script runs by default; the driver written here had left it off. The sound is the
+same by every measure on hand: over the 32 stretches the spectra lie 0.13 dB from full
+precision's (0.23 in the worst stretch; 0.15 on two phrases of 47 seconds, which the driver
+converts in overlapping pieces), the level 0.07 dB lower, and a recognizer hears 609 of the
+piece's words where it heard 622 - the same count in 24 stretches, more in 3, fewer in 5. For
+scale, a second draw of the same singer lies 1.8 dB away. A stretch that comes out as
+not-a-number or silence is done again in full precision; none has been. The next whole piece
+converted at 4.0 times real time against 2.3.
+
+*What did not.* Four stretches in one batch: 0.90 of the time, and in half precision the batch
+stalled the chip until it was stopped. Sixteen workers instead of eight for the fitting: the same
+files to the byte, no sooner. Six refinement steps instead of ten: 0.68, but 1.7 dB from the
+ten-step sound, which is as far as another draw - a different voice, not a rounding of the same
+one. Ten stays until the listener has heard six.
+
+*A caution about the recognizer.* The same piece rendered twice scored 59% and then 48% for
+twelve baritones alone. Passage by passage the loss was two windows where the recognizer gave up
+(one returned a note that the singing was in a foreign language) on sound whose level and
+duration were unchanged; the whole choir's score rose from 47% to 55% between the same two
+renders. A section's word score moves ten points on nothing. Single singers, or many windows,
+are needed to see a real difference.
+
+**"A random long slow stretch in the middle."** The listener's one complaint about the ninth
+piece rendered from its PDF alone - "great" otherwise. The stretch is printed: six measures
+marked slow and stately, 68 to the quarter, between music at 120. What was missing was the reason
+for it. The tune there is the clarinet's, the choir is silent, and the reader left every
+instrument's staff out, on the reasoning that an instrument is in the accompaniment track; from
+a PDF alone there is no track. So the render held the keyboard's chords for eighteen seconds.
+
+An instrument's staff now goes to the accompaniment (`IN:` lines; the piano plays them). In this
+piece that is 237 notes in 53 measures, and the slow passage has 27 note onsets in the mix where
+it had 11. Seven of the passage's nine clarinet measures read correctly at once. One was three
+quarters in a two-beat measure: a triplet whose bracket the engine had not read. The other was
+dropped for not fitting a measure the reader took to be three beats long - the keyboard's two
+whole-bar rests, to which the recognition engine had given three beats, outvoting the clarinet's
+four. A lone rest now says nothing about a measure's length. That measure had been a beat short
+in every reading of the piece so far, unnoticed because it is silent but for the clarinet. Two
+measures elsewhere are a tremolo, written as two whole notes beamed together, now played as the
+two in turn. Drums are named and left out; so is a part in another key than the choir's. The
+other eight pieces read exactly as before.
+
+Not measured, because it cannot be here: how a clarinet's tune sits on a piano among chords that
+lie around it. It is set forward by as much as the top note of a chord. And the fix cost a
+conversion: moving the later music by one beat changed 255 of the piece's 463 stretches, which
+had to be converted again, where a change to the accompaniment alone reuses them all.

@@ -419,6 +419,25 @@ def piano_lines(notes, length, hand):
     return out
 
 
+def instrument_lines(notes, length):
+    """An instrument's measure as lines for the accompaniment (two voices of it at most).  Two things a clarinet's
+    part has that a choir's does not.  A tremolo - two notes, each written as long as the whole measure, with beams
+    between them - is the two played in turn.  And notes that overfill the measure by exactly half are triplets
+    whose bracket was not read."""
+    out = []
+    for v in sorted({n['voice'] for n in notes}):
+        mine = [dict(n) for n in notes if n['voice'] == v]
+        heads = [n for n in mine if not n['chord']]
+        total = sum((n['ql'] for n in heads), Fraction(0))
+        if len(mine) == 2 and len(heads) == 2 and all(n['midi'] is not None and n['ql'] == length for n in mine) and mine[0]['midi'] != mine[1]['midi']:
+            mine = [dict(mine[i % 2], on=Fraction(i, 4), ql=Fraction(1, 4), tie=False, slur=[]) for i in range(int(length * 4))]
+        elif total == length * 3 / 2 and all(n['ql'] * 2 / 3 in TRIP or spell(n['ql'] * 2 / 3) for n in heads):
+            for n in mine:
+                n['on'] = n['on'] * 2 / 3; n['ql'] = n['ql'] * 2 / 3
+        out += mine
+    return piano_lines(layout(out, length), length, 'IN')[:2]
+
+
 def read_systems(crops, log):
     """Pass 2: every system read on its own.  -> crops, each with 'read': its staves top to bottom."""
     need = [c['name'] + '.png' for c in crops if not os.path.exists(c['name'] + '.musicxml')]
@@ -1067,13 +1086,16 @@ def join_split_systems(crops, log=print):
 
 
 def label_role(text):
-    """A staff's printed name -> what it is: 'T1' 'T2' 'BR' 'BS' 'TEN' 'BASS' 'SOLO', 'P' (keyboard), 'I' (an instrument), or None."""
+    """A staff's printed name -> what it is: 'T1' 'T2' 'BR' 'BS' 'TEN' 'BASS' 'SOLO', 'P' (keyboard), 'I' (an instrument
+    that plays notes), 'D' (drums: nothing a piano could play), or None."""
     t = re.sub(r'[^a-z0-9 ]', ' ', text.lower()).split()
     j = ' '.join(t)
     if not t:
         return None
-    if re.search(r'clar|flute|oboe|bassoon|violin|viola|cello|horn|trumpet|trombone|sax|drum|perc|guitar|harp|bells|glock|timp|strings', j) or \
-            re.fullmatch(r'(cl|fl|ob|bsn|vln|vn|vla|vc|hn|tpt|tbn|dr)( (1|2|i|ii|in bb?|in a))?', j):
+    if re.search(r'drum|perc|cymbal|tamb|shaker|conga|bongo', j) or re.fullmatch(r'(dr|perc)( (1|2|i|ii))?', j):
+        return 'D'
+    if re.search(r'clar|flute|oboe|bassoon|violin|viola|cello|horn|trumpet|trombone|sax|guitar|harp|bells|glock|timp|strings', j) or \
+            re.fullmatch(r'(cl|fl|ob|bsn|vln|vn|vla|vc|hn|tpt|tbn)( (1|2|i|ii|in bb?|in a))?', j):
         return 'I'
     if re.search(r'keyb|piano|pno|organ|accomp|kbd', j):
         return 'P'
@@ -1151,7 +1173,7 @@ def staff_labels(crops, pages, exe, work):
         if 'P' in labels:                                # the names know better than the staff finder which two staves are the keyboard's
             c['kinds'] = ['p' if t == 'P' else 'v' for t in labels]
         elif c.get('kinds'):
-            c['kinds'] = ['v' if t in ('T1', 'T2', 'BR', 'BS', 'TEN', 'BASS', 'LOW', 'SOLO', 'I') else k for t, k in zip(labels, c['kinds'])]
+            c['kinds'] = ['v' if t in ('T1', 'T2', 'BR', 'BS', 'TEN', 'BASS', 'LOW', 'SOLO', 'I', 'D') else k for t, k in zip(labels, c['kinds'])]
 
 
 BOTTOM = {('G', 2): 30, ('G', 1): 32, ('F', 4): 18, ('F', 3): 20, ('C', 3): 24, ('C', 4): 22, ('C', 1): 28}    # each clef's bottom line, in steps up from C0
@@ -1180,9 +1202,10 @@ def fix_clefs(crops, log):
     that part has everywhere else, the sign was misread - and every note on the staff with it, by a sixth or
     more.  The notes are moved to where the part's usual clef puts them."""
     seen = {}
+    one = all(sum(r == 'I' for r in c.get('roles') or []) <= 1 for c in crops)      # (two instruments are two parts under one name here)
     for c in crops:
         for st, role in zip(c['read'], c.get('roles') or []):
-            if role in ('T1', 'T2', 'BR', 'BS', 'TEN', 'LOW') and st['clef']:
+            if (role in ('T1', 'T2', 'BR', 'BS', 'TEN', 'LOW') or role == 'I' and one) and st['clef']:
                 seen.setdefault(role, []).append(st['clef'])
     for c in crops:
         for st, role in zip(c['read'], c.get('roles') or []):
@@ -1221,7 +1244,7 @@ def roles_for(crops, piano=None):
         c['roles'] += ['RH', 'LH'] if grand[i] else []
     # ---- the printed names, where there are any, say it better than counting staves does
     known_sets = {}
-    has_instrument = any('I' in (c.get('labels') or []) for c in crops)
+    has_instrument = any(t in ('I', 'D') for c in crops for t in (c.get('labels') or []))
     for i, c in enumerate(crops):
         labels = c.get('labels')
         if labels:
@@ -1235,17 +1258,17 @@ def roles_for(crops, piano=None):
         else:
             known_sets[(nv, clefs)] = labels
         tags = list(labels[:nv])
-        if not any(t in ('I', 'T1', 'T2', 'BR', 'BS', 'TEN', 'BASS', 'LOW', 'SOLO') for t in tags):
+        if not any(t in ('I', 'D', 'T1', 'T2', 'BR', 'BS', 'TEN', 'BASS', 'LOW', 'SOLO') for t in tags):
             continue
         if has_instrument and sum(t is None for t in tags) == 1 and sum(t in ('T1', 'T2', 'BR', 'BS', 'TEN', 'BASS', 'LOW') for t in tags) >= 2:
             tags = ['I' if t is None else t for t in tags]
-        sung = [k for k, t in enumerate(tags) if t != 'I']
+        sung = [k for k, t in enumerate(tags) if t not in ('I', 'D')]
         has_bar = any(t == 'BR' for t in tags); n_bass = sum(t in ('BASS', 'BS', 'BR') for t in tags)
         roles = list(c['roles'][:nv])
-        if any(t == 'I' for t in tags):                  # with the instruments set aside, count the voices again
+        if any(t in ('I', 'D') for t in tags):           # with the instruments set aside, count the voices again
             base = {1: ['ALL'], 2: ['TEN', 'LOW'], 3: ['SOLO', 'TEN', 'LOW'], 4: ['T1', 'T2', 'BR', 'BS']}.get(len(sung))
             for k in range(nv):
-                roles[k] = 'I'
+                roles[k] = 'D' if tags[k] == 'D' else 'I'
             for j, k in enumerate(sung):
                 roles[k] = base[j] if base else '?'
         for k, t in enumerate(tags):
@@ -1257,7 +1280,7 @@ def roles_for(crops, piano=None):
                 roles[k] = 'BS' if has_bar or n_bass > 1 else 'LOW'
             elif t == 'LOW':
                 roles[k] = 'LOW'
-        if len(set(r for r in roles if r not in ('I',))) == len([r for r in roles if r != 'I']):
+        if len(set(r for r in roles if r not in ('I', 'D'))) == len([r for r in roles if r not in ('I', 'D')]):
             c['roles'] = roles + c['roles'][nv:]
 
 
@@ -1309,18 +1332,32 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
     staff_labels(crops, pages, exe, work)
     roles_for(crops, piano)
     fix_clefs(crops, log)
-    lone = [c for c in crops if c['read'] and c.get('roles') and all(r == 'I' for r in c['roles'])]
+    lone = [c for c in crops if c['read'] and c.get('roles') and all(r in ('I', 'D') for r in c['roles'])]
     if lone and len(lone) < len(crops):
         log(f"  {len(lone)} system(s) are an instrument's part alone (printed after the score): left out")
         for c in lone:
             c['read'] = []
+    # ---- an instrument's staff in the score (a clarinet over the choir): the accompaniment plays its line, which is the
+    # tune wherever the choir is silent.  Not one written in another key than the choir's - a part for a transposing
+    # instrument, which sounds elsewhere than it is written.
+    apart = []
+    for c in crops:
+        rs = c.get('roles') or []
+        others = [st['key'] for st, r in zip(c['read'], rs) if r not in ('I', 'D') and st.get('key') is not None]
+        apart += [st['key'] - max(sorted(set(others)), key=others.count) for st, r in zip(c['read'], rs) if r == 'I' and st.get('key') is not None and others]
+    n_inst = sum(r == 'I' for c in crops if c['read'] for r in c.get('roles') or [])
+    play_inst = not apart or max(sorted(set(apart)), key=apart.count) == 0
+    if n_inst:
+        log(f"  an instrument's staff is printed in {sum(any(r == 'I' for r in c.get('roles') or []) for c in crops if c['read'])} system(s): "
+            + ('the accompaniment plays its line  (the IN: lines of the score - delete them to leave it out)' if play_inst else
+               "it is written in another key than the choir's (a transposing instrument), so it is left out"))
     out, num, cur_time, length = [], 0, None, Fraction(4)
     paces, mlen, holds, worded = set(), {}, {}, False       # "rall."/"a tempo" marks; each measure's length; fermatas; a tempo given in words
     imgs = {}
     def read_texts(c, img, M):
         texts = {}
         for si, role in enumerate(c['roles'][:len(c['read'])]):
-            if role in ('RH', 'LH', 'I') or not exe or si >= len(c['staves']):
+            if role in ('RH', 'LH', 'I', 'D') or not exe or si >= len(c['staves']):
                 continue
             top, bot = c['staves'][si]
             unit = (bot - top) / 4
@@ -1521,14 +1558,20 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         for j in range(M):
             # How long is this measure?  Count it: the total most voices agree on.  (The printed time signature is
             # read too, but it is the less reliable of the two, and most systems do not print one at all.)
-            totals = []
+            # A voice that is one rest and nothing else says nothing: the reader gave that rest the length it took
+            # the measure to have.  It may agree with a voice that has notes, not outvote one.
+            totals, idle = [], []
             for st in c['read']:
                 if j < len(st['measures']):
-                    by_voice = {}
+                    by_voice, heads = {}, {}
                     for n in st['measures'][j]['notes']:
                         if not n['chord']:
                             by_voice[n['voice']] = by_voice.get(n['voice'], Fraction(0)) + n['ql']
-                    totals += [v for v in by_voice.values() if v > 0]
+                            heads.setdefault(n['voice'], []).append(n['midi'])
+                    for v_, t_ in by_voice.items():
+                        if t_ > 0:
+                            (idle if heads[v_] == [None] else totals).append(t_)
+            totals += [t_ for t_ in idle if not totals or t_ in totals]
             labels = [st['measures'][j]['time'] for st in c['read'] if j < len(st['measures']) and st['measures'][j]['time']]
             as_len = lambda lab: Fraction(int(lab.split('/')[0]) * 4, int(lab.split('/')[1]))
             exact = [st['measures'][j].get('len') for st in c['read'] if j < len(st['measures'])]
@@ -1544,7 +1587,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         # ---- the words of the whole system, put on its notes by where both stand on the page
         sylmap = {}
         for si, role in enumerate(c['roles'][:len(c['read'])]):
-            if role in ('RH', 'LH', 'I') or si not in texts or not texts[si][0]:
+            if role in ('RH', 'LH', 'I', 'D') or si not in texts or not texts[si][0]:
                 continue
             lines, bars, unit, ys = texts[si]
             for v in (0, 1):
@@ -1619,7 +1662,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 if b_ > a_:
                     extra = min(max(1.2 * float(b_ - a_), 1.), 1.6)          # a fermata adds about a beat, a beat and a half
                     holds.setdefault(num, []).append((float(a_) + 1, float(b_ - a_), 1 + extra / float(b_ - a_)))
-            out.append(f'== {num}')
+            out.append(f'== {num}'); n_in = 0
             if any(st['measures'][j].get('rep_start') for st in c['read'] if j < len(st['measures'])):
                 rep_starts.add(num)
             if any(st['measures'][j].get('rep_end') for st in c['read'] if j < len(st['measures'])):
@@ -1631,7 +1674,13 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 notes = st['measures'][j]['notes']
                 if not any(n['midi'] is not None for n in notes):
                     continue
-                if role == 'I':                      # an instrument's staff: not sung (it is in the accompaniment track, if there is one)
+                if role == 'D' or role == 'I' and not play_inst:
+                    continue
+                if role == 'I':                      # an instrument's staff: not sung, played (two voices of it at most, four lines a measure)
+                    for _, toks in instrument_lines(notes, length):
+                        if n_in < 4:
+                            n_in += 1
+                            out.append(('IN' if n_in == 1 else f'IN{n_in}') + ': ' + ' '.join(toks))
                     continue
                 if role in ('RH', 'LH'):
                     out += [f'{name}: ' + ' '.join(toks) for name, toks in piano_lines(layout(notes, length), length, role)]

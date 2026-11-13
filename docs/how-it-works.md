@@ -59,6 +59,17 @@ What the reader works out without being told, and from what:
 - **Which staves are sung.** From the names printed beside them where there are any, and on the
   systems without names from the system that looked the same. A treble and a bass staff joined by
   a brace are a keyboard in most music; with a line of words between them they are the choir.
+- **An instrument's staff.** A staff named for an instrument ("Cl.", "Flute") is not sung. Its
+  line goes to the accompaniment as `IN:` lines, because where the choir rests it is the tune:
+  without it an interlude is held chords and nothing else. It is played only if its key signature
+  is the choir's - a part in another key is written for a transposing instrument and sounds
+  elsewhere than it is written - and never if it is drums. Two notations of such parts are
+  understood: a tremolo (two notes, each written as long as the measure, beamed together) is the
+  two notes in turn, and notes that overfill a measure by exactly half are a triplet whose
+  bracket was not read.
+- **How long a measure is.** Counted from its notes: the total most voices agree on. A voice
+  that is a single rest does not count against a voice with notes - the recognition engine gives
+  such a rest whatever length it took the measure to have.
 - **Where one system ends.** Staves joined at their left end by a line are one system. The line
   must stand where the staves begin: three spaces in stands the clef, and a clef's tail, a
   measure number and the next clef's top in one column look much like a line.
@@ -182,10 +193,16 @@ python3.12 -m venv .svc/venv
 plus a driver of about a hundred lines that loads the model once and runs the jobs with that
 project's own functions. Seed-VC is under the GPL-3.0 and the driver follows its code, so the
 driver is kept with the installed model, not in this repository. The first run fetches about
-2.3 GB of model files. On an Apple M-series machine it converts about twice as fast as real time
-(ten refinement steps, which measured the same as thirty): a three-minute piece for four parts of
-twelve is an hour and a half of singing, so about 50 minutes; with `--singers 4`, about 15. Running
-several copies of the model side by side gains nothing - the graphics chip is already full. What
+2.3 GB of model files. On an Apple M-series machine it converts about four times as fast as real
+time (ten refinement steps, which measured the same as thirty): a three-minute piece for four
+parts of twelve is an hour and a half of singing, so about 25 minutes; with `--singers 4`, about
+10. That is with the model's two heavy stages, the diffusion and the vocoder, in half precision,
+as that project's own script runs them by default (`torch.autocast` around both): 0.6 of the time
+of full precision and the same sound - over 32 stretches the spectra lie 0.13 dB apart, where a
+second draw of the same singer lies 1.8 dB away, and a recognizer hears the same words. Have the
+driver do a stretch again in full precision if it comes out as not-a-number or silence. Running
+several copies of the model side by side gains nothing - the graphics chip is already full - and
+neither does giving it four stretches at once. What
 has been converted is kept (`.svc/cache`, up to 4 GB): the engine sings a piece the same way every
 time, so rendering it again - for another part's rehearsal tracks, say - takes no conversion.
 

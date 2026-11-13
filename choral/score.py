@@ -14,7 +14,7 @@ SHARPS, FLATS = 'fcgdaeb', 'beadgcf'
 DYN = {'pp': .42, 'p': .52, 'mp': .62, 'mf': .74, 'f': .88, 'ff': 1.0}
 VOCAL = {'TEN': ('T1', 'T2'), 'LOW': ('BR', 'BS'), 'T1': ('T1',), 'T2': ('T2',), 'BR': ('BR',), 'BS': ('BS',), 'SOLO': ('SOLO',),
          'TRIO': ('TR1', 'TR2'), 'TR1': ('TR1',), 'TR2': ('TR2',), 'TR3': ('TR3',)}
-PIANO = ('RH', 'RH2', 'RH3', 'LH', 'LH2', 'LH3')
+PIANO = ('RH', 'RH2', 'RH3', 'LH', 'LH2', 'LH3', 'IN', 'IN2', 'IN3', 'IN4')    # IN: an instrument's line (a clarinet over the choir), played by the piano
 TOKEN = re.compile(r"^(?P<p>r|[a-g](?:##|bb|[#bn])?-?\d~?(?:\+[a-g](?:##|bb|[#bn])?-?\d~?)*)/(?P<d>[whqest]3?\.*)"
                    r"(?P<f>(?:~|\^|>|'|%gl)*)(?:=(?P<l>\S+))?$")
 

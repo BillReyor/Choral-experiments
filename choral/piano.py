@@ -40,6 +40,7 @@ if os.path.exists(_fit_file) and not os.environ.get('CHORAL_NOFIT'):     # setti
     import json
     apply_fit(json.load(open(_fit_file)))
 
+LEAD = .12            # how far an instrument's line (IN:) stands forward: as much as the top note of a chord does
 
 def note(midi, dur, vel, rng):
     """One note as a mono array.  dur is how long the string is left undamped (seconds); vel is 0..1."""
@@ -94,6 +95,8 @@ def render(notes, n_samples, T, dyn, seed=1):
             hold = min(hold, nt['_next'] - nt['beat'] - .02)         # the same key struck again
         t0, t1 = T(nt['beat']), T(nt['beat'] + max(hold, .08))
         vel = dyn(nt['beat']) * .8 + (.14 if '>' in nt['flags'] else 0)
+        if nt.get('hand') == 'IN':                                   # an instrument's line is the tune where it plays: a little
+            vel += LEAD                                              # forward of the chords, which often lie around it
         frac = nt['beat'] % 1
         vel += FIT['accent'] * (1 if frac == 0 and nt['beat'] % 2 == 0 else .4 if frac == 0 else -.3)
         if len(chord) > 1:                                           # voicing

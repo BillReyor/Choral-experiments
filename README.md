@@ -83,7 +83,9 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   about three quarters until the next "a tempo". With no tempo on the page at all the program
   guesses, and says so in capitals: 120 for a notation-software export (the speed such software
   plays an unmarked score at), 100 for a printed page. The accompaniment is the built-in piano playing
-  the piano staves: no other instrument, and no pianist's judgement.
+  the piano staves, with no pianist's judgement. An instrument's staff in the score (a clarinet, a
+  flute) is played by the same piano, so its tune is there when the choir is silent; drums are
+  left out, and so is a part written for a transposing instrument.
 - **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece.
 
 ## The name
