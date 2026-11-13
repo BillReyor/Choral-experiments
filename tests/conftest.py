@@ -15,6 +15,7 @@ for p in (ROOT, os.path.join(ROOT, 'tools')):
 
 os.environ.setdefault('PALARE_NO_BROWSER', '1')
 os.environ.setdefault('PALARE_NO_OPEN', '1')
+os.environ.setdefault('PALARE_QUIET', '1')          # no sound from this computer when a test makes tracks
 
 import pytest  # noqa: E402
 

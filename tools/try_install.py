@@ -86,7 +86,7 @@ class Trial:
         print(f'installed copy: version {v["version"][:12]}, started by {v["start"]}', flush=True)
         if not os.path.exists(v['start']):
             raise SystemExit(f'NOT RIGHT: what should start it is not there: {v["start"]}')
-        os.environ.update(PALARE_LIBRARY=self.lib, PALARE_PORT=str(PORT), PALARE_NO_BROWSER='1')
+        os.environ.update(PALARE_LIBRARY=self.lib, PALARE_PORT=str(PORT), PALARE_NO_BROWSER='1', PALARE_QUIET='1')
         if '--plain' in sys.argv:
             os.environ['PALARE_PLAIN_TRACKS'] = '1'
         if os.name == 'nt':

@@ -202,6 +202,7 @@ footer .heart { color: var(--ink); }
   </section>
 
   <div id="pieces"></div>
+  <p class="small" id="dingrow" hidden><label><input type="checkbox" id="ding"> Play a sound when tracks are ready</label></p>
   <div id="voices"></div>
   <div id="computer"></div>
 
@@ -611,6 +612,7 @@ function draw() {
   $('#where').textContent = 'Your pieces and tracks are kept in ' + S.library + '.';
   $('#demo').hidden = !(S.demo && !S.pieces.length);
   $('#howto').hidden = S.pieces.length > 0;
+  $('#dingrow').hidden = !S.pieces.length; if (document.activeElement !== $('#ding')) $('#ding').checked = (S.last || {}).ding !== false;
   drawUpdate();
   drawVoices();
   drawComputer();
@@ -665,6 +667,7 @@ async function saveReport() {
   } catch (e) { alert(e.message); }
 }
 $('#report-go').onclick = saveReport;
+$('#ding').addEventListener('change', e => post('/api/setting', { ding: e.target.checked }).catch(() => {}));      // (switched on, the computer plays it once: that is what to listen for)
 $('#quit').onclick = () => { if (confirm('Quit Palare Piano? Anything being made is stopped; what was finished is kept.')) fetch('/api/quit', { method: 'POST', headers: { 'X-Palare': TOKEN } }).finally(() => { $('#gone').style.display = 'block'; }); };
 </script>
 </body>

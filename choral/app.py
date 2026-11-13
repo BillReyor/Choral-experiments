@@ -538,33 +538,85 @@ def do_setup():
 
 def worker():
     while True:
-        kind, pid, opt = jobs.get()
+        work(*jobs.get())
+
+
+def work(kind, pid, opt):
+    """One job, from beginning to end: a piece read, tracks made, real voices set up, the computer looked at."""
+    with lock:
+        now.clear(); now.update(id=pid, kind=kind, stage='', progress=None, eta=None, started=time.time())
+        if pid in waiting:
+            waiting.remove(pid)
+    try:
+        if kind == 'setup':
+            do_setup()
+            if voices_state()['ready']:            # now that they are here: how fast are they on this machine?
+                do_check({'voices': True})
+        elif kind == 'check':
+            do_check(opt)
+        elif not os.path.exists(info_file(pid)):
+            pass                                   # removed while it waited
+        elif kind == 'read':
+            do_read(pid, opt.get('again'))
+        else:
+            save(pid, status='rendering', note=None)
+            do_render(pid, opt)
+    except Exception as e:
+        if kind == 'setup':
+            setup.update(running=False, error=str(e))
+        elif os.path.exists(info_file(pid)):
+            save(pid, status='failed' if kind == 'render' else 'unreadable', error=[f'{type(e).__name__}: {e}'])
+    finally:
+        try:                                       # tracks are ready, or making them went wrong: said aloud (not if someone stopped it)
+            if kind == 'render' and not now.get('stopped') and os.path.exists(info_file(pid)):
+                ding(load(pid).get('status') == 'ready')
+        except Exception:
+            pass
         with lock:
-            now.clear(); now.update(id=pid, kind=kind, stage='', progress=None, eta=None, started=time.time())
-            if pid in waiting:
-                waiting.remove(pid)
-        try:
-            if kind == 'setup':
-                do_setup()
-                if voices_state()['ready']:            # now that they are here: how fast are they on this machine?
-                    do_check({'voices': True})
-            elif kind == 'check':
-                do_check(opt)
-            elif not os.path.exists(info_file(pid)):
-                pass                                   # removed while it waited
-            elif kind == 'read':
-                do_read(pid, opt.get('again'))
-            else:
-                save(pid, status='rendering', note=None)
-                do_render(pid, opt)
-        except Exception as e:
-            if kind == 'setup':
-                setup.update(running=False, error=str(e))
-            elif os.path.exists(info_file(pid)):
-                save(pid, status='failed' if kind == 'render' else 'unreadable', error=[f'{type(e).__name__}: {e}'])
-        finally:
-            with lock:
-                now.clear()
+            now.clear()
+
+
+def sound_for(ok, system=None, which=shutil.which, exists=os.path.exists):
+    """What makes this computer's own sound for "done" (ok) or for "that went wrong": a command to run, on Windows
+    the name of a system sound, or None where there is nothing to make one with."""
+    system = system or ('mac' if sys.platform == 'darwin' else 'windows' if os.name == 'nt' else 'linux')
+    if system == 'mac':
+        f = '/System/Library/Sounds/%s.aiff' % ('Glass' if ok else 'Basso')
+        return ['afplay', f] if which('afplay') and exists(f) else None
+    if system == 'windows':
+        return 'SystemAsterisk' if ok else 'SystemHand'
+    name = 'complete' if ok else 'dialog-error'            # a Linux desktop's sound theme, by whatever plays it here
+    if which('canberra-gtk-play'):
+        return ['canberra-gtk-play', '-i', name]
+    f = f'/usr/share/sounds/freedesktop/stereo/{name}.oga'
+    return next(([player, f] for player in ('pw-play', 'paplay') if which(player) and exists(f)), None)
+
+
+def _quietly(cmd):
+    try:
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, **hidden())
+    except Exception:
+        pass                                           # no sound, then: nothing depends on it
+
+
+def ding(ok=True):
+    """Say by ear that tracks are ready (ok), or that making them went wrong.  With real voices a piece takes up to an
+    hour, and nobody watches a page that long.  The computer makes the sound, not the page: a browser lets a page
+    make sound only just after a click, and the page may be in the background, or closed.  It is the computer's own
+    sound at the computer's own loudness, it is not waited for, and the switch on the page turns it off
+    (PALARE_QUIET does, for tests).  -> whether a sound was asked for."""
+    if os.environ.get('PALARE_QUIET') or settings().get('ding') is False:
+        return False
+    try:
+        what = sound_for(ok)
+        if isinstance(what, str):
+            import winsound
+            winsound.PlaySound(what, winsound.SND_ALIAS | winsound.SND_ASYNC)
+        elif what:
+            threading.Thread(target=_quietly, args=(what,), daemon=True).start()
+        return bool(what)
+    except Exception:
+        return False
 
 
 def find_measures():
@@ -719,6 +771,12 @@ def act(path, q, body):
         return {}
     if path == '/api/update':
         update_now()
+        return {}
+    if path == '/api/setting':                         # the page's own switches
+        if 'ding' in q:
+            settings(ding=bool(q['ding']))
+            if q['ding']:
+                ding()                                 # switched on: played once, so that it is known what to listen for
         return {}
     if path == '/api/report':
         return dict(name=f'Palare Piano report {time.strftime("%Y-%m-%d %H%M")}.txt', text=report())

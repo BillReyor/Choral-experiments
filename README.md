@@ -150,7 +150,9 @@ A few seconds for a clean PDF; about half a minute for each page of a scan.
 - **Real voices** sound like people singing, and take much longer (see below).
 
 **4. Click "Make my tracks".**
-You can leave it working and close the window. It carries on.
+You can leave it working and close the window. It carries on, and your computer plays a short
+sound when the tracks are ready. (To turn the sound off, untick **Play a sound when tracks are
+ready** under your pieces.)
 
 **5. Press play and sing along.**
 While a track plays, the page shows which measure you are hearing. To start somewhere else, type
