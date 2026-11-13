@@ -38,28 +38,35 @@ echo "What people would get (newest first):"
 if [ -n "$OLD" ]; then git log --format='  %h %s' "$OLD..$NEW"; else git log -8 --format='  %h %s' "$NEW"; fi
 [ "${1:-}" = "--look" ] && exit 0
 
-# the newest run of the test at exactly this version: its id and how it ended
-newest() { gh run list --repo "$REPO" --workflow "$TEST" --commit "$NEW" --limit 1 --json databaseId,status,conclusion -q '.[0] | "\(.databaseId) \(.status) \(.conclusion)"' 2>/dev/null || true; }
+# the newest run of the test at exactly this version -> ID, STATUS and END (how it ended); ID is empty if there is none
+look() {
+    set -- $(gh run list --repo "$REPO" --workflow "$TEST" --commit "$NEW" --limit 1 --json databaseId,status,conclusion \
+                 -q '.[0] // empty | "\(.databaseId) \(.status) \(.conclusion // "-")"' 2>/dev/null || true)
+    ID="${1:-}"; STATUS="${2:-}"; END="${3:-}"
+}
 
-set -- $(newest)
-if [ "${3:-}" != "success" ]; then
-    if [ -z "${1:-}" ] || [ "${2:-}" = "completed" ]; then        # never run here, or it did not pass: run it (again)
+look
+tries=0                                    # (after a push made a moment ago, its test may not be listed yet)
+while [ -z "$ID" ] && [ "$tries" -lt 4 ]; do sleep 5; tries=$((tries + 1)); look; done
+if [ "$END" != "success" ]; then
+    if [ -z "$ID" ] || [ "$STATUS" = "completed" ]; then           # never run here, or it did not pass: run it (again)
         echo "Starting the test on Linux, Windows and a Mac at $(git rev-parse --short "$NEW")..."
+        was="$ID"
         gh workflow run "$TEST" --repo "$REPO" --ref main >/dev/null
         tries=0
         while :; do
-            sleep 5; set -- $(newest)
-            [ -n "${1:-}" ] && [ "${2:-}" != "completed" ] && break
+            sleep 5; look
+            [ -n "$ID" ] && [ "$ID" != "$was" ] && break
             tries=$((tries + 1)); [ "$tries" -lt 24 ] || { echo "The test did not start. Look at the Actions page of the repository." >&2; exit 1; }
         done
     fi
     echo "Waiting for the test (GitHub's Mac machines can take a while to come free)..."
-    gh run watch "$1" --repo "$REPO" --interval 30 --exit-status >/dev/null 2>&1 || true
-    set -- $(newest)
+    gh run watch "$ID" --repo "$REPO" --interval 30 --exit-status >/dev/null 2>&1 || true
+    look
 fi
-if [ "${3:-}" != "success" ]; then
-    echo "The test did not pass at this version (it ended: ${3:-not at all}). stable stays where it is." >&2
-    echo "    gh run view ${1:-} --repo $REPO --log-failed" >&2
+if [ "$END" != "success" ]; then
+    echo "The test did not pass at this version (it ended: ${END:-not at all}). stable stays where it is." >&2
+    [ -n "$ID" ] && echo "    gh run view $ID --repo $REPO --log-failed" >&2
     exit 1
 fi
 
