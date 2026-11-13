@@ -736,7 +736,7 @@ def main():
         raise SystemExit('No free port between 8765 and 8789 on this computer.')
     json.dump({'port': port, 'pid': os.getpid()}, open(note, 'w'))
     v = (version() or {}).get('version')
-    newer_here = bool(v) and settings().get('version') not in (None, v)      # this is the first start of a newer version
+    newer_here = bool(v) and settings().get('version') != v                  # this is the first start of this version here
     if v:
         settings(version=v)
     with lock:                                         # whatever was under way when it was last closed did not finish
