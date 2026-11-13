@@ -35,12 +35,25 @@ def sysctl(name):
 
 
 def machine():
-    mem = 0.
+    mem, chip = 0., ''
     try:
-        mem = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2 ** 30
-    except (ValueError, OSError):
+        if os.name == 'nt':
+            import ctypes
+
+            class Memory(ctypes.Structure):
+                _fields_ = [('size', ctypes.c_ulong), ('load', ctypes.c_ulong)] + [(n, ctypes.c_ulonglong) for n in ('total', 'free', 'a', 'b', 'c', 'd', 'e')]
+            m = Memory(); m.size = ctypes.sizeof(Memory)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+            mem = m.total / 2 ** 30
+        else:
+            mem = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2 ** 30
+    except (ValueError, OSError, AttributeError):
         pass
-    chip = sysctl('machdep.cpu.brand_string') or platform.processor() or platform.machine()
+    if sys.platform == 'darwin':
+        chip = sysctl('machdep.cpu.brand_string')
+    elif os.path.exists('/proc/cpuinfo'):
+        chip = next((l.split(':', 1)[1].strip() for l in open('/proc/cpuinfo') if l.lower().startswith(('model name', 'hardware'))), '')
+    chip = chip or platform.processor() or platform.machine()
     return dict(chip=chip, apple=sys.platform == 'darwin' and platform.machine() == 'arm64', memory=round(mem), cores=os.cpu_count() or 1,
                 disk=round(shutil.disk_usage(os.path.expanduser('~')).free / 2 ** 30), system=platform.mac_ver()[0] or platform.platform())
 
@@ -122,7 +135,7 @@ def verdicts(mc, slow, rate, voices):
     for key, name, detail, singers in (('small', 'Real voices, small choir', 'four singers to a part', 4), ('full', 'Real voices, full choir', 'twelve singers to a part', 12)):
         t = real(singers)
         if not mc['apple']:
-            row = dict(level='no', why='Real voices need a Mac with an Apple chip (M1 or later).')
+            row = dict(level='no', why='Real voices are only set up for Macs with an Apple chip (M1 or later) so far.')
         elif mc['memory'] and mc['memory'] < 12:
             row = dict(level='no', why=f"Real voices need about {MODEL_GB:.0f} GB of memory for themselves, and this Mac has {mc['memory']} GB.")
         elif not voices and mc['disk'] < MODEL_DISK_GB:
@@ -141,6 +154,8 @@ def verdicts(mc, slow, rate, voices):
 
 
 def main():
+    from . import utf8
+    utf8()
     voices = '--voices' in sys.argv
     mc = machine()
     took = sing_once()

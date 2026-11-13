@@ -1,19 +1,26 @@
 #!/bin/sh
-# Palare Piano - install it, or bring an installed copy up to date.
+# Palare Piano - install it, or bring an installed copy up to date.  For Macs and for Linux
+# (Windows has install.ps1, which does the same there).
 #
 #     curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh
+#     wget -qO- https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh      (where there is no curl)
 #
-# Paste that line into Terminal once.  It needs no password, and what it installs is in three places:
+# Paste one of those lines into a terminal once.  It needs no password, and what it installs is in three places:
 #
-#     ~/Library/Application Support/Palare-Piano    the program, its own Python, and (later) the voice model
-#     ~/Applications/Palare Piano.app               what you double-click from then on
-#     ~/Music/Palare Piano                          your pieces and their tracks (made when you add the first)
+#     the program, its own Python, and (on a Mac, later) the voice model
+#         on a Mac    ~/Library/Application Support/Palare-Piano
+#         on Linux    ~/.local/share/Palare-Piano
+#     what you open from then on
+#         on a Mac    ~/Applications/Palare Piano.app
+#         on Linux    "Palare Piano" among your applications (~/.local/share/applications/palare-piano.desktop)
+#     your pieces and their tracks (made when you add the first)
+#         ~/Music/Palare Piano
 #
 # What it fetches, and from where: uv (astral.sh), which brings a private Python; this program (github.com);
 # the Python packages listed in install/ (pypi.org); the scan reader's models (github.com).  Real voices are
-# added later from the page, if you want them.  The parts that would report their use to their makers
-# (onnxruntime, the Hugging Face downloader) are told not to.  If Apple's developer tools are missing, Apple
-# installs them where it keeps them.
+# added later from the page, if you want them and the computer can run them.  The parts that would report their
+# use to their makers (onnxruntime, the Hugging Face downloader) are told not to.  If Apple's developer tools
+# are missing on a Mac, Apple installs them where it keeps them.
 #
 #     ... | sh -s -- --uninstall       removes the first two places (your pieces and tracks are left alone)
 #
@@ -22,14 +29,34 @@
 set -eu
 
 NAME="Palare Piano"
-BASE="${PALARE_HOME:-$HOME/Library/Application Support/Palare-Piano}"
-APP="$BASE/app"
-LAUNCHER="${PALARE_LAUNCHER:-$HOME/Applications/$NAME.app}"
 REPO="BillReyor/Palare-Piano"
 SOURCE="${PALARE_SOURCE:-}"
+OS="$(uname -s)"
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 fail() { printf '\n%s\n' "$*" >&2; exit 1; }
+# get ADDRESS [SECONDS]: what is at that address, by whichever of the two fetching programs this computer has
+if command -v curl >/dev/null 2>&1; then
+    get() { curl -fsSL -m "${2:-900}" "$1"; }
+elif command -v wget >/dev/null 2>&1; then
+    get() { wget -q -T "${2:-900}" -t 1 -O - "$1"; }
+else
+    fail "This needs the 'curl' program (or 'wget'), and this computer has neither. Install one (on Ubuntu: sudo apt install curl) and run the same line again."
+fi
+
+case "$OS" in
+    Darwin)
+        BASE="${PALARE_HOME:-$HOME/Library/Application Support/Palare-Piano}"
+        LAUNCHER="${PALARE_LAUNCHER:-$HOME/Applications/$NAME.app}"
+        START="$LAUNCHER/Contents/MacOS/launcher" ;;
+    Linux)
+        BASE="${PALARE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/Palare-Piano}"
+        LAUNCHER="${PALARE_LAUNCHER:-${XDG_DATA_HOME:-$HOME/.local/share}/applications/palare-piano.desktop}"
+        START="$BASE/palare-piano" ;;
+    *)
+        fail "This installer is for Macs and Linux. On Windows, use the PowerShell line in the README." ;;
+esac
+APP="$BASE/app"
 
 if [ "${1:-}" = "--uninstall" ]; then
     rm -rf "$BASE" "$LAUNCHER"
@@ -38,26 +65,35 @@ if [ "${1:-}" = "--uninstall" ]; then
 fi
 
 # ---- is this a computer it has been tried on?
-[ "$(uname -s)" = "Darwin" ] || fail "This installer is for Macs. On another computer, see docs/install-by-hand.md in the project."
-[ "$(uname -m)" = "arm64" ] || fail "This installer needs a Mac with an Apple chip (M1 or later). On an Intel Mac, see docs/install-by-hand.md in the project."
-major="$(sw_vers -productVersion | cut -d. -f1)"
-[ "$major" -ge 14 ] || fail "This needs macOS 14 (Sonoma) or later; this Mac has $(sw_vers -productVersion)."
+if [ "$OS" = "Darwin" ]; then
+    [ "$(uname -m)" = "arm64" ] || fail "This installer needs a Mac with an Apple chip (M1 or later). On an Intel Mac, see docs/install-by-hand.md in the project."
+    major="$(sw_vers -productVersion | cut -d. -f1)"
+    [ "$major" -ge 14 ] || fail "This needs macOS 14 (Sonoma) or later; this Mac has $(sw_vers -productVersion)."
+else
+    case "$(uname -m)" in
+        x86_64|aarch64|arm64) ;;
+        *) fail "This computer's processor ($(uname -m)) is not one the program's parts are made for." ;;
+    esac
+    command -v tar >/dev/null 2>&1 || fail "This needs the 'tar' program, which is missing here. Install it (on Ubuntu: sudo apt install tar) and run the same line again."
+fi
 
 say "Installing $NAME. This takes a few minutes and about 1.5 GB."
 
 # ---- Apple's developer tools: the compiler one package is built with, and the text reader for scanned music
-if ! xcode-select -p >/dev/null 2>&1 || ! /usr/bin/xcrun --find swiftc >/dev/null 2>&1; then
-    say "Apple's developer tools are needed first (free, from Apple, about 15 minutes)."
-    echo "A window is opening: click Install there. Leave this window open; it goes on by itself afterwards."
-    xcode-select --install >/dev/null 2>&1 || true
-    until xcode-select -p >/dev/null 2>&1 && /usr/bin/xcrun --find swiftc >/dev/null 2>&1; do sleep 10; done
+if [ "$OS" = "Darwin" ]; then
+    if ! xcode-select -p >/dev/null 2>&1 || ! /usr/bin/xcrun --find swiftc >/dev/null 2>&1; then
+        say "Apple's developer tools are needed first (free, from Apple, about 15 minutes)."
+        echo "A window is opening: click Install there. Leave this window open; it goes on by itself afterwards."
+        xcode-select --install >/dev/null 2>&1 || true
+        until xcode-select -p >/dev/null 2>&1 && /usr/bin/xcrun --find swiftc >/dev/null 2>&1; do sleep 10; done
+    fi
 fi
 
-# ---- uv: fetches a Python of our own, so nothing depends on what this Mac has
+# ---- uv: fetches a Python of our own, so nothing depends on what this computer has
 mkdir -p "$BASE/bin"
 if [ ! -x "$BASE/bin/uv" ]; then
     say "Fetching the tool that installs Python..."
-    curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="$BASE/bin" sh >/dev/null 2>&1 \
+    get https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="$BASE/bin" sh >/dev/null 2>&1 \
         || fail "Could not fetch uv from astral.sh. Check the internet connection and run the same line again."
     [ -x "$BASE/bin/uv" ] || { [ -x "$BASE/bin/bin/uv" ] && ln -sf "$BASE/bin/bin/uv" "$BASE/bin/uv"; }
 fi
@@ -70,8 +106,8 @@ NOTE="$HOME/Music/$NAME/.server.json"
 if [ -f "$NOTE" ]; then
     pid="$(sed -n 's/.*"pid": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
     port="$(sed -n 's/.*"port": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
-    if [ -n "$pid" ] && ps -p "$pid" -o command= 2>/dev/null | grep -q "choral.app"; then
-        if curl -s -m 3 "http://127.0.0.1:$port/api/state" | grep -q '"job": {'; then
+    if [ -n "$pid" ] && ps -p "$pid" -o args= 2>/dev/null | grep -q "choral.app"; then
+        if get "http://127.0.0.1:$port/api/state" 3 2>/dev/null | grep -q '"job": {'; then
             fail "$NAME is in the middle of making something. Let it finish, or stop it on its page, and then run the same line again."
         fi
         say "Closing the copy of $NAME that is open, to bring it up to date..."
@@ -87,7 +123,7 @@ trap 'rm -rf "$TMP"' EXIT
 mkdir "$TMP/src"
 VERSION="local"
 if [ -z "$SOURCE" ]; then
-    VERSION="$(curl -fsSL -m 20 "https://api.github.com/repos/$REPO/commits/main" 2>/dev/null | sed -n 's/^  "sha": "\([0-9a-f]\{40\}\)".*/\1/p' | head -1)"
+    VERSION="$(get "https://api.github.com/repos/$REPO/commits/main" 20 2>/dev/null | sed -n 's/^  "sha": "\([0-9a-f]\{40\}\)".*/\1/p' | head -1)"
     if [ -n "$VERSION" ]; then
         SOURCE="https://github.com/$REPO/archive/$VERSION.tar.gz"
     else
@@ -95,14 +131,21 @@ if [ -z "$SOURCE" ]; then
     fi
 fi
 if [ -d "$SOURCE" ]; then
-    rsync -a --exclude .git --exclude '.venv*' --exclude .svc --exclude out --exclude 'scores/private' --exclude __pycache__ --exclude .DS_Store --exclude '*.preset.json' "$SOURCE/" "$TMP/src/"
+    # a folder: everything in it that is the program - not its history, its environments, its voices,
+    # what it has rendered, or anything private
+    ( cd "$SOURCE" && for f in * .gitignore; do
+        case "$f" in out|__pycache__) continue ;; esac
+        [ -e "$f" ] && echo "$f"
+      done | tar -cf - --exclude 'scores/private' --exclude __pycache__ --exclude .DS_Store --exclude '*.preset.json' -T - ) | tar -xf - -C "$TMP/src"
 else
-    curl -fsSL "$SOURCE" -o "$TMP/src.tar.gz" || fail "Could not fetch the program from github.com. Check the internet connection and run the same line again."
+    get "$SOURCE" > "$TMP/src.tar.gz" || fail "Could not fetch the program from github.com. Check the internet connection and run the same line again."
     tar -xzf "$TMP/src.tar.gz" -C "$TMP/src" --strip-components 1
 fi
 [ -f "$TMP/src/choral/app.py" ] || fail "What was fetched is not the program."
 mkdir -p "$APP"
-rsync -a --delete --exclude .venv --exclude .venv-omr --exclude .svc --exclude __pycache__ "$TMP/src/" "$APP/"
+# out with the old program's files - not its Python, its scan reader or its voices, which stay where they are - and in with the new
+find "$APP" -mindepth 1 -maxdepth 1 ! -name .venv ! -name .venv-omr ! -name .svc -exec rm -rf {} +
+( cd "$TMP/src" && tar -cf - . ) | tar -xf - -C "$APP"
 
 # ---- its Python and packages
 say "Installing Python and the program's packages..."
@@ -112,7 +155,8 @@ say "Installing Python and the program's packages..."
 say "Installing the reader for scanned music..."
 [ -x "$APP/.venv-omr/bin/python" ] || "$UV" venv -q --seed --python 3.12 "$APP/.venv-omr"
 "$UV" pip install -q --python "$APP/.venv-omr/bin/python" -r "$APP/install/scan-reader.txt"
-ORT_DISABLE_TELEMETRY=1 "$APP/.venv-omr/bin/homr" --init >/dev/null 2>&1 || fail "The scan reader could not fetch its models. Check the internet connection and run the same line again."
+ORT_DISABLE_TELEMETRY=1 "$APP/.venv-omr/bin/homr" --init >"$TMP/homr.log" 2>&1 \
+    || { tail -5 "$TMP/homr.log" >&2; fail "The scan reader could not fetch its models. Check the internet connection and run the same line again."; }
 "$UV" cache clean -q >/dev/null 2>&1 || true          # what was downloaded is installed now: the copies are not needed
 
 # ---- does it sing?
@@ -120,9 +164,11 @@ say "Trying it..."
 ( cd "$APP" && "$APP/.venv/bin/python" -m choral scores/demo_shenandoah.score --singers 4 --out "$TMP/try" >"$TMP/try.log" 2>&1 ) \
     || { tail -5 "$TMP/try.log" >&2; fail "The program is installed but could not sing its test piece."; }
 
-# ---- what you double-click
-mkdir -p "$LAUNCHER/Contents/MacOS"
-cat > "$LAUNCHER/Contents/Info.plist" <<EOF
+# ---- what you open from now on.  It leaves the program running behind its page and ends at once, so that
+# opening it again - after the page was closed, say - starts it again and brings the page back.
+if [ "$OS" = "Darwin" ]; then
+    mkdir -p "$LAUNCHER/Contents/MacOS"
+    cat > "$LAUNCHER/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -135,24 +181,40 @@ cat > "$LAUNCHER/Contents/Info.plist" <<EOF
   <key>LSUIElement</key><true/>
 </dict></plist>
 EOF
-cat > "$LAUNCHER/Contents/MacOS/launcher" <<EOF
+else
+    mkdir -p "$(dirname "$LAUNCHER")"
+    cat > "$LAUNCHER" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$NAME
+Comment=Sheet music in, rehearsal tracks out
+Exec="$START"
+Terminal=false
+Categories=AudioVideo;Audio;Music;
+EOF
+fi
+cat > "$START" <<EOF
 #!/bin/sh
 # Starts Palare Piano (or finds it already running) and opens its page.  Written by install.sh.
-# The program is left running behind the page and this launcher ends at once, so that opening
-# the app again - after the page was closed, say - runs this again and brings the page back.
 cd "$APP" || exit 1
 nohup "$APP/.venv/bin/python" -m choral.app >> "$BASE/app.log" 2>&1 &
 EOF
-chmod +x "$LAUNCHER/Contents/MacOS/launcher"
+chmod +x "$START"
 date '+installed %Y-%m-%d %H:%M' > "$BASE/installed.txt"
 cat > "$BASE/version.json" <<EOF
-{"version": "$VERSION", "installed": "$(date '+%Y-%m-%d %H:%M')", "launcher": "$LAUNCHER"}
+{"version": "$VERSION", "installed": "$(date '+%Y-%m-%d %H:%M')", "launcher": "$LAUNCHER", "start": "$START"}
 EOF
 
 say "$NAME is installed."
-echo "From now on, open \"$NAME\" from the Applications folder in your home folder, or find it with Spotlight."
-echo "To bring it up to date later, paste the same line into Terminal again."
+if [ "$OS" = "Darwin" ]; then
+    echo "From now on, open \"$NAME\" from the Applications folder in your home folder, or find it with Spotlight."
+else
+    echo "From now on, open \"$NAME\" from your applications menu."
+    command -v tesseract >/dev/null 2>&1 || echo "One more thing, for scanned music only: its words are read by a program called Tesseract, which is not on this computer. Install it (on Ubuntu: sudo apt install tesseract-ocr) and scans will have their words. Music saved as a PDF by notation software does not need it."
+    command -v ffmpeg >/dev/null 2>&1 || echo "Tracks will be saved as .wav files, which are large. With ffmpeg installed (on Ubuntu: sudo apt install ffmpeg) they are saved small, as .m4a."
+fi
+echo "To bring it up to date later, use the button on its page, or paste the same line again."
 if [ -z "${PALARE_NO_OPEN:-}" ]; then
     echo "Opening it now..."
-    open "$LAUNCHER"
+    if [ "$OS" = "Darwin" ]; then open "$LAUNCHER"; else sh "$START"; fi
 fi

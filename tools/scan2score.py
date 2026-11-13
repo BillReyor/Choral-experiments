@@ -18,7 +18,7 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def homr_cmd():
-    for c in (os.environ.get('HOMR'), os.path.join(HERE, '.venv-omr', 'bin', 'homr'), shutil.which('homr')):
+    for c in (os.environ.get('HOMR'), os.path.join(HERE, '.venv-omr', 'bin', 'homr'), os.path.join(HERE, '.venv-omr', 'Scripts', 'homr.exe'), shutil.which('homr')):
         if c and os.path.exists(c):
             return [c]
     if shutil.which('uvx'):
@@ -542,12 +542,18 @@ def ocr_cmd(work):
             return exe
         if want == 'macos':
             return None
-    return 'tesseract' if shutil.which('tesseract') else None
+    return 'tesseract' if tesseract() else None
+
+
+def tesseract():
+    """Where Tesseract is: on the path, or where its Windows installer puts it (which is not on the path)."""
+    return shutil.which('tesseract') or next((p for p in (os.path.join(os.environ.get(k, ''), 'Tesseract-OCR', 'tesseract.exe') for k in ('ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA'))
+                                              if os.path.exists(p)), None)
 
 
 def _tesseract(path, sparse=True):
     """Tesseract's words on an image -> [(x0, y0, x1, y1, text)] in the image's pixels."""
-    r = subprocess.run(['tesseract', path, 'stdout', '--psm', '11' if sparse else '6', 'tsv'], capture_output=True, text=True)
+    r = subprocess.run([tesseract(), path, 'stdout', '--psm', '11' if sparse else '6', 'tsv'], capture_output=True, text=True, encoding='utf-8', errors='replace')
     out = []
     for row in r.stdout.splitlines()[1:]:
         f = row.split('\t')

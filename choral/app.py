@@ -7,12 +7,14 @@ music - has it read, makes the rehearsal tracks and plays them.  Every piece get
 (PALARE_LIBRARY names another place): the tracks are in it, and the PDF, the score read from it and the working
 files are in its "source" folder.  The work is done by `python -m choral`, run as a program of its own, one piece at
 a time; this module only starts it, follows what it says, and shows that."""
-import json, os, queue, re, secrets, shutil, signal, subprocess, sys, threading, time, urllib.parse
+import json, os, platform, queue, re, secrets, shutil, signal, subprocess, sys, threading, time, urllib.parse
 os.environ.setdefault('ORT_DISABLE_TELEMETRY', '1')        # nothing started from here reports its use to anyone
 os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from . import hidden, show as show_path, utf8
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PY = re.sub(r'(?i)pythonw(\.exe)$', r'python\1', sys.executable)         # (Windows starts this without a window; what it runs needs to be heard)
 LIB = os.environ.get('PALARE_LIBRARY') or os.path.join(os.path.expanduser('~'), 'Music', 'Palare Piano')
 VOICES = os.path.join(ROOT, '.svc', 'voices')
 TOKEN = secrets.token_urlsafe(18)          # the page carries it; nothing else on this computer or the web can ask for work
@@ -27,7 +29,9 @@ CREDIT = ('The voices on these tracks are from VocalSet: Julia Wilkins, Prem See
 
 BOOT = secrets.token_hex(6)                # which run of the program this is: the page starts afresh when it changes
 REPO = 'BillReyor/Palare-Piano'
-LINE = f'curl -fsSL https://raw.githubusercontent.com/{REPO}/main/install.sh | sh'      # what installs it, and brings it up to date
+RAW = f'https://raw.githubusercontent.com/{REPO}/main/install'
+LINE = f'irm {RAW}.ps1 | iex' if os.name == 'nt' else f'wget -qO- {RAW}.sh | sh' if sys.platform != 'darwin' and not shutil.which('curl') else \
+    f'curl -fsSL {RAW}.sh | sh'                        # what installs it, and brings it up to date, on this kind of computer
 newer = {'checked': 0., 'count': 0, 'news': [], 'error': '', 'updating': False}
 
 lock = threading.RLock()
@@ -167,11 +171,16 @@ def update_now():
             raise ValueError('Something is being made. Let it finish, or stop it, and then update.')
         newer.update(updating=True)
     home = os.path.dirname(ROOT)
-    start = os.path.join(v.get('launcher') or '', 'Contents', 'MacOS', 'launcher')
+    start = v.get('start') or os.path.join(v.get('launcher') or '', 'Contents', 'MacOS', 'launcher')      # what starts the program again
     env = dict(os.environ, PALARE_HOME=home, PALARE_NO_OPEN='1', PALARE_NO_BROWSER='1', **({'PALARE_LAUNCHER': v['launcher']} if v.get('launcher') else {}))
-    again = f'sh "{start}"' if os.path.exists(start) else 'true'           # the page that is open finds the new copy by itself: no second window
-    with open(os.path.join(home, 'update.log'), 'w') as log:
-        subprocess.Popen(['/bin/sh', '-c', f'{LINE}; {again}'], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, start_new_session=True)
+    log = open(os.path.join(home, 'update.log'), 'w')
+    if os.name == 'nt':                                # (the page that is open finds the new copy by itself: no second window)
+        again = f"; Start-Process -FilePath '{start}'" if os.path.exists(start) else ''
+        subprocess.Popen(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', f'{LINE}{again}'], stdout=log, stderr=subprocess.STDOUT,
+                         stdin=subprocess.DEVNULL, env=env, cwd=home, creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP)
+    else:
+        again = f'sh "{start}"' if os.path.exists(start) else 'true'
+        subprocess.Popen(['/bin/sh', '-c', f'{LINE}; {again}'], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, cwd=home, start_new_session=True)
 
 
 # ---- the voices
@@ -179,8 +188,8 @@ def update_now():
 def voices_state():
     from . import revoice
     ready = revoice.command() is not None and os.path.isdir(VOICES) and any(f.lower().endswith('.wav') for f in os.listdir(VOICES))
-    can = sys.platform == 'darwin' and os.uname().machine == 'arm64'
-    why = '' if can else 'Real voices need a Mac with an Apple chip (M1 or later). The built-in voices work everywhere.'
+    can = sys.platform == 'darwin' and platform.machine() == 'arm64'
+    why = '' if can else 'Real voices are only set up for Macs with an Apple chip so far. The built-in voices work on this computer, and someone with such a Mac can make real-voice tracks for every part and share them.'
     return dict(ready=bool(ready), can=can or bool(ready), why=why, **{k: setup[k] for k in ('running', 'stage', 'progress', 'error')})
 
 
@@ -257,7 +266,7 @@ def run(cmd, logfile, follow=None):
     if found and found.get('at_once'):                 # a machine short of memory sings fewer voices at once (render.at_once)
         env.setdefault('CHORAL_WORKERS', str(found['at_once']))
     with open(logfile, 'w') as log:
-        p = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace', env=env)
+        p = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace', env=env, **hidden())
         now['proc'] = p
         if shutil.which('caffeinate'):                 # a Mac left alone goes to sleep; not while this is working
             subprocess.Popen(['caffeinate', '-i', '-w', str(p.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -274,7 +283,7 @@ def do_read(pid, again=False):
     if again and music(pid).lower().endswith('.pdf') and os.path.exists(score_of(pid)) and not os.path.exists(score_of(pid) + '.as-read'):
         os.remove(score_of(pid))                       # what was read before and never touched: read the PDF afresh
 
-    code = run([sys.executable, '-m', 'choral', music(pid), '--read'], os.path.join(src, 'read.log'))
+    code = run([PY, '-m', 'choral', music(pid), '--read'], os.path.join(src, 'read.log'))
     if now.get('stopped'):
         return save(pid, status='unreadable', error=['Stopped.'])
     if code or not os.path.exists(score_of(pid)):
@@ -299,7 +308,7 @@ def do_render(pid, opt):
     everyone = opt['part'] == 'all'                    # tracks for every part, to hand round the chorus
     parts = load(pid)['read']['parts']
     asked = ','.join(x[0] for x in parts) if everyone else opt['part']
-    cmd = [sys.executable, '-m', 'choral', music(pid), '--part', asked, '--singers', str(singers), '--out', wavs]
+    cmd = [PY, '-m', 'choral', music(pid), '--part', asked, '--singers', str(singers), '--out', wavs]
     if real:
         cmd += ['--voice', VOICES]
     now.update(stage='Reading the music', progress=None, eta=None)
@@ -344,7 +353,9 @@ def do_render(pid, opt):
         if not f.endswith('.wav'):
             continue
         out = f[:-4] + '.m4a'
-        if shutil.which('afconvert') and not subprocess.run(['afconvert', '-f', 'm4af', '-d', 'aac', '-b', '192000', os.path.join(wavs, f), os.path.join(wavs, out)], capture_output=True).returncode:
+        squeeze = ['afconvert', '-f', 'm4af', '-d', 'aac', '-b', '192000', os.path.join(wavs, f), os.path.join(wavs, out)] if shutil.which('afconvert') else \
+            ['ffmpeg', '-y', '-loglevel', 'error', '-i', os.path.join(wavs, f), '-c:a', 'aac', '-b:a', '192k', os.path.join(wavs, out)] if shutil.which('ffmpeg') else None
+        if squeeze and not subprocess.run(squeeze, capture_output=True, **hidden()).returncode:
             names[f[:-4]] = out
         else:                                          # no converter here: the track as it was written
             names[f[:-4]] = f
@@ -403,7 +414,7 @@ def do_check(opt):
         if line.startswith('result: '):
             got.update(json.loads(line[8:]))
     try:
-        code = run([sys.executable, '-m', 'choral.check'] + (['--voices'] if opt.get('voices') else []), logfile, follow)
+        code = run([PY, '-m', 'choral.check'] + (['--voices'] if opt.get('voices') else []), logfile, follow)
         if not code and got:
             json.dump(got, open(os.path.join(LIB, '.computer.json'), 'w'))
     finally:
@@ -421,7 +432,7 @@ def do_setup():
         m = re.match(r'progress (\d+)%', line.strip())
         if m:
             setup.update(progress=int(m.group(1)) / 100)
-    code = run([sys.executable, '-m', 'choral.setup_voices'], logfile, follow)
+    code = run([PY, '-m', 'choral.setup_voices'], logfile, follow)
     setup.update(running=False, progress=None, stage='', error='' if not code else '\n'.join(tail(logfile, 8)))
 
 
@@ -460,7 +471,10 @@ def stop_now():
     p = now.get('proc')
     if p and p.poll() is None:
         now['stopped'] = True
-        p.send_signal(signal.SIGTERM)
+        if os.name == 'nt':                            # Windows has no polite way to ask: end it and everything it started
+            subprocess.run(['taskkill', '/T', '/F', '/PID', str(p.pid)], capture_output=True, **hidden())
+        else:
+            p.send_signal(signal.SIGTERM)
 
 
 # ---- what the page asks
@@ -470,7 +484,7 @@ def state():
         job = {k: now.get(k) for k in ('id', 'kind', 'stage', 'progress', 'eta')} if now else None
         v = version()
         return dict(pieces=pieces(), job=job, waiting=list(waiting), voices=voices_state(), library=LIB, computer=computer(), checking=checking['running'],
-                    boot=BOOT, update=dict(can=bool(v), installed=(v or {}).get('installed'), version=((v or {}).get('version') or '')[:7], line=LINE,
+                    boot=BOOT, mac=sys.platform == 'darwin', update=dict(can=bool(v), installed=(v or {}).get('installed'), version=((v or {}).get('version') or '')[:7], line=LINE,
                                            count=newer['count'], news=newer['news'], checked=newer['checked'], error=newer['error'], updating=newer['updating']),
                     last=settings(), demo=os.path.exists(os.path.join(ROOT, 'scores', 'demo_shenandoah.score')))
 
@@ -515,8 +529,7 @@ def act(path, q, body):
         save(pid, read=what_was_read(pid))
         return {}
     if path == '/api/reveal':
-        subprocess.run(['open', folder(pid)] if sys.platform == 'darwin' else ['xdg-open', folder(pid)])
-        return {}
+        return {} if show_path(folder(pid)) else {'where': folder(pid)}
     if path.startswith('/api/fix/'):                   # "Fix a note or a word": one measure, shown and changed (choral/fix.py)
         from . import fix
         with lock:
@@ -550,11 +563,9 @@ def act(path, q, body):
         return dict(measure=fix.measure(sf, n, unsure(pid)), changed=fix.outline(sf)['changed'], unsure=unsure(pid))
     if path == '/api/share':
         where = share(pid)
-        subprocess.run(['open', where] if sys.platform == 'darwin' else ['xdg-open', where])
-        return {}
+        return {} if show_path(where) else {'where': where}
     if path == '/api/score':
-        subprocess.run(['open', '-e', score_of(pid)] if sys.platform == 'darwin' else ['xdg-open', score_of(pid)])
-        return {}
+        return {} if show_path(score_of(pid), as_text=True) else {'where': score_of(pid)}
     if path == '/api/readagain':                       # a piece that could not be read: try once more (a newer reader may manage it)
         with lock:
             if now.get('id') == pid or pid in waiting:
@@ -571,7 +582,7 @@ def act(path, q, body):
             if now.get('id') == pid or pid in waiting:
                 raise ValueError('Stop it first.')
             trash = os.path.join(os.path.expanduser('~'), '.Trash')
-            if os.path.isdir(trash):                   # to the Trash, where it can be got back
+            if sys.platform == 'darwin' and os.path.isdir(trash):       # to the Trash, where it can be got back
                 dest, k = os.path.join(trash, pid), 1
                 while os.path.exists(dest):
                     k += 1; dest = os.path.join(trash, f'{pid} {k}')
@@ -718,6 +729,9 @@ def show(url):
 
 
 def main():
+    utf8()
+    if sys.stdout is None:                             # started without a window (Windows): what it says is kept in a file
+        sys.stdout = sys.stderr = open(os.path.join(os.path.dirname(ROOT), 'app.log'), 'a', buffering=1, encoding='utf-8')
     os.makedirs(LIB, exist_ok=True)
     note = os.path.join(LIB, '.server.json')
     try:

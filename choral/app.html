@@ -223,7 +223,11 @@ async function post(path, data, raw) {
   return j;
 }
 const say = (pid, text) => { const c = cards[pid]; if (c) { const m = $('.msg', c.node); if (m) { m.textContent = text; m.hidden = !text; if (text) m.scrollIntoView({ block: 'nearest' }); } } };
-const act = (path, data) => post(path, data).catch(e => data && data.id ? say(data.id, e.message) : alert(e.message));
+const act = (path, data) => post(path, data).then(j => { if (j && j.where && data && data.id) say(data.id, 'This computer could not open the folder for you. The files are here: ' + j.where); return j; }).catch(e => data && data.id ? say(data.id, e.message) : alert(e.message));
+// words that depend on the computer: a Mac has the Finder, the Trash and AirDrop; others have their own
+const mac = () => !S || S.mac !== false;
+const FILES = () => mac() ? 'Finder' : 'your files';
+const THIS = () => mac() ? 'Mac' : 'computer';
 
 // the five tracks: what each is for, and a colour of its own down the side (decoration: the words say it too)
 const WHAT = { 'balanced': ['The whole choir with the piano', '#8b4fd6'], 'predominant': ['Your part louder than everyone else', '#e5484d'], 'muted': ['Everyone except your part: sing your line against it', '#2f7de1'], 'alone': ['Just your part', '#2fa45f'], 'voices only': ['The choir without the piano', '#f08a24'] };
@@ -255,7 +259,7 @@ function chooser(p) {
   const sound = el('div', { class: 'choices' }, opts.map((o, i) => el('div', null, el('input', { type: 'radio', name: n + 's', id: n + 's' + i, value: o[0], checked: o[0] === chosen, disabled: o[4] }), el('label', { class: 'choice', for: n + 's' + i }, el('b', null, o[1]), el('span', null, o[2]), el('span', { class: 'time' }, o[3])))));
   const node = el('div', null,
     el('fieldset', null, el('legend', null, 'Which part do you sing?'), parts, forAll, shared.length ? el('p', { class: 'small', style: 'margin-top:6px' }, shared.join(' ')) : null),
-    el('fieldset', null, el('legend', null, 'How should it sound?'), sound, real ? el('p', { class: 'small', style: 'margin-top:8px' }, (S.computer ? 'Times are estimates from a short test of this computer. ' : 'Times are for a recent Mac; older ones take longer. ') + 'You can close this window while it works. Keep the Mac plugged in.') : null));
+    el('fieldset', null, el('legend', null, 'How should it sound?'), sound, real ? el('p', { class: 'small', style: 'margin-top:8px' }, (S.computer ? 'Times are estimates from a short test of this computer. ' : 'Times are for a recent Mac; older ones take longer. ') + 'You can close this window while it works. Keep the ' + THIS() + ' plugged in.') : null));
   const get = () => { const part = $('input[name=' + n + 'p]:checked', node), s = ($('input[name=' + n + 's]:checked', node) || {}).value || 'quick'; return { part: part && part.value, voices: s === 'quick' ? 'built-in' : 'real', singers: s === 'small' ? 4 : 12 }; };
   return { node, get };
 }
@@ -278,7 +282,7 @@ function goodToKnow(p) {
 function more(p, withFix) {
   return el('details', { class: 'more' }, el('summary', null, 'More options'), el('div', null,
     el('div', { class: 'row', style: 'margin-top:4px' },
-      el('button', { onclick: () => { if (confirm('Move “' + (p.title || p.id) + '” and its tracks to the Trash?')) act('/api/remove', { id: p.id }); } }, 'Remove this piece')),
+      el('button', { onclick: () => { if (confirm((mac() ? 'Move “' : 'Remove “') + (p.title || p.id) + '” and its tracks' + (mac() ? ' to the Trash?' : '? This cannot be undone.'))) act('/api/remove', { id: p.id }); } }, 'Remove this piece')),
     withFix ? el('p', { class: 'small', style: 'margin-top:10px' }, '“Fix a note or a word” cannot yet change a rhythm or add a missing note. For that, ', el('button', { class: 'quiet', onclick: () => act('/api/score', { id: p.id }) }, 'open the music as text'), ' (', el('a', { href: 'https://github.com/BillReyor/Palare-Piano/blob/main/docs/score-format.md', target: '_blank', rel: 'noopener' }, 'how it is written'), ').') : null));
 }
 
@@ -441,11 +445,11 @@ function build(p) {
       const box = el('div', { class: 'tracks' }, names.map((g, i) => panes[g] = el('div', { hidden: i !== 0 }, groups[g].map(f => trackNode(p, f, true)))));
       tabs.addEventListener('change', e => names.forEach(g => { panes[g].hidden = g !== e.target.value; if (panes[g].hidden) panes[g].querySelectorAll('audio').forEach(a => a.pause()); }));
       kids.push(el('fieldset', null, el('legend', null, 'Whose tracks do you want to hear?'), tabs), box);
-      kids.push(el('div', { class: 'note' }, el('b', null, 'To share them with your chorus: '), 'this makes one zip file for each part and shows them in Finder. Send each section its own file, by email, AirDrop or a shared folder. Singers only need a phone to play them.', el('div', { class: 'row', style: 'margin-top:8px' }, el('button', { onclick: () => act('/api/share', { id: p.id }) }, 'Get the files to share'))));
+      kids.push(el('div', { class: 'note' }, el('b', null, 'To share them with your chorus: '), 'this makes one zip file for each part and shows them in ' + FILES() + '. Send each section its own file, by email' + (mac() ? ', AirDrop' : '') + ' or a shared folder. Singers only need a phone to play them.', el('div', { class: 'row', style: 'margin-top:8px' }, el('button', { onclick: () => act('/api/share', { id: p.id }) }, 'Get the files to share'))));
     } else {
       kids.push(el('p', { class: 'small' }, 'Made for ' + partName(r, made.part) + ' with ' + how + '. Press play and sing along.'));
       kids.push(el('div', { class: 'tracks' }, p.tracks.map(f => trackNode(p, f, false))));
-      kids.push(el('div', { class: 'row' }, el('button', { onclick: () => act('/api/reveal', { id: p.id }) }, 'Show the files in Finder'), el('span', { class: 'small' }, 'To put them on your phone, AirDrop them from there.')));
+      kids.push(el('div', { class: 'row' }, el('button', { onclick: () => act('/api/reveal', { id: p.id }) }, mac() ? 'Show the files in Finder' : 'Show the files'), el('span', { class: 'small' }, mac() ? 'To put them on your phone, AirDrop them from there.' : 'To put them on your phone, send them to yourself from there: by email, or a shared folder.')));
     }
     kids.push(el('div', { class: 'row' }, el('button', { onclick: () => openFixer(p) }, 'Fix a note or a word'), el('span', { class: 'small' }, 'Something sound wrong? See the music and put it right.')));
     kids.push(...goodToKnow(p));
@@ -479,7 +483,7 @@ function drawVoices() {
   if (key !== voicesKey) {
     voicesKey = key; box.textContent = '';
     if (v.running) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'Adding real voices'), el('span', { class: 'pill' }, 'Working')), el('p', { class: 'stage' }), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small' }, 'This downloads about 4 GB and can take half an hour on a slow connection. Meanwhile you can add pieces and make quick-listen tracks.')));
-    else if (!v.ready && v.can && blocked) box.append(el('p', { class: 'small' }, 'Real voices are not offered here: ' + blocked.why.charAt(0).toLowerCase() + blocked.why.slice(1) + ' Someone with a newer Mac can make tracks for every part and share them with you.'));
+    else if (!v.ready && v.can && blocked) box.append(el('p', { class: 'small' }, 'Real voices are not offered here: ' + blocked.why.charAt(0).toLowerCase() + blocked.why.slice(1) + ' Someone with a newer Mac can make real-voice tracks for every part and share them with you.'));
     else if (!v.ready && v.can) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'Want it to sound like a real choir?'), el('span', { class: 'pill' }, 'Optional')), el('p', null, 'Right now the choir is sung by built-in voices: clear, quick, and plainly a machine. You can add real recorded voices, and the tracks will sound like people singing.'), el('p', { class: 'small' }, 'It is a 4 GB download, once. After that, real-voice tracks take a good while to make: roughly ten minutes for every minute of music with the full choir.'), v.error ? el('div', { class: 'note bad' }, 'Adding the voices did not finish. Check the internet connection and try again.', el('details', null, el('summary', null, 'What it said'), el('pre', null, v.error))) : null, el('div', { class: 'go' }, el('button', { class: 'main', onclick: () => act('/api/voices') }, v.error ? 'Try again' : 'Add real voices'))));
     else if (!v.ready) box.append(el('p', { class: 'small' }, v.why));
   }

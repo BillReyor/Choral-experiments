@@ -13,7 +13,7 @@ The page's "Add real voices" button runs this (choral/app.py); it can be run by 
 
 It says what it is doing in lines the page can follow - "step 2 of 6: ..." and "progress 40%" - and can be run again
 after a failure: what is already there is kept."""
-import json, os, shutil, subprocess, sys, tarfile, tempfile, threading, time, wave
+import json, os, platform, shutil, subprocess, sys, tarfile, tempfile, threading, time, wave
 os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -57,13 +57,15 @@ def size_kb(path):
 
 
 def main():
+    from . import utf8
+    utf8()
     os.makedirs(SVC, exist_ok=True)
     venv_py = os.path.join(SVC, 'venv', 'bin', 'python')
     repo = os.path.join(SVC, 'seed-vc')
     voices = os.path.join(SVC, 'voices')
 
     step(1, 'Checking this computer')
-    if not (sys.platform == 'darwin' and os.uname().machine == 'arm64'):
+    if not (sys.platform == 'darwin' and platform.machine() == 'arm64'):
         print('  ! real voices have only been tried on a Mac with an Apple chip; going on, but this may not work here', flush=True)
     free = shutil.disk_usage(SVC).free / 2 ** 30
     if free < 8 and not os.path.exists(os.path.join(repo, 'checkpoints')):

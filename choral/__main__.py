@@ -111,6 +111,8 @@ def read_music(path, log, language=None, again=False):
 
 
 def main():
+    from . import utf8
+    utf8()
     import signal
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))    # stopped from outside: leave as on Ctrl-C, so that the
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)     # voice model stops too
