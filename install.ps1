@@ -1,7 +1,7 @@
 # Palare Piano for Windows - install it, or bring an installed copy up to date.
 # (Macs and Linux have install.sh, which does the same there.)
 #
-#     irm https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.ps1 | iex
+#     irm https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.ps1 | iex
 #
 # Paste that line into PowerShell once.  It needs no administrator, and what it installs is in three places:
 #
@@ -13,9 +13,12 @@
 # the Python packages listed in install\ (pypi.org); the scan reader's models (github.com).  The parts that
 # would report their use to their makers (onnxruntime, the Hugging Face downloader) are told not to.
 #
-#     $env:PALARE_UNINSTALL = 1; irm https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.ps1 | iex
+#     $env:PALARE_UNINSTALL = 1; irm https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.ps1 | iex
 #
 # removes the first two places (your pieces and tracks are left alone).
+#
+# What is installed is the newest version on the branch "stable": the last one that passed the tests on a Mac, on
+# Windows and on Linux (tools/release.sh moves it on).  Work in progress is on "main"; PALARE_CHANNEL=main installs that.
 #
 # For testing: PALARE_HOME, PALARE_LAUNCHER, PALARE_LIBRARY and PALARE_SOURCE (a folder, or the address of
 # a .zip) name other places; PALARE_NO_OPEN=1 does not open the app at the end.
@@ -37,6 +40,7 @@ function Install-PalarePiano {
     $Links = if ($env:PALARE_LAUNCHER) { @($env:PALARE_LAUNCHER) } else { @($Menu, $Desk) }
     $Py = Join-Path $App '.venv\Scripts\python.exe'
     $Source = $env:PALARE_SOURCE
+    $Channel = if ($env:PALARE_CHANNEL) { $env:PALARE_CHANNEL } else { 'stable' }
 
     function Say($text) { Write-Host ''; Write-Host $text -ForegroundColor Cyan }
     function Run($what, $exe, $rest) {
@@ -123,8 +127,8 @@ function Install-PalarePiano {
         $Version = 'local'
         if (-not $Source) {
             $Version = 'unknown'
-            try { $Version = (Invoke-RestMethod "https://api.github.com/repos/$Repo/commits/main" -TimeoutSec 20 -Headers @{ 'User-Agent' = 'palare-piano-installer' }).sha } catch {}
-            $Source = if ($Version -match '^[0-9a-f]{40}$') { "https://github.com/$Repo/archive/$Version.zip" } else { $Version = 'unknown'; "https://github.com/$Repo/archive/refs/heads/main.zip" }
+            try { $Version = (Invoke-RestMethod "https://api.github.com/repos/$Repo/commits/$Channel" -TimeoutSec 20 -Headers @{ 'User-Agent' = 'palare-piano-installer' }).sha } catch {}
+            $Source = if ($Version -match '^[0-9a-f]{40}$') { "https://github.com/$Repo/archive/$Version.zip" } else { $Version = 'unknown'; "https://github.com/$Repo/archive/refs/heads/$Channel.zip" }
         }
         if (Test-Path $Source -PathType Container) {
             # a folder: everything in it that is the program - not its history, its environments, its voices,
@@ -180,7 +184,7 @@ function Install-PalarePiano {
             $s.Save()
         }
         $when = Get-Date -Format 'yyyy-MM-dd HH:mm'
-        $json = @{ version = $Version; installed = $when; launcher = $Links[0]; start = $Links[0] } | ConvertTo-Json -Compress
+        $json = @{ version = $Version; channel = $Channel; installed = $when; launcher = $Links[0]; start = $Links[0] } | ConvertTo-Json -Compress
         [IO.File]::WriteAllText((Join-Path $Base 'version.json'), $json)       # (written this way, it has no mark at its start that Python would trip on)
         Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
 

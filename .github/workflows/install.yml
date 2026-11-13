@@ -12,7 +12,7 @@ name: installs and sings
 on:
   push:
     branches: [main]
-    paths-ignore: ['docs/**', '**.md']
+    paths-ignore: ['docs/**', '**.md', '.gitignore', '.github/ISSUE_TEMPLATE/**']
   workflow_dispatch:
 
 permissions:

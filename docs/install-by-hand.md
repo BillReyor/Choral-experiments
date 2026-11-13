@@ -94,3 +94,17 @@ the page's own requests: adds the demo piece, moves a note and puts it back, mak
 fetches them, makes the files to share, waits for the computer check, removes the piece, quits.
 `.github/workflows/install.yml` runs the installer and this on Linux, Windows and a Mac at every
 change. The repository holds no sheet music but the demo piece, so reading a PDF is not part of it.
+
+## Giving out a new version
+
+Work is pushed to the branch `main`. The install lines and the page's update button take the newest
+version on the branch `stable`, so a change reaches people only when `stable` is moved on to it:
+
+```
+sh tools/release.sh --look      # what people would get
+sh tools/release.sh             # test it on the three systems if that has not been done, then move stable
+```
+
+It moves `stable` only to a version the test above has passed, at exactly that version.
+`PALARE_CHANNEL=main` in front of the install line installs the work in progress instead, and that
+copy then follows `main`.

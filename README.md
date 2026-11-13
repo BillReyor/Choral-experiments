@@ -35,7 +35,7 @@ You do not need to know anything about computers beyond clicking, typing and cop
 **What is different on Windows and Linux?** Everything works except *real voices*, which need a
 Mac with an Apple chip. You still get all five practice tracks with the built-in voices. Windows
 and Linux are also newer here and have been tried less than the Mac: if something does not work,
-please say so on the project's [Issues page](https://github.com/BillReyor/Palare-Piano/issues).
+please say so ([how](#if-something-is-not-right)).
 
 **No suitable computer?** You may not need one. Someone in your chorus who has one can make the
 tracks for every part and send them round: see
@@ -60,7 +60,7 @@ Move your mouse over the grey box below. A small copy button appears at its righ
 it. (Or select the whole line and press ⌘C.)
 
 ```
-curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.sh | sh
 ```
 
 **3. Paste it into Terminal and press Return.**
@@ -88,7 +88,7 @@ Move your mouse over the grey box below. A small copy button appears at its righ
 it. (Or select the whole line and press Ctrl+C.)
 
 ```
-irm https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.ps1 | iex
 ```
 
 **3. Paste it into PowerShell and press Enter.**
@@ -107,7 +107,7 @@ It does not ask for an administrator and does not change anything else on your P
 **2. Copy this line**, paste it into the terminal (**Ctrl+Shift+V**) and press **Enter**.
 
 ```
-wget -qO- https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.sh | sh
 ```
 
 If it answers *wget: command not found*, use the line in the Mac steps above instead: it does
@@ -217,6 +217,17 @@ real recorded voices so the tracks sound like people singing.
 
 ## If something is not right
 
+**Something went wrong, or it read your music badly.**
+Near the bottom of the Palare Piano page, click **Save a report**. It saves a small text file
+with your downloads. Send that file, with a few words about what happened, to whoever asked you
+to try Palare Piano. The file holds the version, what kind of computer you have, and what the
+program noted about your pieces. Your sheet music and your tracks are not in it, and you can open
+it and read it first.
+
+If you use GitHub, you can instead [open an issue](https://github.com/BillReyor/Palare-Piano/issues/new/choose)
+and attach the file there. Please do not post sheet music or recordings on that page: it is
+public.
+
 **"The reader was unsure about some places."**
 Normal, especially for scans, and most pieces still come out fine. To check them, click **Go
 through them, one by one**. Each place opens in the music with a plain sentence saying what the
@@ -269,7 +280,8 @@ Open Palare Piano again the same way you opened it before (see
 [Open it next time](#open-it-next-time)). Anything it was making has carried on.
 
 **How do I update it?**
-Palare Piano looks for a newer version by itself. When there is one, the top of the page says
+Palare Piano looks for a newer version by itself. (What it offers is the newest version that has
+passed its tests on a Mac, on Windows and on Linux.) When there is one, the top of the page says
 **A newer version of Palare Piano is ready**: click **Update now**. It takes about a minute, and
 your pieces and tracks are kept. If it is in the middle of making tracks, let it finish first.
 (Doing the three install steps again does the same thing.)
@@ -281,19 +293,19 @@ and tracks stay in your Music folder.
 On a Mac:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.sh | sh -s -- --uninstall
 ```
 
 On Windows:
 
 ```
-$env:PALARE_UNINSTALL = 1; irm https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.ps1 | iex
+$env:PALARE_UNINSTALL = 1; irm https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.ps1 | iex
 ```
 
 On Linux:
 
 ```
-wget -qO- https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh -s -- --uninstall
+wget -qO- https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.sh | sh -s -- --uninstall
 ```
 
 ## Good to know

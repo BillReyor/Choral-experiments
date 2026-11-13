@@ -1759,3 +1759,30 @@ written to 0.9999.
 *Not tried:* a person at a Windows PC; reading any sheet music on Windows; Tesseract on Windows;
 the update button on Windows (on Linux it brought a copy one version old up to date in nine
 seconds); a Linux other than Ubuntu 24.04.
+
+**Before other people try it.** The listener asked what should be tidied in the repository
+before testers come, and said the explanation of the name wanted tightening. The files and the
+whole history were searched first: no audio, no sheet music and no private score was ever put
+in, no piece or chorus is named, and nothing says whose computer this was made on. So nothing
+had to be taken out for that reason. What was done:
+
+*The name* is told in 224 words where it took 391 - three meanings and one paragraph on the
+choruses - and in three sentences on the front page, where it was not told at all.
+
+*What people are given.* Until now the install line and the update button took whatever was
+newest, and work is pushed as it goes: a singer pressing "Update now" could have landed in the
+middle of a change. They now take the newest version on a branch of its own, `stable`, and
+`tools/release.sh` moves that on only to a version that has passed the test on all three
+systems, at exactly that version. An installed copy remembers which branch it came from.
+(GitHub's own machines stand in the way sometimes: twice in a day it had no Mac to give, and
+the test then ends without having run. The script starts it again when asked again.)
+
+*Saying what went wrong.* The page has "Save a report": a text file with the version, the
+computer, and what the program noted about each piece - the reader's remarks, with measure
+numbers and now and then a single word, never the score or a track, and with the name of the
+home folder taken out of every path. It is sent to whoever asked the singer to try the program,
+by whatever means they have. For those who use GitHub there is a form that asks for the same
+file and says, first of all, not to post sheet music on a public page.
+
+*Gone:* `experiments/`, the stand-alone programs that led here; they are in the history up to
+version a92d7df.

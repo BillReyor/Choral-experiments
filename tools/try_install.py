@@ -7,7 +7,7 @@ Run after install.sh (Mac, Linux) or install.ps1 (Windows).  It needs nothing bu
 a Mac, the script on Linux, the Start-menu shortcut on Windows - with a library of its own in a temporary folder, and
 then, as the page would: adds the demo piece, waits for it to be read, moves a note and puts it back, makes the tracks
 with the built-in voices, fetches one and listens for sound in it, makes the files to share, waits for the computer
-check, removes the piece and quits.  --part-all makes the tracks for every part and the files to share; --plain has
+check, saves a report, removes the piece and quits.  --part-all makes the tracks for every part and the files to share; --plain has
 the tracks left as they were written (.wav), so that they can be listened to here: is there sound in them?  Anything that does not go as it should ends the run with what went wrong and the
 last lines the program wrote.  This is what the automatic tests on GitHub run on each system (.github/workflows)."""
 import json, os, re, subprocess, sys, tempfile, time, urllib.error, urllib.parse, urllib.request
@@ -171,6 +171,16 @@ class Trial:
         if quick['level'] == 'no' or not mc['memory'] or not mc['cores']:
             raise SystemExit(self.wrong('the check does not know this computer, or says a quick listen will not work on it'))
 
+    def report(self, pid):
+        r = self.post('/api/report')
+        text, name = r['text'], os.path.basename(os.path.expanduser('~'))
+        for want in ('Palare Piano report', 'version:', 'computer:', '== Shenandoah', 'tracks:'):
+            if want not in text:
+                raise SystemExit(self.wrong(f'the report has no "{want}" in it:\n{text[:1500]}'))
+        if os.path.expanduser('~') in text:
+            raise SystemExit(self.wrong('the report names the home folder: it should not say whose computer this is'))
+        print(f'  the report: {r["name"]}, {len(text.splitlines())} lines, and it does not name the home folder ({name})', flush=True)
+
     def end(self, pid):
         self.post('/api/remove', id=pid)
         if self.piece(pid) or os.path.isdir(os.path.join(self.lib, pid)):
@@ -191,6 +201,7 @@ def main():
     try:
         pid = t.sing('--part-all' in sys.argv)
         t.computer()
+        t.report(pid)
     except BaseException:
         try:
             t.post('/api/quit')

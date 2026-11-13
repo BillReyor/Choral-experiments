@@ -29,9 +29,8 @@ CREDIT = ('The voices on these tracks are from VocalSet: Julia Wilkins, Prem See
 
 BOOT = secrets.token_hex(6)                # which run of the program this is: the page starts afresh when it changes
 REPO = 'BillReyor/Palare-Piano'
-RAW = f'https://raw.githubusercontent.com/{REPO}/main/install'
-LINE = f'irm {RAW}.ps1 | iex' if os.name == 'nt' else f'wget -qO- {RAW}.sh | sh' if sys.platform != 'darwin' and not shutil.which('curl') else \
-    f'curl -fsSL {RAW}.sh | sh'                        # what installs it, and brings it up to date, on this kind of computer
+CHANNEL = 'stable'                         # the branch people are given: moved on only to a version that passed the tests on
+#                                            a Mac, Windows and Linux (tools/release.sh); work in progress is on "main"
 newer = {'checked': 0., 'count': 0, 'news': [], 'error': '', 'updating': False}
 
 lock = threading.RLock()
@@ -136,6 +135,17 @@ def version():
         return None
 
 
+def channel():
+    """Which branch this copy follows: the one it was installed from, or the one everybody is given."""
+    return (version() or {}).get('channel') or CHANNEL
+
+
+def line():
+    """What installs the program, and brings it up to date, on this kind of computer."""
+    raw = f'https://raw.githubusercontent.com/{REPO}/{channel()}/install'
+    return f'irm {raw}.ps1 | iex' if os.name == 'nt' else f'wget -qO- {raw}.sh | sh' if sys.platform != 'darwin' and not shutil.which('curl') else f'curl -fsSL {raw}.sh | sh'
+
+
 def look_for_newer():
     """Ask GitHub what has been published since this copy's version.  Nothing about this computer or its music is
     sent: it is the address of a public page, with the version in it."""
@@ -144,7 +154,7 @@ def look_for_newer():
     if not v:
         return
     try:
-        req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/compare/{v['version']}...main",
+        req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/compare/{v['version']}...{channel()}",
                                      headers={'User-Agent': 'palare-piano', 'Accept': 'application/vnd.github+json'})
         with urllib.request.urlopen(req, timeout=10) as r:
             d = json.load(r)
@@ -172,15 +182,15 @@ def update_now():
         newer.update(updating=True)
     home = os.path.dirname(ROOT)
     start = v.get('start') or os.path.join(v.get('launcher') or '', 'Contents', 'MacOS', 'launcher')      # what starts the program again
-    env = dict(os.environ, PALARE_HOME=home, PALARE_NO_OPEN='1', PALARE_NO_BROWSER='1', **({'PALARE_LAUNCHER': v['launcher']} if v.get('launcher') else {}))
+    env = dict(os.environ, PALARE_HOME=home, PALARE_NO_OPEN='1', PALARE_NO_BROWSER='1', PALARE_CHANNEL=channel(), **({'PALARE_LAUNCHER': v['launcher']} if v.get('launcher') else {}))
     log = open(os.path.join(home, 'update.log'), 'w')
     if os.name == 'nt':                                # (the page that is open finds the new copy by itself: no second window)
         again = f"; Start-Process -FilePath '{start}'" if os.path.exists(start) else ''
-        subprocess.Popen(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', f'{LINE}{again}'], stdout=log, stderr=subprocess.STDOUT,
+        subprocess.Popen(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', f'{line()}{again}'], stdout=log, stderr=subprocess.STDOUT,
                          stdin=subprocess.DEVNULL, env=env, cwd=home, creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP)
     else:
         again = f'sh "{start}"' if os.path.exists(start) else 'true'
-        subprocess.Popen(['/bin/sh', '-c', f'{LINE}; {again}'], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, cwd=home, start_new_session=True)
+        subprocess.Popen(['/bin/sh', '-c', f'{line()}; {again}'], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, cwd=home, start_new_session=True)
 
 
 # ---- the voices
@@ -257,6 +267,50 @@ def computer():
         return json.load(open(os.path.join(LIB, '.computer.json')))
     except (OSError, ValueError):
         return None
+
+
+def report():
+    """What to send when something has not gone right: the version, the computer, and what the program noted about each
+    piece.  Not the music: no score and no track is in it.  The reader's remarks name measures and parts, and here and
+    there a single word it stumbled over; the name of the home folder is taken out of every path.  -> the text"""
+    v, c, base = version() or {}, computer() or {}, os.path.dirname(ROOT)
+    mc = c.get('machine') or {}
+    out = [f'Palare Piano report, {time.strftime("%Y-%m-%d %H:%M")}', '',
+           f'version:   {v["version"][:12]}, following "{channel()}", installed {v.get("installed", "?")}' if v else 'version:   a copy that the installer did not put here',
+           f'system:    {platform.platform()}; Python {platform.python_version()}',
+           f'computer:  {mc.get("chip", "?")}; {mc.get("memory", "?")} GB of memory; {mc.get("cores", "?")} processors; {mc.get("disk", "?")} GB free'
+           + (f'; {c.get("slow")} times as slow as the reference; {c.get("at_once")} voices sung at once' if c else '; the check has not run'),
+           *[f'           {r["what"]}: {r["level"]} {r.get("time") or ""} {r.get("why") or ""}'.rstrip() for r in c.get('rows', [])],
+           f'voices:    real voices {"added" if voices_state()["ready"] else "not added"}',
+           f'updates:   {newer["count"]} newer; {("could not ask: " + newer["error"]) if newer["error"] else "asked"}']
+    said = lambda title, lines: [f'  --- {title}:'] + [f'      {l}' for l in lines] if lines else []
+    for d in pieces():
+        pid = d['id']
+        src = os.path.join(folder(pid), 'source')
+        try:
+            f = os.path.join(src, d['file'])
+            kind = f'{os.path.splitext(f)[1] or "?"}, {max(1, os.path.getsize(f) // 1024)} KB' + (', read as a scan' if os.path.isdir(os.path.splitext(f)[0] + '.scan') else '')
+        except (OSError, KeyError):
+            kind = 'its file is missing'
+        r, made = d.get('read') or {}, d.get('made') or {}
+        out += ['', f'== {d.get("title") or pid}  [{d.get("status")}]  ({kind})']
+        if r:
+            out.append('  read: ' + ', '.join(str(p[1]) for p in r.get('parts', [])) + ''.join(f'; {k} {r[k]}' for k in ('measures', 'minutes', 'tempo', 'tempo_guessed', 'latin', 'spelled') if r.get(k) not in (None, False)))
+        if made:
+            out.append(f'  tracks: {len(d.get("tracks", []))} made for {made.get("part")} with {made.get("voices")} voices, {made.get("singers")} to a part' + ('; corrected since' if d.get('stale') else ''))
+        out += said('what went wrong', d.get('error') or [])
+        doubts = unsure(pid, everything=True) if r else []
+        out += said(f'{len(doubts)} places the reader was unsure of', [f'{u.get("title")} (measures {", ".join(map(str, u.get("measures", [])[:8])) or "-"})' for u in doubts[:40]])
+        out += said('the end of what the reader said', tail(os.path.join(src, 'read.log'), 60))
+        out += said('the end of what the singing said', tail(os.path.join(src, 'render.log'), 30))
+    out += ['', '== the program itself']
+    for title, path, n in (('started', os.path.join(base, 'app.log'), 40), ('last update', os.path.join(base, 'update.log'), 15),
+                           ('computer check', os.path.join(LIB, '.computer.log'), 8), ('adding real voices', os.path.join(LIB, '.voices-setup.log'), 20)):
+        out += said(title, tail(path, n))
+    text = '\n'.join(out) + '\n'
+    for home in {os.path.expanduser('~'), os.path.realpath(os.path.expanduser('~'))}:
+        text = text.replace(home, '~')
+    return text[:300000]
 
 
 def run(cmd, logfile, follow=None):
@@ -503,7 +557,7 @@ def state():
         job = {k: now.get(k) for k in ('id', 'kind', 'stage', 'progress', 'eta')} if now else None
         v = version()
         return dict(pieces=pieces(), job=job, waiting=list(waiting), voices=voices_state(), library=LIB, computer=computer(), checking=checking['running'],
-                    boot=BOOT, mac=sys.platform == 'darwin', update=dict(can=bool(v), installed=(v or {}).get('installed'), version=((v or {}).get('version') or '')[:7], line=LINE,
+                    boot=BOOT, mac=sys.platform == 'darwin', update=dict(can=bool(v), installed=(v or {}).get('installed'), version=((v or {}).get('version') or '')[:7], line=line(),
                                            count=newer['count'], news=newer['news'], checked=newer['checked'], error=newer['error'], updating=newer['updating']),
                     last=settings(), demo=os.path.exists(os.path.join(ROOT, 'scores', 'demo_shenandoah.score')))
 
@@ -621,6 +675,8 @@ def act(path, q, body):
     if path == '/api/update':
         update_now()
         return {}
+    if path == '/api/report':
+        return dict(name=f'Palare Piano report {time.strftime("%Y-%m-%d %H%M")}.txt', text=report())
     if path == '/api/check':
         if not checking['running']:
             checking.update(running=True)

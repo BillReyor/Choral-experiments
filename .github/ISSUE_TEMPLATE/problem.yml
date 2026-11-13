@@ -1,0 +1,33 @@
+name: Something did not work
+description: Say what happened when you tried Palare Piano.
+title: "Something did not work: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for trying it.
+
+        **Please do not attach sheet music or recordings here.** This page is public, and most choral music is under copyright. If a piece was read wrongly, the report file below says enough to start with.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what did you see instead? Plain words are fine.
+    validations:
+      required: true
+  - type: dropdown
+    id: computer
+    attributes:
+      label: What kind of computer?
+      options:
+        - A Mac
+        - A Windows PC
+        - Linux
+        - I am not sure
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: The report
+      description: Near the bottom of the Palare Piano page, click "Save a report". It saves a small text file with your downloads. Drag that file into this box. It holds the version, the kind of computer and what the program noted about your pieces, not your music.

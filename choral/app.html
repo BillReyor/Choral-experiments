@@ -197,6 +197,11 @@ footer .heart { color: var(--ink); }
   <div id="voices"></div>
   <div id="computer"></div>
 
+  <div class="note" id="report">
+    <b>Something not working?</b> Save a report and send it, with a few words about what went wrong, to whoever asked you to try Palare Piano. It is a small text file: the version, what kind of computer this is, and what the program noted about your pieces (their names, measure numbers, now and then a single word). Your sheet music and your tracks are not in it.
+    <div class="row" style="margin-top:8px"><button id="report-go">Save a report</button><span class="small" id="reported" hidden>Saved with your downloads, as a text file you can open and read before you send it.</span></div>
+  </div>
+
   <footer>
     <details>
       <summary>About Palare Piano</summary>
@@ -425,7 +430,7 @@ function build(p) {
   kids.push(el('p', { class: 'note bad msg', hidden: true, role: 'alert' }));
 
   if (st === 'reading') kids.push(el('p', { class: 'stage' }, 'Reading the music…'), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small' }, 'A PDF made by notation software takes seconds. A scan takes about half a minute a page.'));
-  if (st === 'unreadable') kids.push(el('div', { class: 'note bad' }, 'This could not be read as music for tenor and bass voices. It may be a different kind of score, or a scan too faint to read.', el('details', null, el('summary', null, 'What the reader said'), el('pre', null, (p.error || []).join('\n'))),
+  if (st === 'unreadable') kids.push(el('div', { class: 'note bad' }, 'This could not be read as music for tenor and bass voices. It may be a different kind of score, or a scan too faint to read. If you think it should have been read, “Save a report” at the bottom of this page makes a file to send to whoever is helping you.', el('details', null, el('summary', null, 'What the reader said'), el('pre', null, (p.error || []).join('\n'))),
     el('div', { class: 'row', style: 'margin-top:8px' }, el('button', { onclick: () => act('/api/readagain', { id: p.id }) }, 'Try reading it again'), el('span', { class: 'small', style: 'color:inherit' }, 'Worth doing after Palare Piano has been updated.'))), more(p, false));
   if (st === 'failed') kids.push(el('div', { class: 'note bad' }, 'Making the tracks did not finish. You can try again; what was finished is kept.', el('details', null, el('summary', null, 'What it said'), el('pre', null, (p.error || []).join('\n')))));
   if (p.note) kids.push(el('p', { class: 'note' }, p.note));
@@ -577,6 +582,15 @@ const drop = $('#drop');
 ['dragleave', 'drop'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => addFiles([...e.dataTransfer.files]));
 window.addEventListener('dragover', e => e.preventDefault()); window.addEventListener('drop', e => e.preventDefault());
+// "Save a report": the text comes from the program and is saved the way a browser saves any download
+async function saveReport() {
+  try {
+    const j = await post('/api/report'), url = URL.createObjectURL(new Blob([j.text], { type: 'text/plain' }));
+    const a = el('a', { href: url, download: j.name }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+    $('#reported').hidden = false;
+  } catch (e) { alert(e.message); }
+}
+$('#report-go').onclick = saveReport;
 $('#quit').onclick = () => { if (confirm('Quit Palare Piano? Anything being made is stopped; what was finished is kept.')) fetch('/api/quit', { method: 'POST', headers: { 'X-Palare': TOKEN } }).finally(() => { $('#gone').style.display = 'block'; }); };
 </script>
 </body>

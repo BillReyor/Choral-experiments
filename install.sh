@@ -2,8 +2,8 @@
 # Palare Piano - install it, or bring an installed copy up to date.  For Macs and for Linux
 # (Windows has install.ps1, which does the same there).
 #
-#     curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh
-#     wget -qO- https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh      (where there is no curl)
+#     curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.sh | sh
+#     wget -qO- https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install.sh | sh      (where there is no curl)
 #
 # Paste one of those lines into a terminal once.  It needs no password, and what it installs is in three places:
 #
@@ -24,6 +24,9 @@
 #
 #     ... | sh -s -- --uninstall       removes the first two places (your pieces and tracks are left alone)
 #
+# What is installed is the newest version on the branch "stable": the last one that passed the tests on a Mac, on
+# Windows and on Linux (tools/release.sh moves it on).  Work in progress is on "main"; PALARE_CHANNEL=main installs that.
+#
 # For testing: PALARE_HOME, PALARE_LAUNCHER and PALARE_SOURCE (a folder, or the address of a .tar.gz) name
 # other places; PALARE_NO_OPEN=1 does not open the app at the end.
 set -eu
@@ -31,6 +34,7 @@ set -eu
 NAME="Palare Piano"
 REPO="BillReyor/Palare-Piano"
 SOURCE="${PALARE_SOURCE:-}"
+CHANNEL="${PALARE_CHANNEL:-stable}"
 OS="$(uname -s)"
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
@@ -123,11 +127,11 @@ trap 'rm -rf "$TMP"' EXIT
 mkdir "$TMP/src"
 VERSION="local"
 if [ -z "$SOURCE" ]; then
-    VERSION="$(get "https://api.github.com/repos/$REPO/commits/main" 20 2>/dev/null | sed -n 's/^  "sha": "\([0-9a-f]\{40\}\)".*/\1/p' | head -1)"
+    VERSION="$(get "https://api.github.com/repos/$REPO/commits/$CHANNEL" 20 2>/dev/null | sed -n 's/^  "sha": "\([0-9a-f]\{40\}\)".*/\1/p' | head -1)"
     if [ -n "$VERSION" ]; then
         SOURCE="https://github.com/$REPO/archive/$VERSION.tar.gz"
     else
-        VERSION="unknown"; SOURCE="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+        VERSION="unknown"; SOURCE="https://github.com/$REPO/archive/refs/heads/$CHANNEL.tar.gz"
     fi
 fi
 if [ -d "$SOURCE" ]; then
@@ -205,7 +209,7 @@ EOF
 chmod +x "$START"
 date '+installed %Y-%m-%d %H:%M' > "$BASE/installed.txt"
 cat > "$BASE/version.json" <<EOF
-{"version": "$VERSION", "installed": "$(date '+%Y-%m-%d %H:%M')", "launcher": "$LAUNCHER", "start": "$START"}
+{"version": "$VERSION", "channel": "$CHANNEL", "installed": "$(date '+%Y-%m-%d %H:%M')", "launcher": "$LAUNCHER", "start": "$START"}
 EOF
 
 say "$NAME is installed."

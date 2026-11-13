@@ -219,7 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# --- Choral-experiments ---------------------------------------------------
+# --- Palare Piano ---------------------------------------------------------
 # Never commit audio (renders or reference tracks) or sheet music.
 *.wav
 *.mp3
