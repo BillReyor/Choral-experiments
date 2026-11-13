@@ -1459,8 +1459,9 @@ repository (`choral/seedvc_driver.py`).
 
 *From nothing.* The installer was run in an empty home folder, with a search path holding only
 the system's own programs, from a copy of the source. The program, its Python (3.12, where the
-work so far was done on 3.15) and the scan reader with its models: about three minutes and
-1.1 GB, and it sang the demo. Then the page of that copy:
+work so far was done on 3.15) and the scan reader with its models came to 1.1 GB, 0.7 GB once the
+copies of what had been downloaded were cleared away, and it sang the demo. The pasted line
+itself, fetching from GitHub, took 35 seconds on this connection. Then the page of that copy:
 
 - A scanned piece (the fifth) and a notation-software export (the tenth) were read by it into
   scores identical, line for line, to the ones rendered the night before.
@@ -1471,6 +1472,17 @@ work so far was done on 3.15) and the scan reader with its models: about three m
 - Opened the way a double-click opens it. The first launcher stayed running as the app, and a
   Mac does not start a running app again: a second double-click, after the page had been closed,
   did nothing. The launcher now leaves the program running behind the page and ends at once.
+
+*What it left behind, and what it reported.* Every file the test left outside the app's own
+three folders was listed. There were a receipt from uv, pip's copies of the packages, the caches
+of two of the voice model's libraries - and, under a folder named for Microsoft, a device
+identifier and a small database. The library the scan reader computes with (onnxruntime 1.31)
+reports its use to its maker unless a variable tells it not to. The same folder is on the
+listener's own Mac, dated from the day the scan reader was first installed there. Every program
+started from here is now told not to report (the model downloader likewise), the caches go
+inside the app's own folder, and the list is empty. The switch was checked both ways: one scan
+image read with it set leaves nothing in an empty home folder, and without it leaves the
+identifier and the database.
 
 *Not tested.* A Mac that lacks Apple's developer tools - this one has them, so the step where
 they are asked for has never run. Any Mac but this one: an older chip will be slower, by how much

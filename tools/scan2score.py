@@ -32,8 +32,9 @@ def run_homr(images, flags=()):
     """One homr process per image, three at a time: a page it cannot read (a cover) must not stop the rest."""
     from concurrent.futures import ThreadPoolExecutor
     cmd = homr_cmd()
-    with ThreadPoolExecutor(3) as ex:
-        list(ex.map(lambda im: subprocess.run(cmd + list(flags) + [im], capture_output=True), images))
+    quiet = dict(os.environ, ORT_DISABLE_TELEMETRY='1')     # the library homr computes with (onnxruntime) reports its use to
+    with ThreadPoolExecutor(3) as ex:                       # its maker unless told not to: nothing here is anyone else's business
+        list(ex.map(lambda im: subprocess.run(cmd + list(flags) + [im], capture_output=True, env=quiet), images))
 
 
 # ----------------------------------------------------------------- pages, staves, systems ----

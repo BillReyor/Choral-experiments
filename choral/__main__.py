@@ -27,6 +27,8 @@ MUSIC is a score file (docs/score-format.md) or a PDF exported from notation sof
 What was estimated for the piece is saved beside the score as NAME.preset.json and reused.
 """
 import argparse, json, os, re, subprocess, sys, time
+os.environ.setdefault('ORT_DISABLE_TELEMETRY', '1')        # for every program started from here: the scan reader's library
+os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')     # and the voice model's downloader report their use unless told not to
 import numpy as np
 from . import render as R, score as scoremod, presets, reference, voice
 

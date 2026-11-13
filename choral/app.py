@@ -8,6 +8,8 @@ music - has it read, makes the rehearsal tracks and plays them.  Every piece get
 files are in its "source" folder.  The work is done by `python -m choral`, run as a program of its own, one piece at
 a time; this module only starts it, follows what it says, and shows that."""
 import json, os, queue, re, secrets, shutil, signal, subprocess, sys, threading, time, urllib.parse
+os.environ.setdefault('ORT_DISABLE_TELEMETRY', '1')        # nothing started from here reports its use to anyone
+os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

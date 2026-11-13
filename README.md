@@ -44,6 +44,7 @@ On other computers, or to run it from the command line, see
   tracks again - only the corrected phrases are sung again.
 - **Nothing of yours leaves the computer.** The music and the tracks stay on it. The internet is
   used to fetch the program's own parts, when it is installed and when real voices are added.
+  Two of those parts would report their use to their makers; they are told not to.
 
 ## Known limitations
 

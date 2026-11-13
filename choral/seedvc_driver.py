@@ -20,6 +20,8 @@ os.environ.setdefault('HF_HUB_OFFLINE', '1'); os.environ.setdefault('HF_HUB_DISA
 import numpy as np
 
 repo, jobs_file = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
+os.environ.setdefault('HF_HOME', os.path.join(repo, 'checkpoints', 'hf-home'))      # what the model's libraries keep for themselves
+os.environ.setdefault('MPLCONFIGDIR', os.path.join(repo, 'checkpoints', 'matplotlib'))   # stays with the model, not in the home folder
 jobs = json.load(open(jobs_file))
 os.chdir(repo); sys.path.insert(0, repo)
 import warnings; warnings.simplefilter('ignore')

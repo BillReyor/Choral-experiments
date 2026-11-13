@@ -3,7 +3,7 @@
 #
 #     curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh
 #
-# Paste that line into Terminal once.  It needs no password and changes nothing outside three places:
+# Paste that line into Terminal once.  It needs no password, and what it installs is in three places:
 #
 #     ~/Library/Application Support/Palare-Piano    the program, its own Python, and (later) the voice model
 #     ~/Applications/Palare Piano.app               what you double-click from then on
@@ -11,7 +11,9 @@
 #
 # What it fetches, and from where: uv (astral.sh), which brings a private Python; this program (github.com);
 # the Python packages listed in install/ (pypi.org); the scan reader's models (github.com).  Real voices are
-# added later from the page, if you want them.
+# added later from the page, if you want them.  The parts that would report their use to their makers
+# (onnxruntime, the Hugging Face downloader) are told not to.  If Apple's developer tools are missing, Apple
+# installs them where it keeps them.
 #
 #     ... | sh -s -- --uninstall       removes the first two places (your pieces and tracks are left alone)
 #
@@ -54,7 +56,7 @@ fi
 mkdir -p "$BASE/bin"
 if [ ! -x "$BASE/bin/uv" ]; then
     say "Fetching the tool that installs Python..."
-    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$BASE/bin" UV_NO_MODIFY_PATH=1 INSTALLER_NO_MODIFY_PATH=1 UV_PRINT_QUIET=1 sh >/dev/null 2>&1 \
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="$BASE/bin" sh >/dev/null 2>&1 \
         || fail "Could not fetch uv from astral.sh. Check the internet connection and run the same line again."
     [ -x "$BASE/bin/uv" ] || { [ -x "$BASE/bin/bin/uv" ] && ln -sf "$BASE/bin/bin/uv" "$BASE/bin/uv"; }
 fi
@@ -85,7 +87,7 @@ say "Installing Python and the program's packages..."
 say "Installing the reader for scanned music..."
 [ -x "$APP/.venv-omr/bin/python" ] || "$UV" venv -q --seed --python 3.12 "$APP/.venv-omr"
 "$UV" pip install -q --python "$APP/.venv-omr/bin/python" -r "$APP/install/scan-reader.txt"
-"$APP/.venv-omr/bin/homr" --init >/dev/null 2>&1 || fail "The scan reader could not fetch its models. Check the internet connection and run the same line again."
+ORT_DISABLE_TELEMETRY=1 "$APP/.venv-omr/bin/homr" --init >/dev/null 2>&1 || fail "The scan reader could not fetch its models. Check the internet connection and run the same line again."
 "$UV" cache clean -q >/dev/null 2>&1 || true          # what was downloaded is installed now: the copies are not needed
 
 # ---- does it sing?

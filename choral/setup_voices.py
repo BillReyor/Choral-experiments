@@ -14,6 +14,7 @@ The page's "Add real voices" button runs this (choral/app.py); it can be run by 
 It says what it is doing in lines the page can follow - "step 2 of 6: ..." and "progress 40%" - and can be run again
 after a failure: what is already there is kept."""
 import json, os, shutil, subprocess, sys, tarfile, tempfile, threading, time, wave
+os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -73,7 +74,7 @@ def main():
     step(2, "Installing the voice model's packages (about 1 GB)")
     if not os.path.exists(venv_py):
         sh([sys.executable, '-m', 'venv', os.path.join(SVC, 'venv')], 'making a place for the packages')
-    sh([venv_py, '-m', 'pip', 'install', '--disable-pip-version-check', '-q', '-r', os.path.join(ROOT, 'install', 'voice-model.txt')], "installing the voice model's packages")
+    sh([venv_py, '-m', 'pip', 'install', '--disable-pip-version-check', '--no-cache-dir', '-q', '-r', os.path.join(ROOT, 'install', 'voice-model.txt')], "installing the voice model's packages")
 
     step(3, 'Fetching the voice model program')
     if not os.path.exists(os.path.join(repo, 'inference.py')):
@@ -98,7 +99,7 @@ def main():
             warnings.simplefilter('ignore')
             import pyworld                                 # noqa: F401
     except Exception:
-        sh([sys.executable, '-m', 'pip', 'install', '--disable-pip-version-check', '-q', 'pyworld==0.3.5', 'setuptools<81'], 'building pyworld')
+        sh([sys.executable, '-m', 'pip', 'install', '--disable-pip-version-check', '--no-cache-dir', '-q', 'pyworld==0.3.5', 'setuptools<81'], 'building pyworld')
 
     step(6, 'Downloading the voice model (2.3 GB) and trying it')
     cmd = [venv_py, os.path.join(HERE, 'seedvc_driver.py'), repo]
