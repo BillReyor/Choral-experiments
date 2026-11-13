@@ -10,6 +10,9 @@
 # tools/try_install.py on Linux, Windows and a Mac) has passed, at exactly that version.  If the test has not been
 # run there - a change to the documents alone does not start it - it is started here and waited for.
 #
+# GitHub holds to the same rule by itself: "stable" is a protected branch that requires the three checks (Linux,
+# Windows, Mac), for the owner too.  A push to it by hand of a version that has not passed them is refused.
+#
 # It needs git, and gh signed in to an account that may push to the repository.
 set -eu
 
@@ -60,5 +63,8 @@ if [ "${3:-}" != "success" ]; then
     exit 1
 fi
 
-git push -q origin "$NEW:refs/heads/stable"
+git push -q origin "$NEW:refs/heads/stable" || {
+    echo "GitHub refused to move stable (it requires the three checks to have passed at this version). stable stays where it is." >&2
+    exit 1
+}
 echo "Done: stable is now at $(git log -1 --format='%h %s' "$NEW"). The page will offer it to everyone within six hours, or the next time they open it."
