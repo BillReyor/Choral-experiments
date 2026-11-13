@@ -62,7 +62,21 @@ case "$OS" in
 esac
 APP="$BASE/app"
 
+# running: is a copy of the program open?  If so, "pid" and "port" say which (from the note it leaves in its library).
+running() {
+    NOTE="${PALARE_LIBRARY:-$HOME/Music/$NAME}/.server.json"
+    pid=""; port=""
+    [ -f "$NOTE" ] || return 1
+    pid="$(sed -n 's/.*"pid": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
+    port="$(sed -n 's/.*"port": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
+    [ -n "$pid" ] && ps -p "$pid" -o args= 2>/dev/null | grep -q "choral.app"
+}
+
 if [ "${1:-}" = "--uninstall" ]; then
+    if running; then                                   # it keeps running behind its page: stop it before its files go
+        kill "$pid" 2>/dev/null || true
+        sleep 1
+    fi
     rm -rf "$BASE" "$LAUNCHER"
     say "$NAME is removed. Your pieces and tracks are still in ~/Music/$NAME."
     exit 0
@@ -106,18 +120,13 @@ UV="$BASE/bin/uv"
 export UV_PYTHON_INSTALL_DIR="$BASE/python" UV_CACHE_DIR="$BASE/cache" UV_PYTHON_PREFERENCE=only-managed UV_NO_PROGRESS=1
 
 # ---- a copy that is running is closed first, so that what opens afterwards is the new one - unless it is busy
-NOTE="${PALARE_LIBRARY:-$HOME/Music/$NAME}/.server.json"
-if [ -f "$NOTE" ]; then
-    pid="$(sed -n 's/.*"pid": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
-    port="$(sed -n 's/.*"port": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
-    if [ -n "$pid" ] && ps -p "$pid" -o args= 2>/dev/null | grep -q "choral.app"; then
-        if get "http://127.0.0.1:$port/api/state" 3 2>/dev/null | grep -q '"job": {'; then
-            fail "$NAME is in the middle of making something. Let it finish, or stop it on its page, and then run the same line again."
-        fi
-        say "Closing the copy of $NAME that is open, to bring it up to date..."
-        kill "$pid" 2>/dev/null || true
-        sleep 1
+if running; then
+    if get "http://127.0.0.1:$port/api/state" 3 2>/dev/null | grep -q '"job": {'; then
+        fail "$NAME is in the middle of making something. Let it finish, or stop it on its page, and then run the same line again."
     fi
+    say "Closing the copy of $NAME that is open, to bring it up to date..."
+    kill "$pid" 2>/dev/null || true
+    sleep 1
 fi
 
 # ---- the program: which version is the newest, then exactly that one (the page later asks whether there is a newer)

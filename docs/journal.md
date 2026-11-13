@@ -1788,3 +1788,19 @@ file and says, first of all, not to post sheet music on a public page.
 
 *Gone:* `experiments/`, the stand-alone programs that led here; they are in the history up to
 version a92d7df.
+
+**The Mac is tested on a Mac.** The lock was hours old when it showed its cost. Three times in
+an afternoon GitHub had no Mac to run the test on: the job waited a quarter of an hour and was
+dropped, Linux and Windows having passed, and nothing could be given out. The listener: drop the
+Mac from GitHub and make a way to run that test here. `tools/try_here.sh` is the whole test on one
+computer - the installer, the singer's use of it, the installer again, the uninstall - in an
+empty home folder made for the purpose, with nothing of the user's set-up passed in, so that the
+copy of the program installed on the same Mac is neither touched nor seen. It takes a minute and
+ten seconds here. GitHub runs the same script on Linux. `tools/release.sh` runs it on the Mac
+while GitHub does Linux and Windows, and writes the result beside the version on GitHub under the
+name the lock asks for; the lock still wants all three.
+
+What is given up: GitHub's Mac was a machine nobody had used, and this one has Apple's developer
+tools on it already, so the installer's wait for those is not tried. What is gained is a test
+that can start. (And one thing it found by being written: removing the program left a running
+copy running, with its files gone. The uninstall now stops it first.)

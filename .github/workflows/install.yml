@@ -1,9 +1,14 @@
 # Does Palare Piano install and sing on each kind of computer?
 #
-# On every change, on a fresh machine of each kind: run the installer a person would run (install.sh, or
-# install.ps1 on Windows) on the program as it is in this change, then tools/try_install.py, which opens the
-# installed copy the way a person would and does what a singer does: add the demo piece, fix a note, make the
-# tracks, fetch them, make the files to share, look at what the computer can do, quit.
+# On every change, on a fresh machine: run the installer a person would run (install.sh, or install.ps1 on
+# Windows) on the program as it is in this change, then tools/try_install.py, which opens the installed copy the
+# way a person would and does what a singer does: add the demo piece, fix a note, make the tracks, fetch them,
+# make the files to share, look at what the computer can do, save a report, quit.  Then the installer again over
+# the installed copy, the same use of it, and the uninstall.
+#
+# Linux and Windows are tried here.  The Mac is tried on a Mac, by the same script as Linux (tools/try_here.sh),
+# when a version is given out (tools/release.sh): GitHub's own Macs were too often not to be had, and a test that
+# cannot start tests nothing.  The branch people are given, "stable", takes a version only when all three passed.
 #
 # No sheet music is in this repository except the demo piece (a folk song, as a text score), so reading a PDF is
 # not tried here: only that the readers are installed.
@@ -33,15 +38,14 @@ jobs:
         include:
           - { name: Linux, os: ubuntu-latest }
           - { name: Windows, os: windows-latest }
-          - { name: Mac, os: macos-latest }
     env:
       PALARE_NO_OPEN: '1'
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install it (Mac, Linux)
+      - name: Install it, use it as a singer would, update it, take it away (Linux)
         if: runner.os != 'Windows'
-        run: PALARE_SOURCE="$GITHUB_WORKSPACE" sh install.sh
+        run: sh tools/try_here.sh --here
 
       - name: Install it (Windows)
         if: runner.os == 'Windows'
@@ -51,32 +55,18 @@ jobs:
           $env:PALARE_STRICT = '1'
           & .\install.ps1
 
-      - name: Use it as a singer would (Mac, Linux)
-        if: runner.os != 'Windows'
-        run: python3 tools/try_install.py --part-all --plain
-
       - name: Use it as a singer would (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: python tools\try_install.py --part-all --plain
 
-      - name: The readers are there
+      - name: The readers are there (Windows)
+        if: runner.os == 'Windows'
         shell: bash
         run: |
-          case "$RUNNER_OS" in
-            Windows) APP="$LOCALAPPDATA/Palare-Piano/app"; BIN=Scripts; EXE=.exe ;;
-            macOS)   APP="$HOME/Library/Application Support/Palare-Piano/app"; BIN=bin; EXE= ;;
-            *)       APP="$HOME/.local/share/Palare-Piano/app"; BIN=bin; EXE= ;;
-          esac
-          "$APP/.venv/$BIN/python$EXE" -c "import pymupdf, numpy, scipy, PIL; print('PDF reader: pymupdf', pymupdf.__version__)"
-          "$APP/.venv-omr/$BIN/python$EXE" -c "import homr, onnxruntime; print('scan reader: homr, onnxruntime', onnxruntime.__version__)"
-
-      - name: Bring it up to date over itself, and take it away
-        if: runner.os != 'Windows'
-        run: |
-          PALARE_SOURCE="$GITHUB_WORKSPACE" sh install.sh
-          python3 tools/try_install.py
-          sh install.sh --uninstall
+          APP="$LOCALAPPDATA/Palare-Piano/app"
+          "$APP/.venv/Scripts/python.exe" -c "import pymupdf, numpy, scipy, PIL; print('PDF reader: pymupdf', pymupdf.__version__)"
+          "$APP/.venv-omr/Scripts/python.exe" -c "import homr, onnxruntime; print('scan reader: homr, onnxruntime', onnxruntime.__version__)"
 
       - name: Bring it up to date over itself, and take it away (Windows)
         if: runner.os == 'Windows'

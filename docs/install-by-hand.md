@@ -86,14 +86,23 @@ Real voices are added later from the page, on a Mac, by `python -m choral.setup_
 ## Testing an install
 
 ```
-python tools/try_install.py --part-all
+sh tools/try_here.sh            # the program as it is in this folder
+sh tools/try_here.sh VERSION    # as it was at that commit
 ```
 
-opens an installed copy by what the installer left to open it with and does what a singer does, by
-the page's own requests: adds the demo piece, moves a note and puts it back, makes the tracks,
-fetches them, makes the files to share, waits for the computer check, removes the piece, quits.
-`.github/workflows/install.yml` runs the installer and this on Linux, Windows and a Mac at every
-change. The repository holds no sheet music but the demo piece, so reading a PDF is not part of it.
+runs the whole test on this computer, a Mac or Linux: the installer; `tools/try_install.py`, which
+opens the installed copy by what the installer left to open it with and does what a singer does, by
+the page's own requests (adds the demo piece, moves a note and puts it back, makes the tracks for
+every part and listens for sound in them, makes the files to share, waits for the computer check,
+saves a report, removes the piece, quits); the installer again over the installed copy, and the
+same use of it; the uninstall. It takes about a minute and downloads what the installer downloads.
+It is done in an empty home folder made for the purpose and thrown away afterwards, so a copy of
+Palare Piano installed on the same computer, and its pieces, are not touched.
+
+At every change GitHub runs this on Linux, and the same steps on Windows
+(`.github/workflows/install.yml`). The Mac is tested on a Mac, by the release script below:
+GitHub's own Macs were too often not to be had. The repository holds no sheet music but the demo
+piece, so reading a PDF is not part of the test.
 
 ## Giving out a new version
 
@@ -102,13 +111,18 @@ version on the branch `stable`, so a change reaches people only when `stable` is
 
 ```
 sh tools/release.sh --look      # what people would get
-sh tools/release.sh             # test it on the three systems if that has not been done, then move stable
+sh tools/release.sh             # test where that has not been done, then move stable
 ```
 
-It moves `stable` only to a version the test above has passed, at exactly that version. GitHub
-holds to the same rule by itself: `stable` is a protected branch that requires the three checks
-(Linux, Windows, Mac), for the owner too, so a push by hand of an untested version is refused. If
-GitHub has no machine to run a test on for a long while and a fix cannot wait, the lock is lifted
-under Settings, Branches on the repository's page - by a person, on purpose.
+It moves `stable` only to a version that has passed on all three kinds of computer, at exactly that
+version: Linux and Windows on GitHub (it starts that test if it has not run, and runs again a part
+that did not finish), and the Mac on the Mac it is run on, by `tools/try_here.sh`. When the Mac has
+passed, the script writes that beside the version on GitHub, as a status called "Mac".
+
+GitHub holds to the same rule by itself: `stable` is a protected branch that requires the three
+checks (Linux, Windows, Mac), for the owner too, so a push by hand of an untested version is
+refused. If a fix cannot wait for a test that cannot be run, the lock is lifted under Settings,
+Branches on the repository's page - by a person, on purpose.
+
 `PALARE_CHANNEL=main` in front of the install line installs the work in progress instead, and that
 copy then follows `main`.
