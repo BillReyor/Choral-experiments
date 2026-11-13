@@ -69,9 +69,11 @@ function Install-PalarePiano {
         Start-Sleep -Seconds 2
     }
 
+    $doing = 'installed'
     try {
         if ($env:PALARE_UNINSTALL) {
             $env:PALARE_UNINSTALL = $null
+            $doing = 'removed'
             Close-Running $true
             foreach ($l in $Links) { if (Test-Path $l) { Remove-Item $l -Force } }
             if (Test-Path $Base) { Remove-Item $Base -Recurse -Force }
@@ -195,7 +197,7 @@ function Install-PalarePiano {
     } catch {
         Write-Host ''
         Write-Host "$($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "$Name was not installed. Nothing else on this computer was changed." -ForegroundColor Red
+        Write-Host "$Name was not $doing. Pasting the same line again tries again from where it can." -ForegroundColor Red
         $global:PalareFailed = $true
     }
 }
