@@ -393,6 +393,10 @@ def do_render(pid, opt):
     if code:
         return save(pid, status='failed', error=tail(os.path.join(src, 'render.log')))
     now.update(stage='Writing the tracks')
+    try:                                               # when each measure begins in these tracks (the page shows it as one plays)
+        timeline = json.load(open(os.path.join(wavs, 'measures.json')))
+    except (OSError, ValueError):
+        timeline = None
     here = folder(pid)
     for f in load(pid).get('tracks', []):              # what was made before goes: these replace it
         if os.path.exists(os.path.join(here, f)):
@@ -423,7 +427,8 @@ def do_render(pid, opt):
         if real:
             open(os.path.join(here, 'Credits.txt'), 'w').write(CREDIT)
     shutil.rmtree(wavs, ignore_errors=True)
-    save(pid, status='ready', tracks=made, made=dict(part=opt['part'], voices='real' if real else 'built-in', singers=singers, when=time.time()), error=None, note=None)
+    save(pid, status='ready', tracks=made, made=dict(part=opt['part'], voices='real' if real else 'built-in', singers=singers, when=time.time()), error=None, note=None,
+         timeline=timeline)
     settings(part=opt['part'], voices='real' if real else 'built-in', singers=singers)
 
 
@@ -538,6 +543,22 @@ def worker():
         finally:
             with lock:
                 now.clear()
+
+
+def find_measures():
+    """Tracks made by an earlier version of the program do not know where their measures begin.  For a piece whose
+    score has not been touched since its tracks were made, that can be worked out again - the tracks were timed by
+    the score's tempo marks and nothing else - without making them again (which, with real voices, is an hour)."""
+    for d in pieces():
+        if d.get('tracks') and d.get('read') and not d.get('timeline') and not d.get('stale'):
+            try:
+                r = subprocess.run([PY, '-m', 'choral', score_of(d['id']), '--measures'], cwd=ROOT, capture_output=True, text=True, errors='replace',
+                                   timeout=180, env=dict(os.environ, PYTHONUNBUFFERED='1'), **hidden())
+                line = next(l for l in r.stdout.splitlines() if l.startswith('measures: '))
+                if os.path.exists(info_file(d['id'])):
+                    save(d['id'], timeline=json.loads(line[len('measures: '):]))
+            except Exception:
+                pass                                   # no harm done: the page simply does not show the measure for this one
 
 
 def stop_now():
@@ -845,6 +866,7 @@ def main():
         jobs.put(('check', None, {'voices': voices_state()['ready']}))
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=keep_looking, daemon=True).start()
+    threading.Thread(target=find_measures, daemon=True).start()
     signal.signal(signal.SIGTERM, lambda *_: (stop_now(), os._exit(0)))
     print(f'Palare Piano is at http://127.0.0.1:{port}/  (pieces are kept in {LIB})', flush=True)
     show(f'http://127.0.0.1:{port}/')

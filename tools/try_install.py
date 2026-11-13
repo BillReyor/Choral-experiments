@@ -137,6 +137,10 @@ class Trial:
         if p['status'] != 'ready':
             raise SystemExit(self.wrong(f'the tracks were not made: {p.get("error")}'))
         want = 5 * len(parts) if everyone else 5            # three of one's own and two all share; for everyone, a set for each part
+        tl = p.get('timeline') or []                        # when each measure begins in the tracks: the page shows it as one plays
+        if [m for _, m in tl] != list(range(1, len(tl) + 1)) or len(tl) < 3 or any(b <= a for (a, _), (b, _) in zip(tl, tl[1:])):
+            raise SystemExit(self.wrong(f'the tracks do not say when their measures begin, or say it oddly: {tl}'))
+        print(f'  the page knows when each of the {len(tl)} measures begins (the last at {tl[-1][0]:.1f} s)', flush=True)
         print(f'  {len(p["tracks"])} tracks, the first: {p["tracks"][0]}', flush=True)
         if len(p['tracks']) != want:
             raise SystemExit(self.wrong(f'{len(p["tracks"])} tracks where {want} were expected: {p["tracks"]}'))

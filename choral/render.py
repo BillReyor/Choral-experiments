@@ -76,6 +76,14 @@ def clock_for(sc, timing=None, absolute=False):
     return np.append(beats, beats[-1] + 16), np.append(secs, secs[-1] + 16 * slope)
 
 
+def measure_starts(sc, clock):
+    """When each measure begins -> [[seconds, the measure's printed number], ...] in the order played (a measure that
+    is repeated comes twice).  The page shows it beside a track as it plays, so that what is heard can be found in
+    the music - and put right, if it is wrong."""
+    order = sorted(sc.measures.items(), key=lambda kv: kv[1][0])
+    return [[round(float(np.interp(b0, clock[0], clock[1])), 2), int((sc.printed or {}).get(m, m))] for m, (b0, _) in order]
+
+
 def engine_notes(sc, part):
     """Score notes -> engine notes (beat, beats, midi, phonemes, dynamic), expanding slides.  A note that is spoken,
     not sung (an x-shaped notehead; "x" after its value in the score) has a sixth item, True."""

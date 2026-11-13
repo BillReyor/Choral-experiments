@@ -125,6 +125,7 @@ def main():
     ap.add_argument('--voice', help='recording(s) of a real voice for the singers to sound like')
     ap.add_argument('--reread', action='store_true', help='read the PDF again even if a score read from it earlier is there (one corrected by hand is kept)')
     ap.add_argument('--read', action='store_true', help='read the music, say what was found, and stop there')
+    ap.add_argument('--measures', action='store_true', help='say when each measure begins, going by the tempo marks alone, and stop there')
     a = ap.parse_args()
     log = lambda *s: print(*s, flush=True)
     t0 = time.time()
@@ -146,6 +147,9 @@ def main():
     title = sc.title or os.path.splitext(os.path.basename(path))[0]
     log(f'{title}: {len(sc.measures)} measures, {sum(len(v) for v in sc.parts.values())} sung notes, {len(sc.piano)} piano notes')
     if a.read:
+        return
+    if a.measures:                                 # (for tracks the page made before it kept this: see app.find_measures)
+        log('measures: ' + json.dumps(R.measure_starts(sc, R.clock_for(sc))))
         return
 
     # ---- the piece's preset: saved, or estimated from the score, then from whatever recordings there are
@@ -221,6 +225,7 @@ def main():
     outdir = a.out or 'out'
     os.makedirs(outdir, exist_ok=True)
     safe = re.sub(r'[^\w \-]', '', title).strip()
+    json.dump(R.measure_starts(sc, clock), open(os.path.join(outdir, 'measures.json'), 'w'))          # where in the music each moment of these tracks is
     for name, x in R.versions(vox, R.backing(sc, N, voice.T, P, track), P, groups, only=a.only):     # each written as it is mixed
         f = os.path.join(outdir, f'{safe} - {name}.wav')
         R.write_wav(f, x)

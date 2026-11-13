@@ -153,6 +153,8 @@ A few seconds for a clean PDF; about half a minute for each page of a scan.
 You can leave it working and close the window. It carries on.
 
 **5. Press play and sing along.**
+While a track plays, the page shows which measure you are hearing. To start somewhere else, type
+a measure number in **Start from measure** and click **Play from there**.
 
 ![The finished tracks](docs/pictures/3-tracks.jpg)
 
@@ -235,7 +237,9 @@ reader was unsure of, and the notes in question marked in yellow. Put it right t
 **It is right as it is**, and it moves on to the next.
 
 **A note or a word is wrong.**
-You can fix it on the page, with your sheet music beside you:
+You can fix it on the page, with your sheet music beside you. If you hear it while a track is
+playing, click **Fix measure …** under the player: it stops the track and opens the music at the
+measure you were hearing. Otherwise:
 
 1. Under the piece, click **Fix a note or a word**.
 2. Go to the measure: type its number, use the arrows, or type a word from the lyrics and click

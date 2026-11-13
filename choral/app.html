@@ -157,6 +157,13 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.45 ui-monos
 .track { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 10px; border-left: 6px solid var(--tint, var(--accent)); }
 .track b { display: block; }
 .track audio { width: 100%; margin-top: 8px; height: 40px; }
+.where-in { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between; margin-top: 8px; font-size: 15.5px; }
+.where-in .now, .where-in .jump, .where-in label { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.where-in .now[hidden] { display: none; }
+.where-in .now b { font-size: 19px; min-width: 1.6em; display: inline-block; text-align: center; }
+.where-in .jump { margin-left: auto; }
+.where-in button { min-height: 38px; padding: 6px 12px; font-size: 15px; }
+.where-in input[type=number] { width: 4.6em; padding: 6px; text-align: center; }
 .row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-top: 14px; }
 footer { color: var(--soft); font-size: 14.5px; margin-top: 30px; }
 footer .heart { color: var(--ink); }
@@ -238,7 +245,28 @@ const THIS = () => mac() ? 'Mac' : 'computer';
 const WHAT = { 'balanced': ['The whole choir with the piano', '#8b4fd6'], 'predominant': ['Your part louder than everyone else', '#e5484d'], 'muted': ['Everyone except your part: sing your line against it', '#2f7de1'], 'alone': ['Just your part', '#2fa45f'], 'voices only': ['The choir without the piano', '#f08a24'] };
 function trackName(file, theirs) { const base = file.replace(/\.[^.]+$/, ''); const name = base.slice(base.lastIndexOf(' - ') + 3); const kind = Object.keys(WHAT).find(k => name.toLowerCase().endsWith(k)); const w = kind ? WHAT[kind] : ['', '']; return [name.charAt(0).toUpperCase() + name.slice(1), [theirs && THEIRS[kind] || w[0], w[1]]]; }
 const THEIRS = { 'predominant': 'This part louder than everyone else', 'muted': 'Everyone except this part, to sing against', 'alone': 'Just this part' };   // in a set made for the whole chorus
-const trackNode = (p, f, theirs) => { const [name, w] = trackName(f, theirs); const url = '/file/' + encodeURIComponent(p.id) + '/' + f.split('/').map(encodeURIComponent).join('/'); return el('div', { class: 'track', style: w[1] ? '--tint:' + w[1] : null }, el('b', null, name), el('span', { class: 'small' }, w[0]), el('audio', { controls: true, preload: 'none', src: url })); };
+// Where in the music a track is.  p.timeline is [[seconds, measure], ...] in the order played: under each player the
+// measure being heard is shown as it goes by, with a button that opens "Fix a note or a word" at that measure, and a
+// box to start the track from any measure.
+function measureAt(p, t) { const tl = p.timeline || []; if (!tl.length) return null; let lo = 0, hi = tl.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (tl[mid][0] <= t + .05) lo = mid; else hi = mid - 1; } return tl[lo][1]; }
+const trackNode = (p, f, theirs) => {
+  const [name, w] = trackName(f, theirs); const url = '/file/' + encodeURIComponent(p.id) + '/' + f.split('/').map(encodeURIComponent).join('/');
+  const audio = el('audio', { controls: true, preload: 'none', src: url }), kids = [el('b', null, name), el('span', { class: 'small' }, w[0]), audio];
+  if (p.timeline && p.timeline.length) {
+    const tl = p.timeline, all = tl.map(x => x[1]), first = Math.min(...all), last = Math.max(...all);
+    let at = null;
+    const num = el('b', null, ''), fix = el('button', { onclick: () => { audio.pause(); openFixer(p, null, at); } }, 'Fix this measure');
+    const now = el('span', { class: 'now', hidden: true }, 'Now at measure ', num, fix);
+    const show = () => { const n = measureAt(p, audio.currentTime); if (n == null) return; if (n !== at) { at = n; num.textContent = String(n); fix.textContent = 'Fix measure ' + n; } now.hidden = false; };
+    ['timeupdate', 'seeked'].forEach(e => audio.addEventListener(e, show));
+    audio.addEventListener('play', () => { document.querySelectorAll('audio').forEach(a => { if (a !== audio) a.pause(); }); show(); });
+    const box = el('input', { type: 'number', min: first, max: last, inputmode: 'numeric', 'aria-label': 'Measure to start from' });
+    const go = () => { const n = parseInt(box.value, 10), hit = tl.find(x => x[1] === n); if (!hit) return say(p.id, 'There is no measure ' + (box.value || 'with that number') + ' in this piece. It runs from ' + first + ' to ' + last + '.'); say(p.id, ''); audio.currentTime = Math.max(0, hit[0] - .15); audio.play(); };
+    box.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    kids.push(el('div', { class: 'where-in' }, now, el('span', { class: 'jump' }, el('label', null, 'Start from measure ', box), el('button', { onclick: go }, '▶ Play from there'))));
+  }
+  return el('div', { class: 'track', style: w[1] ? '--tint:' + w[1] : null }, kids);
+};
 const about = s => s < 90 ? 'about a minute' : 'about ' + Math.round(s / 60) + ' minutes';
 const partName = (r, v) => { const p = (r.parts || []).find(x => x[0] === v); return p ? p[1] : v; };
 const PILL = { reading: ['Reading', ''], read: ['Ready when you are', ''], queued: ['In line', ''], rendering: ['Making your tracks', ''], ready: ['✓ Tracks ready', 'good'], failed: ['Needs a look', 'bad'], unreadable: ['Needs a look', 'bad'] };
@@ -414,9 +442,9 @@ function paintFixer(pid) {
   if (f.show) { f.show = false; const mark = host.querySelector('.notehead.doubt'), box = host.querySelector('.review'); if (mark) { const st = mark.closest('.staff'); st.scrollLeft = Math.max(0, mark.closest('.col').offsetLeft - st.offsetLeft - 120); } if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 }
 
-async function openFixer(p, key) {
+async function openFixer(p, key, at) {              // key: one of the reader's doubts to go through; at: a measure to open at
   try {
-    const j = await post('/api/fix/open', { id: p.id }), d = key && (j.unsure || []).find(x => x.key === key);
+    const j = await post('/api/fix/open', Object.assign({ id: p.id }, at != null ? { n: at } : {})), d = key && (j.unsure || []).find(x => x.key === key);
     fixing[p.id] = { outline: j.outline, m: j.measure, unsure: j.unsure || [], changed: j.outline.changed, picked: null, msg: '', review: d ? d.key : null, show: !!d };
     if (cards[p.id]) cards[p.id].key = ''; draw();
     if (d && d.measures && d.measures.length && d.measures[0] !== j.measure.n) await goMeasure(p.id, d.measures[0], true);
@@ -544,7 +572,7 @@ function draw() {
   drawComputer();
   const list = $('#pieces'), seen = {};
   S.pieces.forEach((p, i) => {
-    const key = fixing[p.id] ? 'fixing' : JSON.stringify([p.status, p.tracks, p.read, p.error, p.note, p.made, p.title, p.stale, (p.unsure || []).map(d => d.key), S.voices.ready, (S.computer || {}).when]);
+    const key = fixing[p.id] ? 'fixing' : JSON.stringify([p.status, p.tracks, p.read, p.error, p.note, p.made, p.title, p.stale, (p.timeline || []).length, (p.unsure || []).map(d => d.key), S.voices.ready, (S.computer || {}).when]);
     let c = cards[p.id];
     if (!c || c.key !== key) {
       const old = c && c.key && c.key[0] === '[' ? JSON.parse(c.key) : null;        // (not while the fixer is opening or closing)

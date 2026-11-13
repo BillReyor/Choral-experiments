@@ -1847,3 +1847,13 @@ date, three syllables in under half a second, though the score now has the word.
 and checked by a pitch tracker: the singers do speak at different pitches (three semitones
 apart and more) and each syllable falls. Whether it is a crowd of men or a row of machines is
 for the listener to say.
+
+**Where am I?** The listener, fixing the eighth piece by ear: when something sounds wrong, all the
+player shows is minutes and seconds, and the music is numbered in measures. The program has always
+known when every measure begins - it is what the voices are timed by - and had never said. A
+render now writes it down, the page keeps it with the piece, and under each player the measure
+being heard is shown as it goes by, with a button that stops the track and opens the music at
+that measure. A box beside it starts the track from any measure, which is what a singer wants
+at rehearsal as much as anyone fixing a note. Measured on the demo: the written beginning of each
+measure and the sharpest rise in the sound near it are two hundredths of a second apart. Tracks
+made before today get their measures worked out from the score, unless it was changed since.
