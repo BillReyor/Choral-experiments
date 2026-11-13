@@ -83,6 +83,21 @@ what the page's update button goes by. They ask for no password and touch nothin
 Real voices are added later from the page, on a Mac, by `python -m choral.setup_voices`
 (`install/voice-model.txt`).
 
+## Testing the parts
+
+```
+sh tools/test.sh                # every unit test: under a minute
+sh tools/test.sh -k upbeat      # only the tests with "upbeat" in their names (whatever pytest takes)
+sh tools/reread.sh              # the reader on your own sheet music: which readings changed
+```
+
+The first runs the unit tests (`tests/`) on this computer, a Mac or Linux, in a Python it makes for
+the purpose the first time (`.venv-test/`: the program's packages at the installer's versions, and
+pytest). They draw their own music and touch nothing of an installed copy. The last is for changes to
+the reader: it reads every PDF under `scores/private/` - which git ignores; put your own there - and
+compares each reading with the one accepted last time (kept in `out/readings/`).
+[How a change is made](how-it-works.md#how-a-change-is-made) says how the two are used.
+
 ## Testing an install
 
 ```
@@ -99,8 +114,8 @@ same use of it; the uninstall. It takes about a minute and downloads what the in
 It is done in an empty home folder made for the purpose and thrown away afterwards, so a copy of
 Palare Piano installed on the same computer, and its pieces, are not touched.
 
-At every change GitHub runs this on Linux, and the same steps on Windows
-(`.github/workflows/install.yml`). The Mac is tested on a Mac, by the release script below:
+At every change GitHub runs this on Linux, and the same steps on Windows, with the unit tests
+beside them (`.github/workflows/install.yml`). The Mac is tested on a Mac, by the release script below:
 GitHub's own Macs were too often not to be had. The repository holds no sheet music but the demo
 piece, so reading a PDF is not part of the test.
 
@@ -114,10 +129,11 @@ sh tools/release.sh --look      # what people would get
 sh tools/release.sh             # test where that has not been done, then move stable
 ```
 
-It moves `stable` only to a version that has passed on all three kinds of computer, at exactly that
-version: Linux and Windows on GitHub (it starts that test if it has not run, and runs again a part
-that did not finish), and the Mac on the Mac it is run on, by `tools/try_here.sh`. When the Mac has
-passed, the script writes that beside the version on GitHub, as a status called "Mac".
+It moves `stable` only to a version that has passed the unit tests and the test of an install on all
+three kinds of computer, at exactly that version: Linux and Windows on GitHub (it starts that test if
+it has not run, and runs again a part that did not finish), and the Mac on the Mac it is run on, by
+`tools/test.sh` and `tools/try_here.sh`. When the Mac has passed both, the script writes that beside
+the version on GitHub, as a status called "Mac".
 
 GitHub holds to the same rule by itself: `stable` is a protected branch that requires the three
 checks (Linux, Windows, Mac), for the owner too, so a push by hand of an untested version is

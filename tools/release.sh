@@ -6,14 +6,17 @@
 #
 # Everyone's install line, and the "Update now" button on the page, take the newest version on "stable".  Work is
 # pushed to "main" as it goes, so "stable" is what stands between a half-finished change and a singer's computer.
-# This moves it only to a version that has passed the test of an install (the real installer, then
-# tools/try_install.py doing what a singer does) on all three kinds of computer, at exactly that version:
+# This moves it only to a version that has passed two tests on all three kinds of computer, at exactly that
+# version: the unit tests (tests/: each part's rules, one at a time) and the test of an install (the real
+# installer, then tools/try_install.py doing what a singer does).
 #
-#     Linux and Windows   on GitHub's machines ("installs and sings").  If it has not been run at this version - a
-#                         change to the documents alone does not start it - it is started here and waited for.
-#     the Mac             on this Mac, by tools/try_here.sh, in an empty home made for the purpose (about a minute;
-#                         a copy of Palare Piano installed here is not touched).  GitHub's own Macs were too often
-#                         not to be had.  When it has passed, that is written beside the version on GitHub, as "Mac".
+#     Linux and Windows   on GitHub's machines ("installs and sings", which runs both).  If it has not been run at
+#                         this version - a change to the documents alone does not start it - it is started here
+#                         and waited for.
+#     the Mac             on this Mac: tools/test.sh, then tools/try_here.sh in an empty home made for the purpose
+#                         (two minutes together; a copy of Palare Piano installed here is not touched).  GitHub's
+#                         own Macs were too often not to be had.  When both have passed, that is written beside
+#                         the version on GitHub, as "Mac".
 #
 # GitHub holds to the same rule by itself: "stable" is a protected branch that requires the three checks (Linux,
 # Windows, Mac), for the owner too.  A push to it by hand of a version that has not passed them is refused.
@@ -85,9 +88,16 @@ else
         exit 1
     fi
     LOG="$(mktemp)"
-    echo "Testing on this Mac, in an empty home (about a minute)..."
+    echo "Testing on this Mac: each part by itself (a minute)..."
+    if ! sh tools/test.sh --at "$NEW" >"$LOG" 2>&1; then
+        grep -v '^ *$' "$LOG" | tail -30 >&2
+        note_mac failure "The unit tests did not pass on a Mac (tools/test.sh, run by tools/release.sh)" || true
+        echo "The unit tests did not pass on this Mac (all of what they said: $LOG). stable stays where it is." >&2
+        exit 1
+    fi
+    echo "Testing on this Mac: installed and used, in an empty home (about a minute)..."
     if sh tools/try_here.sh "$NEW" >"$LOG" 2>&1; then
-        note_mac success "Installed and used on a Mac (tools/try_here.sh, run by tools/release.sh)"
+        note_mac success "Unit tests passed; installed and used on a Mac (tools/test.sh and tools/try_here.sh, run by tools/release.sh)"
         echo "The Mac: passed."
         rm -f "$LOG"
     else

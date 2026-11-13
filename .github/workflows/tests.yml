@@ -1,20 +1,21 @@
-# Unit tests: the parts of Palare Piano one at a time (tests/), on every change and every pull request.
-# The install test (install.yml) checks the whole program as a singer uses it; these check each part's rules -
-# reading a score, the words, the voices, the mix, fixing a note, and the page's server answering only this computer.
+# Unit tests: the parts of Palare Piano one at a time (tests/), on every pull request - and, as a part of the
+# install test (install.yml calls this), on every change to main and before a version is given out.
+# The install test checks the whole program as a singer uses it; these check each part's rules - reading a score,
+# the words, the voices, the mix, fixing a note, and the page's server answering only this computer.
+#
+# On a Mac they are run by hand, and by tools/release.sh:  sh tools/test.sh
 name: unit tests
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['docs/**', '**.md', '.gitignore', '.github/ISSUE_TEMPLATE/**']
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: tests-${{ github.ref }}
+  group: tests-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -37,5 +38,8 @@ jobs:
           python-version: '3.12'
       - name: Install the program's packages
         run: python -m pip install -r install/app.txt -r install/tracks.txt pytest
+      - name: Install what rebuilds a real voice's tone, if it can be built here (its tests are skipped without it)
+        continue-on-error: true
+        run: python -m pip install pyworld==0.3.5 "setuptools<81"
       - name: Run the unit tests
         run: python -m pytest -ra

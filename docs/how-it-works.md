@@ -12,7 +12,7 @@
 | `choral/app.py`, `choral/app.html` | The page for people who do not use a terminal: a web server only this computer can reach. Add a PDF, have it read, choose a part, make the tracks, play them. It runs `python -m choral` for each piece, one at a time, follows what it says, and keeps every piece in a folder of its own under `~/Music/Palare Piano`. |
 | `choral/fix.py` | "Fix a note or a word" on the page: shows one measure as the printed page has it - where each note sits on its staff, what it sounds as under the key signature and the accidentals before it, the word under it - and changes one note or one word in the score file, leaving every other character as it was. The score is copied first, so that everything can be undone. |
 | `choral/check.py` | "What this computer can do": looks at the chip, the memory and the free disk, sings a few seconds with one voice and (with real voices installed) converts a few, and reckons from figures measured on one machine whether each thing will work here and how long it will take. Its count of how many singers to sing at once is passed to the render as `CHORAL_WORKERS`. |
-| The update check | `choral/app.py` asks GitHub, when the page starts and every six hours, what has been published on the branch `stable` since the version the installer wrote down (`version.json` beside the program), says so on the page with the list of what is new, and "Update now" runs the installer as a program of its own: it closes the running copy, installs the newest, starts it, and the open page finds it. Nothing about the computer or its music is sent - only the version, in the address of a public page. `stable` is what everyone is given: `tools/release.sh` moves it on to where `main` is, and only to a version that has passed the test on Linux and Windows (on GitHub) and on a Mac (the one it is run on); GitHub refuses any other push to it. |
+| The update check | `choral/app.py` asks GitHub, when the page starts and every six hours, what has been published on the branch `stable` since the version the installer wrote down (`version.json` beside the program), says so on the page with the list of what is new, and "Update now" runs the installer as a program of its own: it closes the running copy, installs the newest, starts it, and the open page finds it. Nothing about the computer or its music is sent - only the version, in the address of a public page. `stable` is what everyone is given: `tools/release.sh` moves it on to where `main` is, and only to a version that has passed the unit tests and the test of an install on Linux and Windows (on GitHub) and on a Mac (the one it is run on); GitHub refuses any other push to it. |
 | `install.sh`, `install.ps1` | The one-step install - the first for an Apple-chip Mac and for Linux, the second for Windows: a Python of its own (through uv), the program, the scan reader, and something to open it with. [install-by-hand.md](install-by-hand.md) says what they do and where. |
 | `tools/try_install.py`, `tools/try_here.sh`, `.github/workflows/install.yml` | The test of an install. The first opens an installed copy the way a person would and does what a singer does with the demo piece, by the page's own requests. The second is the whole test on one computer, in an empty home made for the purpose: the installer, that use of it, the installer again over it, the uninstall. GitHub runs it on Linux, and the same steps on Windows, at every change to the program; the Mac is tested on a Mac when a version is given out. |
 | "Save a report" | `choral/app.py` writes, for someone whose copy has gone wrong, a text file to send to whoever is helping: the version, the computer, and what the program noted about each piece - no score, no track, and the home folder's name taken out. |
@@ -34,7 +34,8 @@
 | `tools/tone.py` | Tone, harmonic by harmonic: on every held vowel, compares the strength of each harmonic in a real solo recording and in the model. Only harmonic peaks count, so room reverb does not. |
 | `tools/compare.py`, `choral/compare.py` | Spectral comparison: one real singer alone beside the same part sung by simulated singers on the recording's timing, measured the same way note by note (tone in 16 bands, loudness through each note, colour through the note, entries by consonant type, releases, loud against soft, steadiness) - the simulated ones first placed in a room matched to the recording's, so that like is compared with like. Lists what differs, largest first; given several singers, lists what they have in common. `python -m choral` writes this report on its own whenever practice tracks let it isolate a real voice. |
 | `tools/realism.py` | Scorecard: renders one simulated singer on a part and measures it beside a real singer's isolated recording of the same part — pitch glides and scoops, attacks, how notes are held, harmonics versus noise, consonant strength. |
-| `tests/`, `pytest.ini`, `.github/workflows/tests.yml` | The unit tests: each part on its own - the score reader, the words, Latin, the voices, the piano, the mix, timing, the PDF and scan readers, re-voicing, "Fix a note or a word", the check of the computer, and the page's server (that it answers only this computer, works only for its own page, and keeps to its library). `python -m pytest` runs them (`-m "not slow"` leaves out the three full renders); GitHub runs them on Linux and Windows at every change and pull request. A test marked `xfail` is a fault found and not yet mended: it starts to pass when the fault is. |
+| `tests/`, `tools/test.sh`, `.github/workflows/tests.yml` | The unit tests: each part on its own - the score reader, the words, Latin, the voices, the piano, the mix, timing, the PDF and scan readers (from single rules up to a whole PDF drawn for the purpose and read from one end to the other), re-voicing (with a stand-in for the voice model), "Fix a note or a word", the check of the computer, and the page's server (that it answers only this computer, works only for its own page, and keeps to its library). `sh tools/test.sh` runs them here, in a Python it makes for the purpose; GitHub runs them on Linux and Windows at every change and pull request; a version is given out only when they pass on all three. See [How a change is made](#how-a-change-is-made). |
+| `tools/reread.sh` | The reader tried on real sheet music - your own, which stays on your computer: reads every PDF under `scores/private/` and says which readings differ from the ones accepted last time. Run before and after a change to the reader. |
 | `scores/demo_shenandoah.score` | A short public-domain example. |
 
 The stand-alone experiments that led here (a vowel-only "Shenandoah", and an original pop number in three
@@ -250,6 +251,37 @@ The unit is the phrase, from one rest to the next. One corrected word in the mid
 three-minute piece sends about a twentieth of it to the model again. In slow music with few rests
 a phrase can last half a minute, and a correction there costs all of it. A change that moves the
 music in time - a tempo, the length of a measure - still converts everything after it.
+
+## How a change is made
+
+Test first. A fault someone hears, or a thing the program should newly do, becomes a test before it becomes a
+change to the program:
+
+1. **Write the test, and see it fail.** The smallest piece of music that shows the fault - three notes, a line of
+   words, a page drawn for the purpose - and what should come of it. A test that passes before the fault is
+   mended has not found it.
+2. **Mend the program until it passes**, with every other test (`sh tools/test.sh`, under a minute).
+3. **Take the mending out again and see the test fail.** A test that passes either way guards nothing. (The tests
+   of a week's work were checked like this in one go: each rule broken on purpose, one at a time, to see that
+   some test noticed. Forty of forty did; one of them had found a fault of its own on the way.)
+4. **For a change to the reader, read real music before and after** (`sh tools/reread.sh`): every measure that now
+   reads differently is either what the change was for or a mistake, and is looked at against its page.
+5. **A version is given out** (`sh tools/release.sh`) only when the unit tests and the test of an install pass on
+   Linux, on Windows and on a Mac, at exactly that version.
+
+What the tests are made of matters here more than in most programs:
+
+- **No sheet music, no words of a song, no recording that is somebody's.** The tests draw their own music and
+  make up their own words. A piece that showed a fault is not named, and its words are not quoted - a made-up
+  line that goes wrong the same way does the same work.
+- **A sound's note is not asked of a pitch tracker.** The worst fault so far - real voices leaping an octave and
+  sliding about - was first declared mended on a pitch tracker's word, and the tracker was what had been misled
+  in the first place. The tests tell a note from which overtones carry the sound's strength, and from how well
+  it repeats after one cycle of the note it should be on.
+- **A test says what was heard.** Its name is the rule in plain words, and where a listener's remark led to it,
+  the remark is beside it: the next person to break it should know what will be heard if they do.
+- **What a test cannot tell is how it sounds.** That takes ears - a person's, in the end. A passing test means
+  the rule holds, not that the singing is good.
 
 ## What gets estimated for each piece
 

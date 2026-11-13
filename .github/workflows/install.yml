@@ -28,6 +28,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  parts:                               # each part's rules, one at a time (tests/): a version is given out only if these pass too
+    name: unit tests
+    uses: ./.github/workflows/tests.yml
+
   try:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}

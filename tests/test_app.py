@@ -101,7 +101,7 @@ def test_add_names_a_nameless_file_piece(lib, name):
 
 
 def test_add_strips_odd_characters(lib):
-    assert app.add('Ave <Maria>|"*?.pdf', b'%PDF-1.4') == 'Ave Maria'
+    assert app.add('My <Song>|"*?.pdf', b'%PDF-1.4') == 'My Song'
 
 
 def test_add_numbers_a_second_piece_of_the_same_name(lib):
@@ -205,6 +205,35 @@ def test_update_line_fetches_from_this_project_on_github(monkeypatch):
     monkeypatch.setattr(app, 'version', lambda: None)
     line = app.line()
     assert 'https://raw.githubusercontent.com/BillReyor/Palare-Piano/stable/install' in line
+
+
+def test_what_is_new_leaves_out_the_housekeeping_and_sends_nothing_of_this_computer(monkeypatch):
+    import io
+    import urllib.request
+    titles = ['A first fix', 'Journal: what was learned', 'Tests for the reader', 'Merge pull request #3 from someone/a-branch', 'A second fix']
+    body = json.dumps({'commits': [{'commit': {'message': t + '\n\nand why'}} for t in titles]}).encode()
+    asked = {}
+
+    def github(req, timeout=None):
+        asked.update(url=req.full_url, headers={k.lower() for k, _ in req.header_items()}, body=req.data)
+        return io.BytesIO(body)
+    monkeypatch.setattr(urllib.request, 'urlopen', github)
+    monkeypatch.setattr(app, 'version', lambda: {'version': 'a' * 40})
+    monkeypatch.setattr(app, 'newer', {})
+    app.look_for_newer()
+    assert app.newer['count'] == 5
+    assert app.newer['news'] == ['A second fix', 'A first fix']          # newest first; what a singer would notice, no more
+    assert asked == dict(url='https://api.github.com/repos/BillReyor/Palare-Piano/compare/' + 'a' * 40 + '...stable',
+                         headers={'user-agent', 'accept'}, body=None)
+
+
+def test_no_answer_from_github_is_not_an_error_on_the_page(monkeypatch):
+    import urllib.request
+    monkeypatch.setattr(urllib.request, 'urlopen', lambda *a, **k: (_ for _ in ()).throw(OSError('no network')))
+    monkeypatch.setattr(app, 'version', lambda: {'version': 'a' * 40})
+    monkeypatch.setattr(app, 'newer', {})
+    app.look_for_newer()
+    assert app.newer['error'] == 'OSError' and 'news' not in app.newer
 
 
 # ---- the report keeps private things out
@@ -328,3 +357,101 @@ def test_nothing_but_listed_tracks_is_served(server, piece_with_track, path):
     status, _, body = request(server, 'GET', path.format(pid=piece_with_track))
     assert status == 404
     assert b'private' not in body and b'secret-sheet-music' not in body
+
+
+# ---- what the page says about a piece: where a muted part is still heard
+TWO_LINES = b'''title: Two Lines
+tempo: 100
+time: 4/4
+key: 0
+transpose: TEN -12
+
+== 1
+TEN: a4+c5/q=la a4+c5/q=la a4+c5/q=la a4+c5/q=la
+LOW: c3+f3/q c3+f3/q c3+f3/q c3+f3/q
+== 2
+TEN: a4+c5/h=la a4+c5/h=la
+LOW: c3/h d3/h
+== 3
+TEN: a4+c5/h=la a4/h=la
+LOW: c3+f3/h c3+f3/h
+'''
+
+
+def test_measures_where_another_part_sings_the_same_notes_are_named(lib):
+    # with the baritones left out of a track, their line is still heard where the basses sing it too: the page says where
+    pid = app.add('two lines.score', TWO_LINES)
+    got = app.what_was_read(pid)
+    assert [p[0] for p in got['parts']] == ['tenor1', 'tenor2', 'baritone', 'bass']
+    assert got['doubled'] == {'baritone': [2], 'bass': [2]}          # (a measure only half in unison, the third, is not one)
+    assert got['measures'] == 3 and got['tempo'] == 100
+
+
+def test_two_parts_on_one_line_throughout_are_one_part_not_a_doubling(lib):
+    pid = app.add('one line.score', TWO_LINES.replace(b'c3+f3', b'c3').replace(b'a4+c5', b'a4'))
+    got = app.what_was_read(pid)
+    assert [p[0] for p in got['parts']] == ['tenor1', 'bass'] and all(len(p) == 3 for p in got['parts'])     # each with a word of explanation
+    assert got['doubled'] == {}
+
+
+# ---- the measure being heard, for tracks made before the page showed it
+def with_tracks(lib, pid, stale=False):
+    import time
+    (lib / pid / 'x - Bass.mp3').write_bytes(b'x')
+    app.save(pid, read=True, tracks=['x - Bass.mp3'], made=dict(part='bass', when=time.time() + (-1e6 if stale else 1e6)))
+
+
+def test_measures_of_tracks_made_earlier_are_worked_out_from_the_score(lib):
+    pid = app.add('two lines.score', TWO_LINES)
+    with_tracks(lib, pid)
+    app.find_measures()
+    assert app.load(pid)['timeline'] == [[1.0, 1], [3.4, 2], [5.8, 3]]          # a second of silence, then 2.4 s a measure
+
+
+def test_measures_are_not_guessed_for_a_score_changed_since_its_tracks(lib, monkeypatch):
+    pid = app.add('two lines.score', TWO_LINES)
+    with_tracks(lib, pid, stale=True)
+    monkeypatch.setattr(app.subprocess, 'run', lambda *a, **k: pytest.fail('the tracks no longer follow this score'))
+    app.find_measures()
+    assert 'timeline' not in app.load(pid)
+
+
+def test_a_piece_that_cannot_be_timed_is_left_alone(lib):
+    pid = app.add('broken.score', b'title: x\n== 1\nTEN: this is not music\n')
+    with_tracks(lib, pid)
+    app.find_measures()                                                          # (says nothing, harms nothing)
+    assert 'timeline' not in app.load(pid)
+
+
+# ---- small files to send
+def a_wav(path, seconds=.5):
+    import wave
+    with wave.open(str(path), 'wb') as w:
+        w.setnchannels(2); w.setsampwidth(2); w.setframerate(44100)
+        w.writeframes(bytes(4 * int(44100 * seconds)))
+    return str(path)
+
+
+def test_squeeze_leaves_tracks_as_written_when_asked(tmp_path, monkeypatch):
+    monkeypatch.setenv('PALARE_PLAIN_TRACKS', '1')
+    assert app.squeeze(a_wav(tmp_path / 'a.wav')) is None
+    assert os.listdir(tmp_path) == ['a.wav']
+
+
+def test_squeeze_makes_an_mp3_where_the_computer_has_no_converter(tmp_path, monkeypatch):
+    pytest.importorskip('lameenc')
+    monkeypatch.delenv('PALARE_PLAIN_TRACKS', raising=False)
+    monkeypatch.setattr(app.shutil, 'which', lambda name: None)                  # Windows, and most Linux
+    assert app.squeeze(a_wav(tmp_path / 'a b.wav')) == 'a b.mp3'
+    data = (tmp_path / 'a b.mp3').read_bytes()
+    assert len(data) > 1000 and (data[:3] == b'ID3' or (data[0] == 0xFF and data[1] & 0xE0 == 0xE0))
+    assert len(data) < os.path.getsize(tmp_path / 'a b.wav')
+
+
+def test_squeeze_with_nothing_to_make_a_small_file_says_so(tmp_path, monkeypatch):
+    import sys
+    monkeypatch.delenv('PALARE_PLAIN_TRACKS', raising=False)
+    monkeypatch.setattr(app.shutil, 'which', lambda name: None)
+    monkeypatch.setitem(sys.modules, 'lameenc', None)                            # not installed
+    assert app.squeeze(a_wav(tmp_path / 'a.wav')) is None
+    assert os.listdir(tmp_path) == ['a.wav']

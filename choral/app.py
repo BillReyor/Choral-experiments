@@ -146,6 +146,9 @@ def line():
     return f'irm {raw}.ps1 | iex' if os.name == 'nt' else f'wget -qO- {raw}.sh | sh' if sys.platform != 'darwin' and not shutil.which('curl') else f'curl -fsSL {raw}.sh | sh'
 
 
+NOT_NEWS = ('journal', 'tests', 'merge ')      # how the title of a change begins that a singer would not notice: notes, tests, a joining of two lines of work
+
+
 def look_for_newer():
     """Ask GitHub what has been published since this copy's version.  Nothing about this computer or its music is
     sent: it is the address of a public page, with the version in it."""
@@ -159,7 +162,7 @@ def look_for_newer():
         with urllib.request.urlopen(req, timeout=10) as r:
             d = json.load(r)
         titles = [c['commit']['message'].split('\n')[0].strip() for c in d.get('commits', [])][::-1]       # newest first
-        newer.update(checked=time.time(), count=len(titles), news=[t for t in titles if not t.lower().startswith('journal')][:8], error='')
+        newer.update(checked=time.time(), count=len(titles), news=[t for t in titles if not t.lower().startswith(NOT_NEWS)][:8], error='')
     except Exception as e:
         newer.update(checked=time.time(), error=f'{type(e).__name__}')
 
