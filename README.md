@@ -308,10 +308,15 @@ wget -qO- https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.
   *Credits*. Keep it with the tracks: the voices belong to real singers who allowed their use on
   that condition.
 
+## Why "Palare Piano"?
+
+*Palare* is one spelling of Polari, the slang gay men in Britain once spoke so as not to be
+overheard. *Piano* means "softly". Say the two together and you hear *player piano*, the piano
+that plays itself. This one sings. ([The longer story](docs/about.md#the-name).)
+
 ## More
 
-- [About Palare Piano](docs/about.md): what it cannot do, the story behind the name, credits and
-  licence.
+- [About Palare Piano](docs/about.md): what it cannot do, credits and licence.
 - [Other computers, and the command line](docs/install-by-hand.md), for the technically minded.
 - [How it works](docs/how-it-works.md) and [the record of how it was made](docs/journal.md).
 

@@ -50,37 +50,25 @@ cannot do, where the name comes from, and whose work it stands on.
 
 ## The name
 
-*Palare* is one spelling of [Polari](https://wp.lancs.ac.uk/fabulosa/whats-polari/) (from the
-Italian *parlare*, "to talk"): the slang gay men in Britain spoke among themselves, picked up from
-the theatre, the fairground and the merchant navy, in the years when being found out could mean
-prison. It let two men talk about their lives in a pub or on a bus without anyone around them
-following. The whole country heard it, mostly without knowing what it was hearing, from Julian
-and Sandy on the BBC's *Round the Horne* in the 1960s. After the law changed in 1967 there was
-less need for it and it faded, leaving English a few of its words: *naff*, *zhoosh*, *camp*,
-*drag*.
+It means three things at once.
 
-*Piano* is the instrument under the voices here, and the Italian for "softly". *Parlare piano*:
-to speak quietly - which is what Polari was for.
-
-The name is also a play on **player piano**: the piano that plays itself from a roll of punched
-paper. This program is one for a choir - it reads the page and performs it with nobody there.
-Kurt Vonnegut's first novel, [*Player Piano*](https://en.wikipedia.org/wiki/Player_Piano_(novel))
-(1952), makes that instrument the emblem of a world where machines do the work, and it plays in
-the bar where the people they replaced go to drink. The name keeps the book in view: what this
-makes is a practice track, something to learn a part from. The singing stays with the singers.
+- **Palare** is one spelling of [Polari](https://wp.lancs.ac.uk/fabulosa/whats-polari/): the slang
+  gay men in Britain spoke among themselves, in the years when being found out could mean prison,
+  so that nobody nearby could follow. The word is the Italian *parlare*, "to talk".
+- **Piano** is the instrument under the voices here, and the Italian for "softly". *Parlare
+  piano*, to speak quietly, is what Polari was for.
+- Said aloud, it is a **player piano**: the piano that plays itself from a roll of punched paper.
+  This program is one for a choir. It reads the page and sings it with nobody there. Kurt
+  Vonnegut's novel [*Player Piano*](https://en.wikipedia.org/wiki/Player_Piano_(novel)) (1952)
+  made that instrument the emblem of machines doing people's work, and the name keeps the warning
+  in view: what this makes is a practice track. The singing stays with the singers.
 
 Gay choruses are the other half of that history: the same people, no longer keeping their voices
-down. The [San Francisco Gay Men's Chorus](https://www.sfgmc.org/our-story), founded by Jon Reed
-Sims in the autumn of 1978 and the first chorus to put the word "gay" in its name, sang in public
-for the first time on the steps of City Hall on 27 November 1978, at the candlelight vigil on
-the night Harvey Milk and George Moscone were killed. Its tour of nine cities in 1981 left new
-choruses behind it. [GALA Choruses](https://en.wikipedia.org/wiki/GALA_Choruses), the
-association they formed in 1982, now has more than two hundred member choruses and over ten
-thousand singers. Through the AIDS years they went on singing while they buried their own; the
-San Francisco chorus remembers the more than three hundred members it lost as its "fifth
-section".
-
-This program was written to help one such chorus learn its notes.
+down. The first to put the word "gay" in its name, the
+[San Francisco Gay Men's Chorus](https://www.sfgmc.org/our-story), sang in public for the first
+time on 27 November 1978, at the vigil on the night Harvey Milk and George Moscone were killed.
+[GALA Choruses](https://en.wikipedia.org/wiki/GALA_Choruses) now counts more than two hundred.
+This program was written to help one of them learn its notes.
 
 ## Credits
 
