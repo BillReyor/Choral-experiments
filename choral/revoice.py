@@ -651,7 +651,7 @@ def revoice(tracks, voices, log=print, seed=0, rebuild=True, alone=None):
         if len(todo) < len(jobs):
             left = sum(kb - ka for (_, _, _, ka, kb), f in zip(where, kept) if not os.path.exists(f)) / SR
             log(f'  {len(jobs) - len(todo)} of the {len(jobs)} stretches were converted before and are reused'
-                + (f': {left / 60:.0f} minutes of singing are left to convert' if todo else ''))
+                + ('' if not todo else ': less than a minute of singing is left to convert' if left < 60 else f': {left / 60:.0f} minutes of singing are left to convert'))
         said, code = '', 0
         if todo:
             import re

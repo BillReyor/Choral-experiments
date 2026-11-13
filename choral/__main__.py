@@ -22,6 +22,7 @@ MUSIC is a score file (docs/score-format.md) or a PDF exported from notation sof
                     long as all the singing lasts.  Use your own voice, or one whose owner has agreed
   --language        latin or english, when the program takes the words for the wrong one (it tells Latin by its words)
   --only            write just one version, e.g. --only "Baritone predominant"
+  --read            read the music, say what was found, and stop there
 
 What was estimated for the piece is saved beside the score as NAME.preset.json and reused.
 """
@@ -119,6 +120,7 @@ def main():
     ap.add_argument('--fresh', action='store_true', help='ignore a saved preset and estimate again')
     ap.add_argument('--voice', help='recording(s) of a real voice for the singers to sound like')
     ap.add_argument('--reread', action='store_true', help='read the PDF again even if a score read from it earlier is there (one corrected by hand is kept)')
+    ap.add_argument('--read', action='store_true', help='read the music, say what was found, and stop there')
     a = ap.parse_args()
     log = lambda *s: print(*s, flush=True)
     t0 = time.time()
@@ -139,6 +141,8 @@ def main():
     part = groups[0][1][-1] if groups else None    # the part a --predominant track belongs to
     title = sc.title or os.path.splitext(os.path.basename(path))[0]
     log(f'{title}: {len(sc.measures)} measures, {sum(len(v) for v in sc.parts.values())} sung notes, {len(sc.piano)} piano notes')
+    if a.read:
+        return
 
     # ---- the piece's preset: saved, or estimated from the score, then from whatever recordings there are
     pfile = a.preset or os.path.splitext(path)[0] + '.preset.json'

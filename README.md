@@ -1,60 +1,49 @@
 # Palare-Piano
 
 Give it the sheet music of a piece for men's chorus and it sings it: a simulated choir (tenor 1,
-tenor 2, baritone, bass) rendered entirely in code - no samples, no recordings - with the piano, or
-over an accompaniment track you supply. Name your part and it also writes the rehearsal versions:
-your part brought forward, your part left out, your part alone.
+tenor 2, baritone, bass) with the piano. Name your part and it also makes the rehearsal tracks:
+your part brought forward, your part left out, your part alone. The singing is done entirely in
+code - no samples, no recordings - and can then be given the sound of real men's voices.
 
-## Quickstart
+## Install (Mac)
 
-```
-pip install -r requirements.txt
-python -m choral scores/demo_shenandoah.score --part bass
-```
+1. Open Terminal: press ⌘-Space, type `Terminal`, press Return.
+2. Paste this line and press Return:
 
-This writes into `out/`: the full rendering (*balanced*), *voices only*, and for the part named
-*Bass predominant*, *Bass muted* (everyone else, to sing against) and *Bass alone*.
+   ```
+   curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh
+   ```
 
-With your own music:
+3. A few minutes later it says it is installed, and Palare Piano opens in your browser.
 
-```
-python -m choral MUSIC.pdf --part baritone                           # sung with the built-in piano
-python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3   # sung over a recorded accompaniment
-python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
-       --balanced BALANCED.mp3 --predominant BARITONE_PREDOMINANT.mp3    # and learn from practice tracks
-```
+After that you never need Terminal again: open **Palare Piano** from the Applications folder in your
+home folder, or find it with Spotlight.
 
-- **MUSIC** is a PDF (exported from notation software, or a scan) or a plain-text score
-  ([docs/score-format.md](docs/score-format.md)). A PDF is read once into a `.score` file beside it;
-  correct a misread note or word there and the next run uses the correction.
-- **--part** takes `tenor1`, `tenor2`, `baritone`, `bass`, `solo`, or several with commas.
-- **--accompaniment** lines the voices up with a recording instead of using the built-in piano.
-- **--balanced / --predominant / --muted** are practice tracks of the same piece, if you have them.
-  They are only listened to - for the timing, the room, how the notes are shaped - and nothing of
-  them ends up in the output. The run then reports how well it fits them: the share of the real
-  singer's notes that are on pitch where the timing puts them, how closely the voices sit on the
-  accompaniment, and where the simulated voice differs most from the real one.
-- **--tune** lets a speech recognizer choose how close the microphones are (needs whisper.cpp).
-- **--voice VOICE.wav** (or several, or a folder of them) gives the singers the sound of real
-  voices: 15-30 seconds each of someone singing alone - you, or people who have agreed to it.
-  Several voices are seated like a choir, the low ones in the low parts.
-  `tools/vocalset_voices.py` fetches ten men's voices from a public research collection to start
-  with. This is the one thing here that is not done in code: an outside voice-conversion model,
-  installed separately ([docs/how-it-works.md](docs/how-it-works.md)), re-voices each simulated
-  singer, keeping the notes, words and timing the engine sang. It is slow - a three-minute piece
-  takes 15 to 50 minutes, by the size of the choir - but only the first time for a piece: after
-  a correction to the score, only the phrases it touches are converted again.
+It needs a Mac with an Apple chip (M1 or later), macOS 14 or later, about 1.5 GB of disk, and the
+internet while it installs. No password is asked for. If Apple's own developer tools are missing it
+asks Apple to install them first - a window opens; click Install. To bring it up to date, paste the
+same line again. To remove it: the same line with ` -s -- --uninstall` added after `sh`.
 
-## Install
+On other computers, or to run it from the command line, see
+[docs/install-by-hand.md](docs/install-by-hand.md).
 
-| For | You need |
-|---|---|
-| Everything above from a `.score` file or a PDF exported from notation software (MuseScore, Dorico, Sibelius, Finale): read exactly, in seconds | Python 3.10+, `pip install -r requirements.txt` |
-| Scans and photocopies | the [homr](https://github.com/liebharc/homr) recognition engine beside the project: `python3.12 -m venv .venv-omr && .venv-omr/bin/pip install "homr[cpu]"` (AGPL; it is called as a separate program) |
-| Words from a scan | nothing on macOS (with the Xcode command-line tools); elsewhere [Tesseract](https://tesseract-ocr.github.io/). A PDF that carries its text needs neither. |
-| Audio other than WAV | `ffmpeg` (or macOS's `afconvert`) |
-| `--voice` | the voice model ([docs/how-it-works.md](docs/how-it-works.md)), and `pip install pyworld`, which rebuilds the sung notes the model leaves rough (on a recent Python add `"setuptools<81"`, which pyworld needs to start) |
-| `--tune`, and the listening checks in `tools/` | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) and a model, named in `WHISPER_MODEL` |
+## Using it
+
+- **Add a piece.** Drop the sheet music on the page as a PDF - exported from notation software, or
+  a scan. It is read into a score: seconds for an export, about half a minute a page for a scan.
+- **Make your tracks.** Choose your part, and you get the full rendering (*balanced*), *voices
+  only*, your part *predominant*, your part *muted* (everyone else, to sing against) and your part
+  *alone*. They play on the page and are kept in `Music/Palare Piano` in your home folder.
+- **Real voices.** Out of the box the choir is the program's own simulated voices: clear, quick
+  (a minute or two a piece), and plainly a machine. The page offers to add real men's voices - a
+  4 GB download, once. With them a piece takes far longer, roughly ten minutes for every minute of
+  music with twelve singers to a part, and sounds like a choir.
+- **When something is wrong.** The page says where the reader was unsure, and when no tempo was
+  printed and it had to guess. *Correct the score* opens what was read as text
+  ([docs/score-format.md](docs/score-format.md)); fix the note or the word, save, and make the
+  tracks again - only the corrected phrases are sung again.
+- **Nothing of yours leaves the computer.** The music and the tracks stay on it. The internet is
+  used to fetch the program's own parts, when it is installed and when real voices are added.
 
 ## Known limitations
 
@@ -87,7 +76,10 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   the piano staves, with no pianist's judgement. An instrument's staff in the score (a clarinet, a
   flute) is played by the same piano, so its tune is there when the choir is silent; drums are
   left out, and so is a part written for a transposing instrument.
-- **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece.
+- **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece with
+  the built-in voices, and half an hour or more with real ones.
+- **The one-step installer is for Apple-chip Macs**, and has been run from nothing on one of them.
+  Real voices have been tried on no other kind of computer.
 
 ## The name
 
@@ -132,8 +124,9 @@ This program was written to help one such chorus learn its notes.
   its singers, with the silences cut out, serve as references for voice conversion. None of the
   recordings are in this repository. **Anything you share that was sung with these voices - a rehearsal track included -
   must carry this credit.**
-- **Voice conversion** (`--voice`) is done by [Seed-VC](https://github.com/Plachtaa/seed-vc)
-  (GPL-3.0), installed separately and run as its own program; none of its code is here.
+- **Real voices** are made by [Seed-VC](https://github.com/Plachtaa/seed-vc) (GPL-3.0), fetched when
+  you add them and run as its own program. The small driver that runs it (`choral/seedvc_driver.py`)
+  follows Seed-VC's own code, which is why this whole project is under the GPL.
 - **Each re-voiced singer's tone** is rebuilt with [WORLD](https://github.com/mmorise/World) (Masanori Morise;
   modified BSD) through [pyworld](https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder)
   (MIT).
@@ -144,6 +137,9 @@ This program was written to help one such chorus learn its notes.
 
 ## More
 
+- [docs/install-by-hand.md](docs/install-by-hand.md) - other computers, and the command line: an
+  accompaniment recording instead of the built-in piano, learning from practice tracks, your own
+  voice for the singers.
 - [docs/how-it-works.md](docs/how-it-works.md) - what each file does, how PDFs are read, what is
   estimated for each piece and from what.
 - [docs/score-format.md](docs/score-format.md) - the plain-text score format.
@@ -152,4 +148,10 @@ This program was written to help one such chorus learn its notes.
 - `experiments/` - the stand-alone experiments that led here.
 
 Audio, sheet music and transcriptions of copyrighted arrangements are never committed
-(`.gitignore` blocks them, along with per-piece settings); renders go to `out/`.
+(`.gitignore` blocks them, along with per-piece settings).
+
+## Licence
+
+Copyright (C) 2026 Bill Reyor. Palare Piano is free software: you may redistribute and change it
+under the terms of the [GNU General Public License](LICENSE), version 3 or (at your option) any
+later version. It comes with no warranty.

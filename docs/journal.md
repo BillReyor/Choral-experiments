@@ -1429,3 +1429,50 @@ level within 0.1 dB, the spectrum by third octaves a quarter of a decibel apart 
 1.2 dB at the most, the bands that carry the soloist within 1.5 dB through the solo verse, and
 a recognizer gets 70% and 48% of the words where the night's render gave 71% and 49%. The
 listener's answer to whether it sounds as good: "As good".
+
+**For anyone.** Asked what it would take to run all this without an assistant at the keyboard,
+and then by other people on their own machines, the listener said: "I want to make it easy for
+anyone to run this." Two questions were theirs to answer. Who is it for - people who type
+commands, or singers who never open a terminal? Singers. And how do other people get the driver
+that runs the voice model, which follows GPL code and so could not sit in an MIT repository? Make
+the whole project GPL. So the licence is now the GPL, version 3, and the driver is in the
+repository (`choral/seedvc_driver.py`).
+
+*What "easy" came to.*
+
+- *One line, once.* A Mac will not open an unsigned app that a browser downloaded; it will run a
+  line pasted into Terminal, and it will open with a double-click whatever that line builds on
+  the spot. So the install is one pasted line, and after it an app in the Applications folder. A
+  signed app that needs no line takes a paid Apple developer account, which is the listener's
+  to decide on.
+- *Nothing assumed.* The installer brings its own Python (through uv) and installs every package
+  at the version this was tested with. One package, the one that steadies held notes, has no
+  ready-built form for a Mac and must be compiled, and the text reader for scans is compiled
+  too; so Apple's developer tools are asked for where they are missing.
+- *A page instead of commands* (`choral/app.py`). Drop a PDF on it; it is read; choose a part,
+  the voices, the size of the choir; the tracks appear with players. It says in plain words what
+  the reader was unsure of, and where no tempo was printed it says what it guessed and takes a
+  better one. One piece at a time. Stopping keeps what was finished. The Mac is kept awake while
+  it works. Tracks are compressed, and those made with real voices get a file with the credit.
+- *Real voices behind a button* (`choral/setup_voices.py`): the model's packages, the model, the
+  ten voices, and a three-second trial, with a progress bar.
+
+*From nothing.* The installer was run in an empty home folder, with a search path holding only
+the system's own programs, from a copy of the source. The program, its Python (3.12, where the
+work so far was done on 3.15) and the scan reader with its models: about three minutes and
+1.1 GB, and it sang the demo. Then the page of that copy:
+
+- A scanned piece (the fifth) and a notation-software export (the tenth) were read by it into
+  scores identical, line for line, to the ones rendered the night before.
+- Real voices were added by the button: 166 seconds on this connection, 4.7 GB in all, and the
+  ten voices fetched are byte for byte the ten used here.
+- The demo, made there with real voices and four to a part, against the same made in the working
+  copy: correlation 0.9996 to 0.9999, level within 0.01 dB.
+- Opened the way a double-click opens it. The first launcher stayed running as the app, and a
+  Mac does not start a running app again: a second double-click, after the page had been closed,
+  did nothing. The launcher now leaves the program running behind the page and ends at once.
+
+*Not tested.* A Mac that lacks Apple's developer tools - this one has them, so the step where
+they are asked for has never run. Any Mac but this one: an older chip will be slower, by how much
+is unknown. Intel Macs, Windows and Linux, which get instructions and no installer. And nobody
+who is not a programmer has tried it yet.

@@ -9,6 +9,9 @@
 | `choral/latin.py` | Church Latin by rule, syllable by syllable, with its own five vowels fitted to real singers. |
 | `choral/piano.py`, `choral/render.py` | Piano, stage (48 singers on risers in front of a stereo pair, section leaders on close mics), hall, mix. Every section is kept on its own stem, so one part can be brought forward, left out, or heard alone. |
 | `choral/__main__.py` | The program: sheet music in, audio out (see below). |
+| `choral/app.py`, `choral/app.html` | The page for people who do not use a terminal: a web server only this computer can reach. Add a PDF, have it read, choose a part, make the tracks, play them. It runs `python -m choral` for each piece, one at a time, follows what it says, and keeps every piece in a folder of its own under `~/Music/Palare Piano`. |
+| `install.sh` | The one-step install for an Apple-chip Mac: a Python of its own (through uv), the program, the scan reader, and an app to double-click. [install-by-hand.md](install-by-hand.md) says what it does and how to do without it. |
+| `choral/setup_voices.py`, `choral/seedvc_driver.py` | Adding real voices: the first installs the voice model and the voices and tries them once; the second is the program the model is run through (it runs in the model's own Python and imports nothing from here). |
 | `choral/presets.py` | Estimates what differs from piece to piece - tempo and its bends, hall, how close the microphones are, how loud the accompaniment sits - from practice tracks, from a speech recognizer, or from the score alone. |
 | `choral/timing.py` | Finds where every beat of the score falls in the recordings: a first, steady fit from one isolated voice, then a follower that tracks the written piano attacks through the accompaniment track and every isolated voice's notes together (position and tempo both), plus the checks that say how well the result fits - singers on pitch, voices against the accompaniment. |
 | `choral/reference.py` | Takes a set of practice tracks apart (balanced, accompaniment, "part predominant" or "part muted") into voices alone, accompaniment alone and one part alone, and says how cleanly they separated. |
@@ -187,20 +190,23 @@ with these voices should carry the credit.
 **The model.** `revoice.py` only needs a command that takes a list of jobs
 (`{"source": wav, "reference": wav, "out": wav}`) and writes each `out`; the command is the JSON
 list in `.svc/command.json` (or in the file `CHORAL_REVOICE` names). The one used so far is
-[Seed-VC](https://github.com/Plachtaa/seed-vc)'s singing model, set up like this:
+[Seed-VC](https://github.com/Plachtaa/seed-vc)'s singing model. `python -m choral.setup_voices`
+sets all of it up - the page's "Add real voices" button runs the same thing - and what it does can
+be done by hand:
 
 ```
-git clone https://github.com/Plachtaa/seed-vc .svc/seed-vc
 python3.12 -m venv .svc/venv
-.svc/venv/bin/pip install torch==2.6.0 torchaudio==2.6.0 numpy==1.26.4 scipy==1.13.1 librosa==0.10.2 \
-    soundfile transformers==4.46.3 "huggingface-hub>=0.28.1" munch einops pyyaml tqdm matplotlib \
-    descript-audio-codec==1.0.0
+.svc/venv/bin/pip install -r install/voice-model.txt          # torch 2.6.0, librosa 0.10.2, transformers 4.46.3 ...
+# Seed-VC at the commit this was tested with (51383ef), unpacked as .svc/seed-vc
+python tools/vocalset_voices.py -o .svc/voices                # the voices
+pip install pyworld "setuptools<81"                           # in the program's own Python: steadies held notes
+# .svc/command.json:  [".svc/venv/bin/python", "choral/seedvc_driver.py", ".svc/seed-vc"]   (full paths)
 ```
 
-plus a driver of about a hundred lines that loads the model once and runs the jobs with that
-project's own functions. Seed-VC is under the GPL-3.0 and the driver follows its code, so the
-driver is kept with the installed model, not in this repository. The first run fetches about
-2.3 GB of model files. On an Apple M-series machine it converts about four times as fast as real
+`choral/seedvc_driver.py` loads the model once and runs the jobs with that project's own functions.
+Seed-VC is under the GPL-3.0 and the driver follows its code; it used to be kept outside this
+repository for that reason, and is part of it now that the whole project is under the GPL. The
+first run fetches about 2.3 GB of model files. On an Apple M-series machine it converts about four times as fast as real
 time (ten refinement steps, which measured the same as thirty): a three-minute piece for four
 parts of twelve is an hour and a half of singing, so about 25 minutes; with `--singers 4`, about
 10. That is with the model's two heavy stages, the diffusion and the vocoder, in half precision,
