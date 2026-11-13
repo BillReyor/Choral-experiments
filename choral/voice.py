@@ -366,7 +366,8 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     # an octave and a third under where the voice sings comfortably, a little different for every singer (so that a
     # section speaking together is a crowd and not a chord), higher on the beat than off it, sinking through the
     # breath, and falling within each syllable as speech does.  Where the x stands on the staff counts for a little:
-    # a higher x is said a little higher.  None of this has been heard by its author; see docs/journal.md.
+    # a higher x is said a little higher.  This is built from a description of speech and checked with a pitch
+    # tracker; what a listener makes of it is in docs/journal.md.
     # (The pitch: a man's lively speaking voice, 113 Hz for the basses to 148 Hz for the first tenors.)
     said = np.array([len(x) > 5 and bool(x[5]) for x in ph])
     if said.any():

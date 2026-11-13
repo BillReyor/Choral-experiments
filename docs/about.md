@@ -5,9 +5,12 @@ cannot do, where the name comes from, and whose work it stands on.
 
 ## What it cannot do (the full list)
 
-- **It has never been listened to by its author.** Every judgement behind it is a measurement:
-  against isolated recordings of real singers, against accompaniment tracks, and by a speech
-  recognizer. Trust your ears over its reports.
+- **It was built by measurement, and has been checked by ear only in part.** Its sound was fitted
+  to isolated recordings of real singers and to accompaniment tracks, and its words to what a
+  speech recognizer understands. A singer has since listened to tracks of several of the test
+  pieces, and what they reported has been put right ([the journal](journal.md) says what and
+  how). Not every piece, part or setting has been heard by anyone. Trust your ears over its
+  reports.
 - **Tenor and bass choirs only** (TTBB, TTB, soloist or trio over the choir), with piano or unaccompanied.
 - **Reading scans is imperfect.** Typically 96-99% of the notes are right. About one syllable in
   ten is wrong or missing, more with Tesseract. (A PDF exported from notation software is read
@@ -15,6 +18,12 @@ cannot do, where the name comes from, and whose work it stands on.
   "8va" lines are not followed yet. A PDF that stores its music font under private numbers is
   recognized like a scan.) Repeats, D.S., codas and numbered endings are followed - numbered
   endings have been met in one piece so far. Always look through the `.score` file it writes.
+- **Two parts on one staff of a scan are told apart by height**: at each moment the upper part has the
+  highest note and the lower the lowest. That is wrong where the parts cross. It is set aside in
+  one case only, where the engine that recognizes the page found two complete voices on one pitch
+  with different rhythms (one part holds a note while the other, on the same note, moves on).
+- **Measure numbers are counted, not read.** They match the page's as long as every barline was
+  found. An opening upbeat is measure 0, as it is in print.
 - **Words:** English (by dictionary) and church Latin (by rule); which of the two a scan is in
   is told from its words (`--language` overrides). A word the dictionary does not
   have - a name, another language, a misread - is sung as it is spelled, by rough English rules:
@@ -31,8 +40,7 @@ cannot do, where the name comes from, and whose work it stands on.
   laying-back that make swing swing are not attempted.
 - **Spoken notes are a first attempt.** Notes with an x for a head are said in rhythm, each singer
   at a speaking pitch of his own, falling through the syllable. A recognizer understands them at
-  least as well as the same words sung; whether they sound like men speaking has been judged by
-  no ear yet. They are read from a PDF exported by notation software; on a scan, mark them in
+  least as well as the same words sung; a listener's verdict on how they sound is still awaited. They are read from a PDF exported by notation software; on a scan, mark them in
   "Fix a note or a word".
 - **From a PDF alone, the pacing is by rule.** A metronome mark is followed; a tempo given in words
   ("Moderately slow") is looked up in a table; a fermata adds about a beat, a "rall." slows to

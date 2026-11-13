@@ -341,10 +341,33 @@ def lines_of(notes, length):
     # line is then its own voice, silent where that voice rests.  A recognized page's voices are not to be relied on:
     # there the upper line is whatever sounds highest, the lower whatever sounds lowest.
     known = bool(notes) and all(n.get('exact') for n in notes) and all(any(n['midi'] is not None and n['voice'] == v for n in notes) for v in ('1', '2'))
-    for pick, voice in ((max, '1'), (min, '2')):
+    names = ('1', '2') if known else (None, None)
+    # There is one case in which a recognized page's voices are believed all the same: the engine found exactly two,
+    # each fills the measure by itself, and going by height cannot tell them apart - at some moment the two are on one
+    # pitch with different rhythms (the basses hold a note while the baritones, on the same note, rest and move on).
+    # By height the moving voice would vanish into the held note.  (Voices that merely cross are not believed: the
+    # engine deals the two notes of a chord to its voices as it pleases - tried, and it swapped parts in three pieces.)
+    vs = sorted({n['voice'] for n in notes}, key=lambda v: (len(v), v))
+    if not known and len(vs) == 2 and all(sum(n['ql'] for n in notes if n['voice'] == v and not n['chord']) == length and
+                                          any(n['midi'] is not None for n in notes if n['voice'] == v) for v in vs):
+        def sounding(v, a):
+            return [n for n in notes if n['voice'] == v and n['midi'] is not None and n['on'] <= a < n['on'] + n['ql']]
+        for a in pts[:-1]:
+            up_, lo_ = sounding(vs[0], a), sounding(vs[1], a)
+            if up_ and lo_:
+                hi_, low_ = max(up_, key=lambda n: n['midi']), min(lo_, key=lambda n: n['midi'])
+                if hi_['midi'] == low_['midi'] and (hi_['on'], hi_['ql']) != (low_['on'], low_['ql']):
+                    names = tuple(vs)
+                    break
+        if names[0] is not None:                       # one notehead for both voices has one tie for both: the engine gives it to one
+            for a_ in notes:
+                for b_ in notes:
+                    if a_['tie'] and not b_['tie'] and a_['voice'] != b_['voice'] and (a_['on'], a_['ql'], a_['midi']) == (b_['on'], b_['ql'], b_['midi']):
+                        b_['tie'] = True
+    for pick, voice in zip((max, min), names):
         line = []
         for a, b in zip(pts, pts[1:]):
-            live = [n for n in notes if n['midi'] is not None and n['on'] <= a < n['on'] + n['ql'] and (not known or n['voice'] == voice)]
+            live = [n for n in notes if n['midi'] is not None and n['on'] <= a < n['on'] + n['ql'] and (voice is None or n['voice'] == voice)]
             n = None
             if live:
                 best = pick(x['midi'] for x in live)
@@ -1546,6 +1569,42 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                     not any(CHORD.match(t) or NOT_LYRICS.match(t) for _, t in row_)
         return texts
 
+    as_len = lambda lab: Fraction(int(lab.split('/')[0]) * 4, int(lab.split('/')[1]))
+
+    def plan_of(c, M, length, cur_time):
+        """How long each measure of one system is, and its time signature -> ([(length, 'n/d')], the length carried on)."""
+        plan = []
+        for j in range(M):
+            # How long is this measure?  Count it: the total most voices agree on.  (The printed time signature is
+            # read too, but it is the less reliable of the two, and most systems do not print one at all.)
+            # A voice that is one rest and nothing else says nothing: the reader gave that rest the length it took
+            # the measure to have.  It may agree with a voice that has notes, not outvote one.
+            totals, idle = [], []
+            for st in c['read']:
+                if j < len(st['measures']):
+                    by_voice, heads = {}, {}
+                    for n in st['measures'][j]['notes']:
+                        if not n['chord']:
+                            by_voice[n['voice']] = by_voice.get(n['voice'], Fraction(0)) + n['ql']
+                            heads.setdefault(n['voice'], []).append(n['midi'])
+                    for v_, t_ in by_voice.items():
+                        if t_ > 0:
+                            (idle if heads[v_] == [None] else totals).append(t_)
+            totals += [t_ for t_ in idle if not totals or t_ in totals]
+            labels = [st['measures'][j]['time'] for st in c['read'] if j < len(st['measures']) and st['measures'][j]['time']]
+            as_len = lambda lab: Fraction(int(lab.split('/')[0]) * 4, int(lab.split('/')[1]))
+            exact = [st['measures'][j].get('len') for st in c['read'] if j < len(st['measures'])]
+            if exact and all(exact):                 # read from the PDF's own symbols: the length is known, not counted
+                length = exact[0]
+            elif totals:
+                best = max(set(totals), key=lambda v: (totals.count(v), v == length, v))
+                if best != length and (totals.count(best) >= 2 or any(as_len(l) == best for l in labels)):
+                    length = best
+            t = next((l for l in labels if as_len(l) == length), None) or (cur_time if cur_time and as_len(cur_time) == length else None) \
+                or (f'{int(length)}/4' if length == int(length) else f'{int(length * 2)}/8')
+            plan.append((length, t))
+        return plan, length
+
     for c in crops:                                 # first the words of the whole piece ...
         if c['read']:
             counts = [len(st['measures']) for st in c['read']]
@@ -1613,6 +1672,19 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                                 if not w[1].endswith('-'):
                                     w[1] += '-'
             c['texts'][si] = ([[tuple(w) for w in line] for line in lines], bars, unit, ys)
+    # A piece that begins before its first barline: the notes of that upbeat are a measure here, but not in print,
+    # where the first whole measure is number 1.  So that the numbers shown are the numbers on the page, the upbeat
+    # is measure 0.  It is taken for one when it is no more than half as long as the measure after it, or when it and
+    # the last measure together make exactly one (the way such a piece is written out).
+    read_ = [c for c in crops if c['read']]
+    if read_:
+        counts_ = [len(st['measures']) for st in read_[0]['read']]
+        first_, _ = plan_of(read_[0], max(set(counts_), key=counts_.count), length, cur_time)
+        counts_ = [len(st['measures']) for st in read_[-1]['read']]
+        last_, _ = plan_of(read_[-1], max(set(counts_), key=counts_.count), first_[-1][0] if first_ else length, cur_time)
+        if len(first_) > 1 and first_[0][0] < first_[1][0] and (2 * first_[0][0] <= first_[1][0] or (len(read_) > 1 or len(last_) > 2) and first_[0][0] + last_[-1][0] == first_[1][0]):
+            num = -1
+            log(f'  the piece begins with an upbeat ({float(first_[0][0]):g} of {float(first_[1][0]):g} beats): it is measure 0, so that the measure numbers are the page\'s')
     nav, rep_starts, rep_ends = [], set(), set()    # what sends the music elsewhere: signs, words, repeat barlines
     endings = []                                    # numbered endings: (the measure each begins at, the passes it is for)
     last = {}                                       # (role, voice) -> (line number in out, pitch) of the note that ended the previous bar
@@ -1715,36 +1787,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                         if under:
                             a_ = min(n['on'] for n in under); b_ = max(n['on'] + n['ql'] for n in under)
                             evens.setdefault(num + j_ + 1, set()).add((float(a_) + 1, float(b_ - a_)))
-        plan = []
-        for j in range(M):
-            # How long is this measure?  Count it: the total most voices agree on.  (The printed time signature is
-            # read too, but it is the less reliable of the two, and most systems do not print one at all.)
-            # A voice that is one rest and nothing else says nothing: the reader gave that rest the length it took
-            # the measure to have.  It may agree with a voice that has notes, not outvote one.
-            totals, idle = [], []
-            for st in c['read']:
-                if j < len(st['measures']):
-                    by_voice, heads = {}, {}
-                    for n in st['measures'][j]['notes']:
-                        if not n['chord']:
-                            by_voice[n['voice']] = by_voice.get(n['voice'], Fraction(0)) + n['ql']
-                            heads.setdefault(n['voice'], []).append(n['midi'])
-                    for v_, t_ in by_voice.items():
-                        if t_ > 0:
-                            (idle if heads[v_] == [None] else totals).append(t_)
-            totals += [t_ for t_ in idle if not totals or t_ in totals]
-            labels = [st['measures'][j]['time'] for st in c['read'] if j < len(st['measures']) and st['measures'][j]['time']]
-            as_len = lambda lab: Fraction(int(lab.split('/')[0]) * 4, int(lab.split('/')[1]))
-            exact = [st['measures'][j].get('len') for st in c['read'] if j < len(st['measures'])]
-            if exact and all(exact):                 # read from the PDF's own symbols: the length is known, not counted
-                length = exact[0]
-            elif totals:
-                best = max(set(totals), key=lambda v: (totals.count(v), v == length, v))
-                if best != length and (totals.count(best) >= 2 or any(as_len(l) == best for l in labels)):
-                    length = best
-            t = next((l for l in labels if as_len(l) == length), None) or (cur_time if cur_time and as_len(cur_time) == length else None) \
-                or (f'{int(length)}/4' if length == int(length) else f'{int(length * 2)}/8')
-            plan.append((length, t))
+        plan, length = plan_of(c, M, length, cur_time)
         # ---- the words of the whole system, put on its notes by where both stand on the page
         sylmap = {}
         for si, role in enumerate(c['roles'][:len(c['read'])]):
@@ -1889,6 +1932,25 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                                         out[k_] = head + ': ' + ' '.join(tl_)
                                     got.pop(id(starts[0]), None); starts[0]['tied_from'] = True
                             syl[v] = got
+                # The same, for a staff that prints words of its own only where it differs from the others and prints none
+                # in this system: a note that begins the system on the pitch its voice was holding at the end of the last
+                # one - under a word of that staff's own - and is as long as no other voice's note there, is that note
+                # still sounding.  (Were the voice singing the others' next word, it would be singing their rhythm.)
+                if j == 0 and not (si in texts and texts[si][0]):
+                    for v, line in enumerate((up, lo)):
+                        n_, a_, b_ = next(((n, a_, b_) for n, a_, b_ in line if n is not None), (None, None, None))
+                        k_, midi_ = last.get((role, v), (None, None))
+                        if n_ is None or a_ != 0 or k_ is None or midi_ != n_['midi'] or n_.get('tied_from'):
+                            continue
+                        head, _, toks_ = out[k_].partition(': ')
+                        tl_ = toks_.split()
+                        note_, eq_, lyr_ = tl_[-1].partition('=')
+                        beside = [x for st2 in c['read'] if j < len(st2['measures']) for x in st2['measures'][j]['notes']
+                                  if x is not n_ and x['midi'] is not None and x['on'] == 0 and not (st2 is st and x['voice'] == n_['voice'])]
+                        if lyr_ and lyr_ != '_' and not note_.endswith('~') and beside and (b_ - a_) not in {x['ql'] for x in beside}:
+                            tl_[-1] = note_ + '~' + eq_ + lyr_
+                            out[k_] = head + ': ' + ' '.join(tl_)
+                            n_['tied_from'] = True
                 dyn = ('!' + st['measures'][j]['dyn'] + ' ') if st['measures'][j].get('dyn') in ('pp', 'p', 'mp', 'mf', 'f', 'ff') else ''
                 shift = 1 if (role in ('TEN', 'T1', 'T2', 'TRIO') or role == 'ALL') and st['clef'] == 'F' else 0
                 if role == 'SOLO' and st.get('octave') == -1:        # a clef with an 8 under it (known when the symbols are read exactly)

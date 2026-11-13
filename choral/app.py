@@ -250,6 +250,25 @@ def what_was_read(pid):
             parts = [x for x in parts if x[0] != 'tenor1'] + [('tenor1', 'Tenor', 'The tenors sing one line in this piece.')]
         else:
             parts.append((ASK[p], NAMES[p]))
+    # Where another part sings a part's very notes - a passage in unison - leaving that part out of a track does not
+    # take its line out of it.  The page says so beside the "muted" track: the measures where every note of the part
+    # is some other part's note too (the same pitch as it sounds, at the same moment, for as long).
+    same_note = lambda n: (round(n['beat'] * 96), round(n['dur'] * 96), n['midi'])
+    doubled = {}
+    for ask, *_ in parts:
+        mine = [p for p in have if ASK[p] == ask]
+        if ask == 'bass' and 'baritone' not in [x[0] for x in parts] and 'BR' in have:
+            mine = ['BR', 'BS']
+        if ask == 'tenor1' and 'tenor2' not in [x[0] for x in parts] and 'T2' in have:
+            mine = ['T1', 'T2']
+        others = {same_note(n) for p in have if p not in mine for n in sc.parts[p]}
+        per = {}
+        for p in mine:
+            for n in sc.parts[p]:
+                m = (sc.printed or {}).get(n['m'], n['m'])
+                per[m] = per.get(m, True) and same_note(n) in others
+        if any(per.values()):
+            doubled[ask] = sorted(m for m, v in per.items() if v)
     text = open(score_of(pid)).read()
     tempo = re.search(r'(?m)^tempo:\s*([\d.]+)', text)
     log = open(os.path.join(folder(pid), 'source', 'read.log'), errors='replace').read() if os.path.exists(os.path.join(folder(pid), 'source', 'read.log')) else ''
@@ -258,7 +277,7 @@ def what_was_read(pid):
     return dict(title=sc.title or load(pid)['title'], measures=len(sc.measures), parts=parts, minutes=round(secs / 60, 1),
                 tempo=float(tempo.group(1)) if tempo else None, tempo_guessed='NO TEMPO IS PRINTED' in log and not load(pid).get('tempo_set'),
                 latin=bool(re.search(r'(?m)^language:\s*latin', text)), unsure=unsure[:60], unsure_count=len(unsure),
-                spelled=sum('is not in the dictionary' in l for l in said))
+                spelled=sum('is not in the dictionary' in l for l in said), doubled=doubled)
 
 
 def computer():

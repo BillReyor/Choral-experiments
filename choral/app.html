@@ -160,7 +160,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.45 ui-monos
 .where-in { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between; margin-top: 8px; font-size: 15.5px; }
 .where-in .now, .where-in .jump, .where-in label { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .where-in .now[hidden] { display: none; }
-.where-in .now b { font-size: 19px; min-width: 1.6em; display: inline-block; text-align: center; }
+.where-in .now b { font-size: 19px; min-width: 1.6em; display: inline-block; text-align: center; white-space: nowrap; }
 .where-in .jump { margin-left: auto; }
 .where-in button { min-height: 38px; padding: 6px 12px; font-size: 15px; }
 .where-in input[type=number] { width: 4.6em; padding: 6px; text-align: center; }
@@ -248,16 +248,27 @@ const THEIRS = { 'predominant': 'This part louder than everyone else', 'muted': 
 // Where in the music a track is.  p.timeline is [[seconds, measure], ...] in the order played: under each player the
 // measure being heard is shown as it goes by, with a button that opens "Fix a note or a word" at that measure, and a
 // box to start the track from any measure.
+function runs(ms) {                                 // [0, 1, 2, 3, 4, 7, 9] -> "measures 0-4, 7 and 9"
+  const out = []; let a = null, b = null;
+  ms.forEach(m => { if (b !== null && m === b + 1) b = m; else { if (a !== null) out.push(a === b ? '' + a : a + '\u2013' + b); a = b = m; } });
+  if (a !== null) out.push(a === b ? '' + a : a + '\u2013' + b);
+  return (ms.length === 1 ? 'measure ' : 'measures ') + (out.length > 1 ? out.slice(0, -1).join(', ') + ' and ' + out[out.length - 1] : out[0]);
+}
 function measureAt(p, t) { const tl = p.timeline || []; if (!tl.length) return null; let lo = 0, hi = tl.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (tl[mid][0] <= t + .05) lo = mid; else hi = mid - 1; } return tl[lo][1]; }
 const trackNode = (p, f, theirs) => {
   const [name, w] = trackName(f, theirs); const url = '/file/' + encodeURIComponent(p.id) + '/' + f.split('/').map(encodeURIComponent).join('/');
   const audio = el('audio', { controls: true, preload: 'none', src: url }), kids = [el('b', null, name), el('span', { class: 'small' }, w[0]), audio];
+  if (/ muted\.[^.]+$/.test(f)) {                     // where another part sings this part's very notes, leaving it out does not take its line away
+    const r = p.read || {}, label = theirs ? f.split('/')[0] : null, part = theirs ? ((r.parts || []).find(x => x[1] === label) || [])[0] : (p.made || {}).part;
+    const ms = (r.doubled || {})[part] || [];
+    if (ms.length) kids.splice(2, 0, el('span', { class: 'small', style: 'display:block;margin-top:4px' }, 'In ' + runs(ms) + ' another part sings the very same notes, so ' + (theirs ? 'this' : 'your') + ' line is still heard there.'));
+  }
   if (p.timeline && p.timeline.length) {
     const tl = p.timeline, all = tl.map(x => x[1]), first = Math.min(...all), last = Math.max(...all);
     let at = null;
     const num = el('b', null, ''), fix = el('button', { onclick: () => { audio.pause(); openFixer(p, null, at); } }, 'Fix this measure');
     const now = el('span', { class: 'now', hidden: true }, 'Now at measure ', num, fix);
-    const show = () => { const n = measureAt(p, audio.currentTime); if (n == null) return; if (n !== at) { at = n; num.textContent = String(n); fix.textContent = 'Fix measure ' + n; } now.hidden = false; };
+    const show = () => { const n = measureAt(p, audio.currentTime); if (n == null) return; if (n !== at) { at = n; num.textContent = n === 0 ? '0 (the pickup)' : String(n); fix.textContent = 'Fix measure ' + n; } now.hidden = false; };
     ['timeupdate', 'seeked'].forEach(e => audio.addEventListener(e, show));
     audio.addEventListener('play', () => { document.querySelectorAll('audio').forEach(a => { if (a !== audio) a.pause(); }); show(); });
     const box = el('input', { type: 'number', min: first, max: last, inputmode: 'numeric', 'aria-label': 'Measure to start from' });

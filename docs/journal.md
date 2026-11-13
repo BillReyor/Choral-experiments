@@ -1857,3 +1857,47 @@ that measure. A box beside it starts the track from any measure, which is what a
 at rehearsal as much as anyone fixing a note. Measured on the demo: the written beginning of each
 measure and the sharpest rise in the sound near it are two hundredths of a second apart. Tracks
 made before today get their measures worked out from the score, unless it was changed since.
+
+**The eleventh piece, heard by its owner.** The listener: something odd in the tenors around
+measures 5 to 8, and the track with the baritones left out still seems to have them in it -
+perhaps because basses and baritones sing the same?
+
+The tenors were looked at first and found innocent. Their notes in those measures are the
+page's, note for note, and a pitch tracker hears them sung as written, with the built-in voices
+and with real ones. What is wrong at that spot is the staff below. For two measures the basses
+hold one note while the baritones, starting on the same note, rest and then move with the
+tenors. The engine that recognizes the page had this right: two voices, each filling its
+measure. The reader threw that away, as it always has on a recognized page, and dealt the notes
+out by height - the higher to the baritones, the lower to the basses - and where both are on one
+pitch the moving voice vanished into the held one. So the tenors sang two words alone that the
+baritones should have sung with them, and the next measure was dealt out wrong between the two
+lower parts. That is very likely what was heard as the tenors being odd.
+
+The engine's voices are still not believed in general (believing them wherever they cross was
+tried: in three other pieces it swapped the parts, the engine having dealt the two notes of a
+chord to its voices as it pleased). They are believed in this one case: exactly two voices, each
+complete, on one pitch with different rhythms. The ten pieces were read again. Outside this one
+it changes four measures in three pieces, and each was looked up on its page: three are now as
+printed (a slide from one note to another that had been read as one long note; a part that
+rests for half a measure and had been singing the other part's notes; a slurred note that had
+been given a word) and the fourth is half right where it was wholly wrong. Two things followed
+from it. A tie on a notehead two voices share belongs to both, and the engine gives it to one.
+And a held note that carries over the end of a line could not be seen where its staff prints no
+words; it is now taken to carry over when the staff had a word of its own under it, the pitch
+is the same, and no other voice has a note of that length there.
+
+The numbers were the other thing. The piece begins with an upbeat, which was counted as measure
+1, so every number the page showed was one more than the number printed in the music - on the
+very day the page began showing measure numbers. An upbeat is now measure 0.
+
+As for the baritones: the track is mixed as it says, everyone but them. But in this piece
+another part sings the baritones' notes, note for note, for four tenths of their line - the
+whole opening is in unison - so their line is there without them. Taking the others out as
+well would leave an unaccompanied piece silent for its first nine seconds, with nothing to sing
+against; the track is left as it is, and the page now says beside it in which measures another
+part sings the same notes.
+
+And the documents said that nobody had ever listened to what this program makes. That stopped
+being true some entries ago: the listener has heard tracks of several of these pieces, and the
+last three entries are what they heard. The page of limits now says what is so - built by
+measurement, checked by ear in part.
