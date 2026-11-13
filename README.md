@@ -196,8 +196,10 @@ Open Palare Piano again the same way (⌘ and space bar, type `Palare Piano`, Re
 was making has carried on.
 
 **How do I update it?**
-Do the three install steps again. Your pieces and tracks are kept. If Palare Piano is in the
-middle of making tracks, let it finish first.
+Palare Piano looks for a newer version by itself. When there is one, the top of the page says
+**A newer version of Palare Piano is ready**: click **Update now**. It takes about a minute, and
+your pieces and tracks are kept. If it is in the middle of making tracks, let it finish first.
+(Doing the three install steps again does the same thing.)
 
 **How do I remove it?**
 Do the install steps again, but paste this line instead. Your pieces and tracks stay in your
@@ -214,7 +216,7 @@ curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install
 - **Tenor and bass choirs only** (four parts, or three), with piano or unaccompanied.
 - **English and church Latin.** Other languages are sung as if spelled in English.
 - **Your music stays on your Mac.** The internet is used only to download Palare Piano itself
-  and, if you add them, the real voices.
+  and, if you add them, the real voices, and to ask whether a newer version exists.
 - **Sharing tracks made with real voices?** Each piece's folder has a small file called
   *Credits*. Keep it with the tracks: the voices belong to real singers who allowed their use on
   that condition.

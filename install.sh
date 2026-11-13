@@ -25,7 +25,8 @@ NAME="Palare Piano"
 BASE="${PALARE_HOME:-$HOME/Library/Application Support/Palare-Piano}"
 APP="$BASE/app"
 LAUNCHER="${PALARE_LAUNCHER:-$HOME/Applications/$NAME.app}"
-SOURCE="${PALARE_SOURCE:-https://github.com/BillReyor/Palare-Piano/archive/refs/heads/main.tar.gz}"
+REPO="BillReyor/Palare-Piano"
+SOURCE="${PALARE_SOURCE:-}"
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 fail() { printf '\n%s\n' "$*" >&2; exit 1; }
@@ -79,11 +80,20 @@ if [ -f "$NOTE" ]; then
     fi
 fi
 
-# ---- the program
+# ---- the program: which version is the newest, then exactly that one (the page later asks whether there is a newer)
 say "Fetching the program..."
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir "$TMP/src"
+VERSION="local"
+if [ -z "$SOURCE" ]; then
+    VERSION="$(curl -fsSL -m 20 "https://api.github.com/repos/$REPO/commits/main" 2>/dev/null | sed -n 's/^  "sha": "\([0-9a-f]\{40\}\)".*/\1/p' | head -1)"
+    if [ -n "$VERSION" ]; then
+        SOURCE="https://github.com/$REPO/archive/$VERSION.tar.gz"
+    else
+        VERSION="unknown"; SOURCE="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+    fi
+fi
 if [ -d "$SOURCE" ]; then
     rsync -a --exclude .git --exclude '.venv*' --exclude .svc --exclude out --exclude 'scores/private' --exclude __pycache__ --exclude .DS_Store --exclude '*.preset.json' "$SOURCE/" "$TMP/src/"
 else
@@ -135,6 +145,9 @@ nohup "$APP/.venv/bin/python" -m choral.app >> "$BASE/app.log" 2>&1 &
 EOF
 chmod +x "$LAUNCHER/Contents/MacOS/launcher"
 date '+installed %Y-%m-%d %H:%M' > "$BASE/installed.txt"
+cat > "$BASE/version.json" <<EOF
+{"version": "$VERSION", "installed": "$(date '+%Y-%m-%d %H:%M')", "launcher": "$LAUNCHER"}
+EOF
 
 say "$NAME is installed."
 echo "From now on, open \"$NAME\" from the Applications folder in your home folder, or find it with Spotlight."

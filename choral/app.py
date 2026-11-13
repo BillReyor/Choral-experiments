@@ -25,6 +25,11 @@ CREDIT = ('The voices on these tracks are from VocalSet: Julia Wilkins, Prem See
           '(https://creativecommons.org/licenses/by/4.0/).  The notes, words and timing were sung by Palare Piano and\n'
           're-voiced with Seed-VC.  Keep this credit with the tracks if you share them.\n')
 
+BOOT = secrets.token_hex(6)                # which run of the program this is: the page starts afresh when it changes
+REPO = 'BillReyor/Palare-Piano'
+LINE = f'curl -fsSL https://raw.githubusercontent.com/{REPO}/main/install.sh | sh'      # what installs it, and brings it up to date
+newer = {'checked': 0., 'count': 0, 'news': [], 'error': '', 'updating': False}
+
 lock = threading.RLock()
 jobs = queue.Queue()
 waiting = []                               # ids of the pieces in the queue, in order
@@ -113,6 +118,60 @@ def settings(**changes):
         if changes:
             d.update(changes); json.dump(d, open(f, 'w'))
         return d
+
+
+# ---- is there a newer version?
+
+def version():
+    """What install.sh wrote down about this copy: which version it is, when it was installed, where its launcher is.
+    None for a copy that was not installed by it (a programmer's own): that one is not offered updates."""
+    try:
+        v = json.load(open(os.path.join(os.path.dirname(ROOT), 'version.json')))
+        return v if re.fullmatch(r'[0-9a-f]{40}', v.get('version', '')) else None
+    except (OSError, ValueError):
+        return None
+
+
+def look_for_newer():
+    """Ask GitHub what has been published since this copy's version.  Nothing about this computer or its music is
+    sent: it is the address of a public page, with the version in it."""
+    import urllib.request
+    v = version()
+    if not v:
+        return
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/compare/{v['version']}...main",
+                                     headers={'User-Agent': 'palare-piano', 'Accept': 'application/vnd.github+json'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.load(r)
+        titles = [c['commit']['message'].split('\n')[0].strip() for c in d.get('commits', [])][::-1]       # newest first
+        newer.update(checked=time.time(), count=len(titles), news=[t for t in titles if not t.lower().startswith('journal')][:8], error='')
+    except Exception as e:
+        newer.update(checked=time.time(), error=f'{type(e).__name__}')
+
+
+def keep_looking():
+    while True:
+        look_for_newer()
+        time.sleep(6 * 3600)
+
+
+def update_now():
+    """Bring this copy up to date from the page: run the installer as a program of its own - it closes this copy, puts the
+    new one in its place and starts it - and let the page wait for the new one to answer."""
+    v = version()
+    if not v:
+        raise ValueError('This copy was not installed by the installer, so it cannot update itself.')
+    with lock:
+        if now or waiting:
+            raise ValueError('Something is being made. Let it finish, or stop it, and then update.')
+        newer.update(updating=True)
+    home = os.path.dirname(ROOT)
+    start = os.path.join(v.get('launcher') or '', 'Contents', 'MacOS', 'launcher')
+    env = dict(os.environ, PALARE_HOME=home, PALARE_NO_OPEN='1', PALARE_NO_BROWSER='1', **({'PALARE_LAUNCHER': v['launcher']} if v.get('launcher') else {}))
+    again = f'sh "{start}"' if os.path.exists(start) else 'true'           # the page that is open finds the new copy by itself: no second window
+    with open(os.path.join(home, 'update.log'), 'w') as log:
+        subprocess.Popen(['/bin/sh', '-c', f'{LINE}; {again}'], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, start_new_session=True)
 
 
 # ---- the voices
@@ -407,7 +466,10 @@ def stop_now():
 def state():
     with lock:
         job = {k: now.get(k) for k in ('id', 'kind', 'stage', 'progress', 'eta')} if now else None
+        v = version()
         return dict(pieces=pieces(), job=job, waiting=list(waiting), voices=voices_state(), library=LIB, computer=computer(), checking=checking['running'],
+                    boot=BOOT, update=dict(can=bool(v), installed=(v or {}).get('installed'), version=((v or {}).get('version') or '')[:7], line=LINE,
+                                           count=newer['count'], news=newer['news'], checked=newer['checked'], error=newer['error'], updating=newer['updating']),
                     last=settings(), demo=os.path.exists(os.path.join(ROOT, 'scores', 'demo_shenandoah.score')))
 
 
@@ -512,6 +574,12 @@ def act(path, q, body):
             return {}
         setup.update(running=True, stage='Waiting for its turn', error='')
         jobs.put(('setup', None, {}))
+        return {}
+    if path == '/api/update/look':
+        look_for_newer()
+        return {}
+    if path == '/api/update':
+        update_now()
         return {}
     if path == '/api/check':
         if not checking['running']:
@@ -669,6 +737,7 @@ def main():
         checking.update(running=True)
         jobs.put(('check', None, {'voices': voices_state()['ready']}))
     threading.Thread(target=worker, daemon=True).start()
+    threading.Thread(target=keep_looking, daemon=True).start()
     signal.signal(signal.SIGTERM, lambda *_: (stop_now(), os._exit(0)))
     print(f'Palare Piano is at http://127.0.0.1:{port}/  (pieces are kept in {LIB})', flush=True)
     show(f'http://127.0.0.1:{port}/')

@@ -176,6 +176,7 @@ footer .heart { color: var(--ink); }
 <div class="stripes" aria-hidden="true"></div>
 <main>
   <div id="gone" class="note bad">Palare Piano has been closed. Open it again from your Applications folder.</div>
+  <div id="update"></div>
 
   <section class="card drop" id="drop" aria-label="Add a piece">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
@@ -200,6 +201,7 @@ footer .heart { color: var(--ink); }
     <details>
       <summary>About Palare Piano</summary>
       <p id="where" style="margin-top:8px"></p>
+      <p id="ver"></p>
       <p>Real voices, where added, come from <a href="https://zenodo.org/records/1193957" target="_blank" rel="noopener">VocalSet</a> (Wilkins, Seetharaman, Wahl and Pardo; CC BY 4.0), re-voiced with Seed-VC. Tracks made with them come with a Credits file: keep it with them if you share them.</p>
       <p>Palare Piano is free software under the GNU General Public License, version 3. <em>Palare</em> is one spelling of Polari, the slang gay men in Britain once spoke so as not to be overheard; <em>piano</em> means softly.</p>
       <p>It keeps running quietly after you close this window, so that long jobs can finish. <button id="quit">Quit Palare Piano</button></p>
@@ -483,6 +485,23 @@ function drawVoices() {
   if (v.running) { const s = $('.stage', box), bar = $('.bar', box); if (s) s.textContent = (v.stage || 'Starting') + '…'; if (bar) { const has = v.progress != null; bar.classList.toggle('busy', !has); $('i', bar).style.width = has ? Math.max(3, Math.round(v.progress * 100)) + '%' : ''; } }
 }
 
+// ---- a newer version: said at the top of the page, with what is new in it and a button that fetches it
+let updateKey = '', updating = false, boot = null;
+function drawUpdate() {
+  const u = S.update || {}, busy = !!(S.job || (S.waiting || []).length), key = JSON.stringify([u.can, u.count, u.news, u.updating, updating, busy, u.checked, u.error]);
+  if (key === updateKey) return;
+  updateKey = key;
+  const box = $('#update'), ver = $('#ver'); box.textContent = ''; ver.textContent = '';
+  if (!u.can) { ver.append('This copy was not put here by the installer, so it does not look for newer versions.'); return; }
+  ver.append('Version ' + u.version + ', installed ' + u.installed + '. ', u.count ? 'A newer version is ready (see the top of the page). ' : u.error ? 'It could not look for a newer version just now (is the internet on?). ' : u.checked ? 'This is the newest version. ' : '',
+    el('button', { class: 'quiet', onclick: () => act('/api/update/look') }, 'Look for a newer version'));
+  if (updating || u.updating) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'Updating Palare Piano'), el('span', { class: 'pill' }, 'Working')), el('p', { class: 'stage' }, 'Fetching the new version…'), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small' }, 'This takes about a minute. The page comes back by itself; your pieces and tracks are not touched.')));
+  else if (u.count > 0) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'A newer version of Palare Piano is ready'), el('span', { class: 'pill' }, u.count + (u.count === 1 ? ' improvement' : ' improvements'))),
+    u.news.length ? el('details', null, el('summary', null, 'What is new'), el('ul', { style: 'margin:8px 0 0;padding-left:20px' }, u.news.map(t => el('li', null, t)))) : null,
+    el('div', { class: 'go' }, el('button', { class: 'main', disabled: busy, onclick: () => { updating = true; updateKey = ''; drawUpdate(); post('/api/update').catch(e => { updating = false; updateKey = ''; drawUpdate(); alert(e.message); }); } }, 'Update now'),
+      el('span', { class: 'small' }, busy ? 'It can be updated when what is being made has finished.' : 'About a minute. Your pieces and tracks are kept.'))));
+}
+
 let computerKey = '';
 function drawComputer() {
   const c = S.computer, key = JSON.stringify([c, S.checking, S.voices.ready, S.voices.can]);
@@ -508,6 +527,7 @@ function draw() {
   $('#where').textContent = 'Your pieces and tracks are kept in ' + S.library + '.';
   $('#demo').hidden = !(S.demo && !S.pieces.length);
   $('#howto').hidden = S.pieces.length > 0;
+  drawUpdate();
   drawVoices();
   drawComputer();
   const list = $('#pieces'), seen = {};
@@ -528,8 +548,12 @@ function draw() {
 
 let misses = 0;
 async function refresh() {
-  try { const r = await fetch('/api/state'); S = await r.json(); misses = 0; $('#gone').style.display = 'none'; draw(); }
-  catch (e) { if (++misses > 2) $('#gone').style.display = 'block'; }
+  try {
+    const r = await fetch('/api/state'); S = await r.json(); misses = 0; $('#gone').style.display = 'none';
+    if (boot && S.boot !== boot) return location.reload();       // another run of the program (it was updated, or opened again): start afresh
+    boot = S.boot; draw();
+  }
+  catch (e) { if (!updating && ++misses > 2) $('#gone').style.display = 'block'; }
 }
 setInterval(refresh, 1500); refresh();
 

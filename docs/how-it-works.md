@@ -12,6 +12,7 @@
 | `choral/app.py`, `choral/app.html` | The page for people who do not use a terminal: a web server only this computer can reach. Add a PDF, have it read, choose a part, make the tracks, play them. It runs `python -m choral` for each piece, one at a time, follows what it says, and keeps every piece in a folder of its own under `~/Music/Palare Piano`. |
 | `choral/fix.py` | "Fix a note or a word" on the page: shows one measure as the printed page has it - where each note sits on its staff, what it sounds as under the key signature and the accidentals before it, the word under it - and changes one note or one word in the score file, leaving every other character as it was. The score is copied first, so that everything can be undone. |
 | `choral/check.py` | "What this computer can do": looks at the chip, the memory and the free disk, sings a few seconds with one voice and (with real voices installed) converts a few, and reckons from figures measured on one machine whether each thing will work here and how long it will take. Its count of how many singers to sing at once is passed to the render as `CHORAL_WORKERS`. |
+| The update check | `choral/app.py` asks GitHub, when the page starts and every six hours, what has been published since the version `install.sh` wrote down (`version.json` beside the program). The page then says a newer version is ready, lists what is new, and "Update now" runs the installer as a program of its own: it closes the running copy, installs the newest, starts it, and the open page finds it. Nothing about the computer or its music is sent - only the version, in the address of a public page. |
 | `install.sh` | The one-step install for an Apple-chip Mac: a Python of its own (through uv), the program, the scan reader, and an app to double-click. [install-by-hand.md](install-by-hand.md) says what it does and how to do without it. |
 | `choral/setup_voices.py`, `choral/seedvc_driver.py` | Adding real voices: the first installs the voice model and the voices and tries them once; the second is the program the model is run through (it runs in the model's own Python and imports nothing from here). |
 | `choral/presets.py` | Estimates what differs from piece to piece - tempo and its bends, hall, how close the microphones are, how loud the accompaniment sits - from practice tracks, from a speech recognizer, or from the score alone. |
@@ -82,6 +83,13 @@ What the reader works out without being told, and from what:
   it (the ragged end of a footnote). A line that is nothing but a part's name ("Tenor I",
   "BASS", with or without a rehearsal letter) is the name of a staff. The run says what it left
   out and where.
+- **A choir on two staves.** A piece that is pairs of staves from beginning to end is a keyboard
+  piece - or a choir written short, tenors on the upper staff and basses on the lower, as hymns and
+  brief unaccompanied pieces are. Words between the two staves say which.
+- **Words above the top staff** are the first tenors' own, where they differ from the others'. A
+  whole line of them is sung by the upper voice wherever the staff beneath carries two. And the
+  staff above does not take them for its own: a line of words far below a lowest staff is asked
+  which neighbours it sounds like - voices that sing together sing much the same words.
 - **Where one system ends.** Staves joined at their left end by a line are one system. The line
   must stand where the staves begin: three spaces in stands the clef, and a clef's tail, a
   measure number and the next clef's top in one column look much like a line.

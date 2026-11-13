@@ -1293,6 +1293,21 @@ def has_piano(crops, pages, exe, work):
     in most music; in unaccompanied music they are the choir's, and the words between them say so."""
     seen = any('p' in ''.join(c.get('kinds') or []) for c in crops if len(c['staves']) >= 3)   # a grand staff under other staves
     big = [c for c in crops if len(c['read']) >= 3][:4]
+    lyric = lambda ws: sum(1 for w in ws if re.search('[aeiou]', w[4].lower()) and len(w[4]) > 1 and not NOT_LYRICS.match(w[4]) and not CHORD.match(w[4]))
+    if not big and exe:                              # nothing but pairs of staves.  That is a piece for a keyboard alone - or a
+        pairs = [c for c in crops if len(c['read']) == 2 and len(c['staves']) == 2]      # choir written on two staves, tenors over basses,
+        told = 0                                                                        # as hymns and short unaccompanied pieces are:
+        for c in pairs[:4]:                                                             # then its words run between the two
+            img = np.asarray(Image.open(pages[c['page'] - 1]).convert('L'))
+            on_page(c['page'], img)
+            top, bot = c['staves'][-1]
+            unit = (bot - top) / 4
+            told += lyric(ocr_words(exe, img, c['staves'][0][1] + .6 * unit, top - 1.0 * unit, work, 'piano')) >= 3
+        if pairs and told > len(pairs[:4]) / 2:
+            for c in crops:
+                if c.get('kinds'):
+                    c['kinds'] = ['v'] * len(c['kinds'])
+            return False
     if not big or not exe:
         return True if seen else None
     sung = between = 0
@@ -1303,7 +1318,6 @@ def has_piano(crops, pages, exe, work):
         unit = (bot - top) / 4
         words = ocr_words(exe, img, bot + .6 * unit, min(c['bot'], bot + 7 * unit), work, 'piano')
         mid = ocr_words(exe, img, c['staves'][-2][1] + .6 * unit, top - 1.0 * unit, work, 'piano')
-        lyric = lambda ws: sum(1 for w in ws if re.search('[aeiou]', w[4].lower()) and len(w[4]) > 1 and not NOT_LYRICS.match(w[4]) and not CHORD.match(w[4]))
         sung += lyric(words) >= 3 or lyric(mid) >= 3; between += lyric(mid) >= 3
     if seen:                                         # the staff finder saw a keyboard: only a line of words inside it says otherwise
         if between <= len(big) / 2:
@@ -1331,7 +1345,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         log('  ! no text recognition here (macOS has its own; elsewhere install Tesseract): the notes will have no words')
     piano = has_piano(crops, pages, exe, work)
     if piano is False:
-        log('  no piano part: words are printed under the lowest staff')
+        log('  no piano part: the words to sing are printed between or under the lowest staves')
     staff_labels(crops, pages, exe, work)
     roles_for(crops, piano)
     fix_clefs(crops, log)
@@ -1376,6 +1390,22 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 if far > nxt - 1.2 * unit:
                     loose = ocr_multi(exe, img, bot + .6 * unit, far, work, tag, (2, 3, 6))
                     loose = [w for w in loose if re.search('[A-Za-z]', w[4]) and '(' not in w[4] and not NOT_LYRICS.match(w[4])]
+                    # Whose words are they?  Print that far down may belong to the system below: the first tenors' own
+                    # words stand above their staff where they differ from the others'.  Voices that sing together sing
+                    # much the same words, so the line is asked which neighbours it sounds like - the staves of its own
+                    # system, or the words under the top staff of the next.
+                    nxt_c = min((o for o in crops if o['page'] == c['page'] and o['staves'] and o['staves'][0][0] > bot), key=lambda o: o['staves'][0][0], default=None)
+                    if loose and nxt_c is not None:
+                        said = lambda ws: {re.sub('[^a-z]', '', t.lower()) for t in ws} - {''}
+                        mine = said(t for lines_, *_ in texts.values() for line_ in lines_ for _, t in line_)
+                        t2, b2 = nxt_c['staves'][0]
+                        u2 = (b2 - t2) / 4
+                        low2 = nxt_c['staves'][1][0] - 1.2 * u2 if len(nxt_c['staves']) > 1 else b2 + 6 * u2
+                        theirs = said(w[4] for w in ocr_words(exe, img, b2 + .6 * u2, min(low2, b2 + 6 * u2), work, tag + 'n'))
+                        line_ = {t for t in said(w[4] for w in loose) if len(t) > 2}
+                        if len(line_ & theirs) >= 2 and len(line_ & theirs) > len(line_ & mine):
+                            log(f"  page {c['page']} system {c['system']}: the words below the {role} staff are the next system's (printed above its top staff)")
+                            loose = []
             ys = []
             for w in sorted(loose, key=lambda w: w[1]):
                 if not any(abs(w[1] - y) < near for y in ys):
@@ -1420,6 +1450,9 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 up_words = ocr_words(exe, img, max(c['top'], top - 4.4 * unit), top - .5 * unit, work, tag + 'a', zoom=4)
                 rows_up = syllables(up_words, unit, img)
                 c['above'] = (rows_up[-1] if rows_up else [], unit)
+                row_ = c['above'][0]
+                c['above_line'] = len([t for _, t in row_ if re.fullmatch(r"[A-Za-z']+[-.,;:!?]*", t) and re.search('[aeiouy]', t.lower())]) >= 4 and \
+                    not any(CHORD.match(t) or NOT_LYRICS.match(t) for _, t in row_)
         return texts
 
     for c in crops:                                 # first the words of the whole piece ...
@@ -1668,6 +1701,21 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                             alone += [n for n, a_, b_ in up_ if n is not None and a_ == n['on'] and not n.get('tied_from') and n.get('x') is not None
                                       and id(n) not in got and lo_on.get(a_) is not n and (a_ not in lo_on)]
                     got.update(place_x(alone, c['above'][0], unit))
+                    if c.get('above_line'):     # a whole line of words above the staff: where the staff carries two voices
+                        row_a = c['above'][0]   # beneath it, the upper one sings those and not the words below
+                        under_ = []
+                        for j in range(M):
+                            stm = c['read'][si]['measures']
+                            if j < len(stm) and any(n['midi'] is not None for n in stm[j]['notes']):
+                                up_, lo_ = lines_of(stm[j]['notes'], plan[j][0])
+                                if all(a_[0] is b_[0] for a_, b_ in zip(up_, lo_)) and len(up_) == len(lo_):
+                                    continue
+                                under_ += [n for n, a_, b_ in up_ if n is not None and a_ == n['on'] and not n.get('tied_from') and n.get('x') is not None
+                                           and row_a[0][0] - 2 * unit <= n['x'] <= row_a[-1][0] + 2 * unit]
+                        if len(under_) >= 3:
+                            for n in under_:
+                                got.pop(id(n), None)
+                            got.update(place_x(under_, row_a, unit))
                 sylmap[(si, v)] = got
         for j in range(M):
             num += 1
