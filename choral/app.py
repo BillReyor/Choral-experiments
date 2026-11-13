@@ -70,6 +70,8 @@ def pieces():
                 continue
             d['id'] = pid
             d['tracks'] = [t for t in d.get('tracks', []) if os.path.exists(os.path.join(folder(pid), t))]
+            if d.get('read'):                          # the places to look at, briefly: the page asks for the whole of one when it shows it
+                d['unsure'] = [dict(key=u['key'], title=u['title'], go=u['measures'][0] if u['measures'] else None) for u in unsure(pid)]
             try:                                       # corrected since its tracks were made: they are out of date
                 sf = os.path.splitext(os.path.join(folder(pid), 'source', d['file']))[0] + '.score'
                 d['stale'] = bool(d['tracks']) and os.path.getmtime(sf) > (d.get('made') or {}).get('when', 1e18)
@@ -77,6 +79,24 @@ def pieces():
                 d['stale'] = False
             out.append(d)
     return sorted(out, key=lambda d: -d.get('added', 0))
+
+
+_unsure = {}
+
+
+def unsure(pid, everything=False):
+    """The places in a piece the program was unsure of (choral/fix.py), without those someone has said are right."""
+    from . import fix
+    try:
+        sf = score_of(pid)
+        log = os.path.join(folder(pid), 'source', 'read.log')
+        stamp = (os.path.getmtime(sf), os.path.getmtime(log) if os.path.exists(log) else 0)
+        if _unsure.get(pid, (None,))[0] != stamp:
+            _unsure[pid] = (stamp, fix.doubts(sf, open(log, errors='replace').read() if os.path.exists(log) else ''))
+        done = set() if everything else set(load(pid).get('checked', []))
+        return [d for d in _unsure[pid][1] if d['key'] not in done]
+    except Exception:
+        return []
 
 
 def tail(path, n=12):
@@ -442,24 +462,28 @@ def act(path, q, body):
         try:
             if path == '/api/fix/open':
                 o = fix.outline(sf)
-                return dict(outline=o, measure=fix.measure(sf, n if n in o['measures'] else o['measures'][0]))
+                return dict(outline=o, measure=fix.measure(sf, n if n in o['measures'] else o['measures'][0], unsure(pid)), unsure=unsure(pid))
             if path == '/api/fix/measure':
-                return dict(measure=fix.measure(sf, n))
+                return dict(measure=fix.measure(sf, n, unsure(pid)))
+            if path == '/api/fix/right':                  # "it is right as it is": that doubt is not raised again
+                save(pid, checked=sorted(set(load(pid).get('checked', [])) | {q.get('key', '')}))
+                return dict(measure=fix.measure(sf, n, unsure(pid)), unsure=unsure(pid))
             if path == '/api/fix/move':
-                m = fix.move(sf, n, int(q['line']), int(q['t']), int(q['k']), int(q.get('step') or 0), q.get('sign'))
+                fix.move(sf, n, int(q['line']), int(q['t']), int(q['k']), int(q.get('step') or 0), q.get('sign'))
             elif path == '/api/fix/word':
-                m = fix.word(sf, n, int(q['line']), int(q['t']), q.get('text', ''))
+                fix.word(sf, n, int(q['line']), int(q['t']), q.get('text', ''))
             elif path == '/api/fix/find':
                 return dict(found=fix.find(sf, q.get('text', '')))
             elif path == '/api/fix/undo':
                 fix.undo_all(sf)
+                save(pid, checked=[])
                 o = fix.outline(sf)
-                m = fix.measure(sf, n if n in o['measures'] else o['measures'][0])
+                n = n if n in o['measures'] else o['measures'][0]
             else:
                 raise KeyError(path)
         except fix.Refused as e:
             raise ValueError(str(e))
-        return dict(measure=m, changed=fix.outline(sf)['changed'])
+        return dict(measure=fix.measure(sf, n, unsure(pid)), changed=fix.outline(sf)['changed'], unsure=unsure(pid))
     if path == '/api/share':
         where = share(pid)
         subprocess.run(['open', where] if sys.platform == 'darwin' else ['xdg-open', where])

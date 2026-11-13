@@ -125,8 +125,9 @@ def outline(path):
     return dict(measures=list(blocks), words=words, changed=changed, locked='=*' in '\n'.join(lines))
 
 
-def measure(path, n):
-    """One measure as the page shows it."""
+def measure(path, n, unsure=()):
+    """One measure as the page shows it.  unsure: the doubts there are about the piece (doubts()): the notes they
+    point at in this measure are marked, and the doubts themselves are handed back with it."""
     lines, blocks = _blocks(path)
     if n not in blocks:
         raise Refused(f'There is no measure {n} in this piece.')
@@ -154,8 +155,188 @@ def measure(path, n):
             notes.append(note)
         label, hint = STAVES.get(name, (name, ''))
         staves.append(dict(line=i, name=name, label=label, hint=hint, clef=clefs.get(name, 'bass'), notes=notes))
+    here = [d for d in unsure if n in d.get('measures', ())]
+    for d in here:
+        for st in staves:
+            start, run = 0., []
+            for note in st['notes']:
+                if any(part in scoremod.VOCAL[st['name']] and abs(start - (beat - 1)) < 1e-6 for part, beat in d.get('notes', {}).get(str(n), ())):
+                    note.setdefault('doubt', []).append(d['key'])         # which doubts point at this note
+                if d.get('syllable'):                            # the very syllable that was doubted
+                    if note['word'] == d['syllable']:
+                        note.setdefault('doubt', []).append(d['key'])
+                elif d.get('word') and not note['rest']:         # the notes a doubted word is sung on
+                    if note['word']:
+                        run.append(note)
+                        if not note['word'].endswith('-'):
+                            if _plain(''.join(x['word'] for x in run)) == _plain(d['word']):
+                                for x in run:
+                                    x.setdefault('doubt', []).append(d['key'])
+                            run = []
+                start += note['beats']
     return dict(n=n, prev=order[at - 1] if at else None, next=order[at + 1] if at + 1 < len(order) else None,
-                first=order[0], last=order[-1], time=b['time'], tempo=b['tempo'], key=b['key'], staves=staves)
+                first=order[0], last=order[-1], time=b['time'], tempo=b['tempo'], key=b['key'], staves=staves,
+                doubts=[d['key'] for d in here])
+
+
+def _plain(word):
+    return re.sub(r"[^a-z']", '', word.lower())
+
+
+PARTS = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass', 'SOLO': 'the soloist', 'TR1': 'the trio (first voice)',
+         'TR2': 'the trio (second voice)', 'TR3': 'the trio (third voice)'}
+NTH = {1: '1st', 2: '2nd', 3: '3rd'}
+
+
+def _who(parts):
+    names = [PARTS.get(p, p) for p in sorted(parts, key=list(PARTS).index)]
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def _span(ms):
+    ms = sorted(ms)
+    return f'measure {ms[0]}' if len(ms) == 1 else f'measures {ms[0]} to {ms[-1]}' if ms[-1] - ms[0] == len(ms) - 1 else 'measures ' + ', '.join(map(str, ms[:6])) + (' ...' if len(ms) > 6 else '')
+
+
+def doubts(path, read_log=''):
+    """Everything the program was unsure of in this piece, in words a singer can act on, each tied to the measures to look
+    at.  Two kinds of source: what the score says when it is loaded as it now stands (a note with no word, a syllable
+    with no vowel, a word not in the dictionary - these go away when they are put right), and what the reader of a
+    scan said while it read (a line of music whose measures it miscounted - these stay until someone says they have
+    looked).  The loader counts measures as they are performed; with repeats that is not how they are printed, and
+    one printed measure sung three times is one place to look, not three."""
+    said = []
+    try:
+        sc = scoremod.load(path, warn=said.append)
+    except Exception as e:
+        return [dict(key='broken', kind='broken', measures=[], title='The music no longer adds up',
+                     text=f'Something in it cannot be read ({e}). "Undo all my changes" puts it back as it was first read.')]
+    printed = sc.printed or {}
+    lines, blocks = _blocks(path)
+    systems, cur = {}, None                               # (page, line of music) -> the measures printed there
+    for raw in lines:
+        m = re.match(r'\s*// page (\d+), system (\d+)', raw)
+        if m:
+            cur = (int(m[1]), int(m[2]))
+        elif raw.strip().startswith('==') and cur:
+            systems.setdefault(cur, []).append(int(raw.split('//')[0].strip('= \t').split()[0]))
+    found = {}
+
+    def add(key, **kw):
+        d = found.setdefault(key, dict(key=key, measures=[], notes={}, parts=[]))
+        for k, v in kw.items():
+            if k == 'measure':
+                if v not in d['measures']:
+                    d['measures'].append(v)
+            elif k == 'note':
+                n, part, beat = v
+                d['notes'].setdefault(str(n), [])
+                if [part, beat] not in d['notes'][str(n)]:
+                    d['notes'][str(n)].append([part, beat])
+                if part not in d['parts']:
+                    d['parts'].append(part)
+            else:
+                d[k] = v
+        return d
+    for line in said:
+        line = line.strip().lstrip('!? ').strip()
+        m = re.match(r'measure (\d+) (\w+): no syllable for the note on beat ([\d.]+)', line)
+        if m:
+            n = printed.get(int(m[1]), int(m[1]))
+            add(f'noword|{n}', kind='noword', measure=n, note=(n, m[2], float(m[3])))
+            continue
+        m = re.match(r'measure (\d+) (\w+): "(.+)" has no vowel to sing', line)
+        if m:
+            n = printed.get(int(m[1]), int(m[1]))
+            add(f'novowel|{n}|{m[3]}', kind='novowel', measure=n, word=m[3], syllable=m[3]).setdefault('parts', [])
+            if m[2] not in found[f'novowel|{n}|{m[3]}']['parts']:
+                found[f'novowel|{n}|{m[3]}']['parts'].append(m[2])
+            continue
+        m = re.match(r'measure (\d+) (\w+): a syllable on a tied note was ignored', line)
+        if m:
+            n = printed.get(int(m[1]), int(m[1]))
+            d = add(f'tied|{n}', kind='tied', measure=n)
+            if m[2] not in d['parts']:
+                d['parts'].append(m[2])
+            continue
+        m = re.match(r'"(.+)" is not in the dictionary', line)
+        if m:
+            add(f'unknown|{_plain(m[1])}', kind='unknown', word=m[1])
+            continue
+        m = re.match(r'"(.+)" is set to (\d+) note-syllable\(s\) but pronounced with (\d+)', line)
+        if m:
+            add(f'fitting|{_plain(m[1])}', kind='fitting', word=m[1], given=int(m[2]), needs=int(m[3]))
+            continue
+        m = re.match(r'no pronunciation for "(.+)"', line)
+        if m:
+            add(f'nopron|{_plain(m[1])}', kind='nopron', word=m[1])
+    for line in read_log.splitlines():
+        line = line.strip().lstrip('!? ').strip()
+        m = re.match(r'page (\d+) system (\d+): found (\d+) measures on the page but (\d+) were read', line)
+        if m:
+            add(f'miscount|{m[1]}|{m[2]}', kind='miscount', page=int(m[1]), system=int(m[2]), saw=int(m[3]), read=int(m[4]))
+            continue
+        m = re.match(r'page (\d+) system (\d+): (\d+) staves on the page but (\d+) were read', line)
+        if m:
+            add(f'staves|{m[1]}|{m[2]}', kind='staves', page=int(m[1]), system=int(m[2]), saw=int(m[3]), read=int(m[4]))
+            continue
+        m = re.match(r'page (\d+) system (\d+): the staves were read with different numbers of measures', line)
+        if m:
+            add(f'uneven|{m[1]}|{m[2]}', kind='uneven', page=int(m[1]), system=int(m[2]))
+            continue
+        if line.startswith('no text recognition here'):
+            add('nowords', kind='nowords')
+        elif line.startswith('a D.S. is printed but its sign was not found'):
+            add('order', kind='order')
+    words = None
+    out = []
+    for d in found.values():
+        k = d['kind']
+        if k in ('unknown', 'fitting', 'nopron'):
+            if words is None:
+                words = outline(path)['words']
+            want = _plain(d['word'])
+            d['measures'] = [n for n, text in words.items() if want and want in [_plain(w) for w in re.split(r'[ /]+', text)]]
+        if k in ('miscount', 'staves', 'uneven'):
+            d['measures'] = list(systems.get((d['page'], d['system']), []))
+            place = f"Page {d['page']}, {NTH.get(d['system'], str(d['system']) + 'th')} line of music" + (f" ({_span(d['measures'])})" if d['measures'] else '')
+        d['measures'].sort()
+        where = _span(d['measures']).capitalize() if d['measures'] else ''
+        if k == 'noword':
+            d.update(title=f'{where}: a note with no word', text=f'The reader found no word under a note for {_who(d["parts"])}, so the vowel before it is held. '
+                     'That is right when one syllable is sung over several notes.', do='If your music has a word under the marked note, type it in the box below it. Otherwise it is right as it is.')
+        elif k == 'novowel':
+            d.update(title=f'{where}: a syllable that cannot be sung', text=f'The reader read “{d["syllable"]}” as a syllable under a note for {_who(d["parts"])}, and there is no vowel in it to sing. It is probably a misreading.',
+                     do='Type what your music has under the marked note.')
+        elif k == 'tied':
+            d.update(title=f'{where}: a word under a tied note', text=f'A tied note only holds the note before it, so the word the reader found under it ({_who(d["parts"])}) was left out.',
+                     do='If the word belongs here, type it under the note where it really starts.')
+        elif k == 'unknown':
+            d.update(title=f'“{d["word"]}” is not a word it knows' + (f' ({_span(d["measures"])})' if d['measures'] else ''),
+                     text='It will be sung the way it is spelled. A name, another language, or a sound like “doo” is fine.',
+                     do='If it is a misreading, correct the spelling under the marked notes. Otherwise it is right as it is.')
+        elif k == 'fitting':
+            d.update(title=f'“{d["word"]}” does not fit its notes' + (f' ({_span(d["measures"])})' if d['measures'] else ''),
+                     text=f'The reader put this word under {d["given"]} note{"s" if d["given"] != 1 else ""}, but it is said in {d["needs"]} syllables, so it is squeezed to fit.',
+                     do='Check that each syllable sits under its own note, with a hyphen where the word goes on: “glo-” “ri-” “a”.')
+        elif k == 'nopron':
+            d.update(title=f'“{d["word"]}” could not be pronounced' + (f' ({_span(d["measures"])})' if d['measures'] else ''), text='It will be sung as “ah”.',
+                     do='Correct its spelling under the marked notes.')
+        elif k == 'miscount':
+            d.update(title=f'{place}: the words may sit under the wrong notes', text=f'The reader counted {d["saw"]} measure{"s" if d["saw"] != 1 else ""} in this line of music but read {d["read"]}, '
+                     'so it spaced the words out evenly.', do='Compare these measures with your music: are the notes there, and is each word under the right note?')
+        elif k == 'staves':
+            d.update(title=f'{place}: a part may be missing', text=f'The reader saw {d["saw"]} staves in this line of music and could read {d["read"]} of them.',
+                     do='Compare these measures with your music: is every part there?')
+        elif k == 'uneven':
+            d.update(title=f'{place}: the parts may not line up', text='The staves in this line of music were read with different numbers of measures.',
+                     do='Compare these measures with your music: is any part ahead of the others, or behind?')
+        elif k == 'nowords':
+            d.update(title='The words could not be read', text='This computer has nothing to read printed words with, so the notes have no words.', do='')
+        elif k == 'order':
+            d.update(title='The order of the music may be wrong', text='A repeat sign (D.S.) is printed, but the reader could not find the place it sends the music back to.', do='')
+        out.append(d)
+    return sorted(out, key=lambda d: (d['measures'][0] if d['measures'] else 10 ** 6, d['key']))
 
 
 def _change(path, n, line, t, new):

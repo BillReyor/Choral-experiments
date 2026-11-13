@@ -158,14 +158,16 @@ tracks sound like people singing.
 
 ## If something is not right
 
-**"The reader had doubts in some spots."**
-Normal, especially for scans. Listen to the tracks first. Most of the time they are fine.
+**"The reader was unsure about some places."**
+Normal, especially for scans, and most pieces still come out fine. To check them, click **Go
+through them, one by one**. Each place opens in the music with a plain sentence saying what the
+reader was unsure of, and the notes in question marked in yellow. Put it right there, or click
+**It is right as it is**, and it moves on to the next.
 
 **A note or a word is wrong.**
 You can fix it on the page, with your sheet music beside you:
 
-1. Under the piece, open **Something sound wrong? More options** and click **Fix a note or a
-   word**.
+1. Under the piece, click **Fix a note or a word**.
 2. Go to the measure: type its number, use the arrows, or type a word from the lyrics and click
    **Find**. Each measure is drawn the way it looks in your music.
 3. **A wrong note:** click it, then click **Higher** or **Lower** until it sits where your

@@ -1636,3 +1636,37 @@ on the two pieces of that length rendered in the big test.
 at everything in the proportion it is slower at a quarter-second of singing; the voice model is
 said to need 9 GB because it took 9 GB on a machine with 128, and it may make do with less where
 there is less, or fail. The crosses and the times on any machine but this one are reckoning.
+
+**Doubts a singer can act on.** The listener, looking at the sixth piece on the page: where the
+reader had doubts was shown, "but the output doesn't make a lot of sense to the layman, and the
+place to go to make corrections" was not obvious. What was shown was the program's own log - 91
+lines of "measure 66 T2: no syllable for the note on beat 1; holding the previous vowel" - under a
+count, with the way to fix anything folded away further down under another heading.
+
+*What a doubt is now.* A place to look at, with a sentence about it. The log lines are read
+back into what they are about, and put together:
+
+- The loader counts measures as they are performed. That piece is sung through three times, so
+  one printed measure with one doubtful note was three lines, in three parts each. Measures are
+  turned back into the printed ones, and a measure is one place however many parts and passes it
+  was reported for. The 91 lines are 20 places.
+- Each kind has its own words: a note with no word under it (and that this is right when one
+  syllable is sung over several notes); a syllable that cannot be sung; a word under a tied
+  note; a word not in the dictionary; a word with more syllables than it was given notes; and,
+  from the reader of a scan, a line of music whose measures it miscounted, or in which it could
+  not read every staff. The reader names a page and a line of music; the score records which
+  measures each line holds, so those are named too.
+- What the loader says is asked of the score as it now stands, so a doubt that has been put
+  right is gone. What the reader of the scan said stays until someone says they have looked.
+
+*Where to go.* The note on the piece has one button, "Go through them, one by one", and a list
+with "Show me" beside each. Either opens the fixer at that place: its sentence at the top, the
+notes it is about ringed in yellow and their word boxes coloured, and only the lines of music it
+concerns (the others are a click away). From there: put it right, or "It is right as it is",
+and it says how many are left and goes on. "Fix a note or a word" is now a button on the piece
+itself, not under "More options".
+
+*Tried* on the sixth piece by a program pressing the buttons: marked one place right (19 left),
+typed a word under a marked note (18 left), and at the syllable with no vowel saw it ringed in
+both tenor lines - the syllable of the prayer that pencil marks had hidden from the reader in
+the first place. Not tried by a singer.
