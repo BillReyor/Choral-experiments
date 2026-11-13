@@ -1901,3 +1901,44 @@ And the documents said that nobody had ever listened to what this program makes.
 being true some entries ago: the listener has heard tracks of several of these pieces, and the
 last three entries are what they heard. The page of limits now says what is so - built by
 measurement, checked by ear in part.
+
+**Voices out of control.** The last entry was wrong about the tenors. The listener, with the
+corrected tracks: the voices going out of control and gliding all over the place are not
+fixed - do a spectral analysis and hunt this down, and it may not be the tenors at all.
+
+It was not a misreading of the page and it was not only the tenors. Every singer's track was
+kept twice over, as the engine sang it and as it came back in a real voice, and the two were
+compared. Two faults, both in the rebuilding of the sung tone at the engine's pitch
+(`revoice._rebuild`), which is done to every real-voice track.
+
+*The model sings another note.* For moments at a time the voice model returns the right vowel
+an octave higher, or an octave and a fifth, or two octaves. The rebuilding took the sound apart
+as if it were on the engine's note, so the colour it kept was strong at every second or third
+overtone of that note and empty between - and put together again at the engine's pitch it was
+still heard up there. A sound is now taken apart at the pitch it really has (read from it, and
+from which of its overtones carry its strength), so that its colour holds no note of its own.
+
+*The engine's pitch was misread.* The rebuilding read the engine's pitch back from the engine's
+sound. For the brightest singers - one first tenor and one bass here, whose strength lies in
+their upper overtones - the reading went an octave up, or anywhere between, for half a second
+at a time in the middle of a held note, and in the hiss of an s it found notes that were never
+sung. The real voice was then rebuilt on that: a held bass note sliding about for five seconds.
+The engine knows its pitch exactly, and now hands it over with the sound; nothing is read back.
+
+*Measured*, on the sixteen singers of the eleventh piece (four to a part, 1,018 seconds sung),
+by two tests that use no pitch tracker - which overtones of the engine's note carry the
+strength, and whether the sound repeats at the period of that note:
+
+    an octave or more too high          41.5 s before     0.6 s after
+    off its note for 80 ms or more       8.3 s before     0.2 s after
+
+Before, it began in the second measure and came every measure or two; three singers of
+sixteen carried most of it. A recognizer gets 73 of the 79 words from the whole choir before
+and after; from the track with the baritones left out - tenors and basses, where the wild
+singers were - it got 31 and now gets 73. The engine's own sound is bit for bit what it was.
+
+*What went wrong in the looking.* The first check of the tenors compared a pitch tracker's
+reading of the real voice with a tracker's reading of the engine, a few points to a note, and
+took the median: the leaps were outvoted, and odd readings in the low parts were put down to
+the tracker. A tracker is the wrong witness here twice over - it is what the rebuilding itself
+was misled by. The tests above ask the sound a narrower question it cannot get wrong.

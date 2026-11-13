@@ -35,6 +35,10 @@ cannot do, where the name comes from, and whose work it stands on.
   in places.
 - **Timing follows the accompaniment track** when there is one. Where the score as read does not
   match the recording (a misread ending, a cut), the run says so and the timing there is a guess.
+- **The voice model does not always sing the note it is given.** With real voices, moments of a
+  singer come back an octave or more too high (about four seconds in a hundred, in the piece where
+  this was measured). The program puts them back on the note; a few hundredths of a second in a
+  hundred still get through, and with four singers to a part one stray voice is heard.
 - **Swing is the long-short eighth notes and nothing more.** Where the music is marked "swing" the
   eighths go two to one, and a bracket marked "straight" is sung evenly. The accents and the
   laying-back that make swing swing are not attempted.

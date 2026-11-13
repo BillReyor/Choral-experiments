@@ -168,7 +168,7 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
     N = voice.CLOCK['n']
     tune = dict(tune or {}, CDUR=voice.CDUR)                                   # (said every time: a worker keeps what the last singer set)
     slow = dict(tune, CDUR=voice.CDUR * REVOICED_CONS)                         # the model blurs consonants: given longer ones, a re-voiced
-    tasks = [(sect, i, engine_notes(sc, sect), clock, slow if voices and sect in LONG_CONS else tune)      # soloist is understood as well as the engine's
+    tasks = [(sect, i, engine_notes(sc, sect), clock, slow if voices and sect in LONG_CONS else tune) + ((True,) if voices else ())      # soloist is understood as well as the engine's
              for sect in voice.SECT if sc.parts[sect]
              for i in ((1,) if sect in SINGLE else range(singers))]            # singer 1 is a section leader: on a close mic
     stems = {sect: np.zeros((3, N, 2), np.float32) for sect in voice.SECT if sc.parts[sect]}
@@ -180,7 +180,7 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
             log('voices sung in %.0fs' % (time.time() - t0))
             mid = lambda ns: float(np.median(np.repeat([np.mean(n[2]) for n in ns], [max(1, int(round(8 * n[1]))) for n in ns]))) if ns else 60.   # the middle of its notes, by how long each lasts
             given = revoice.deal(voices, [(t[0], t[1]) for t in tasks], {t[0]: mid(t[2]) for t in tasks}, log, NAMES)   # low voices to the low sections
-            new = revoice.revoice([d[4] for d in done], given, log, alone=[t[0] in SINGLE for t in tasks])
+            new = revoice.revoice([d[4] for d in done], given, log, alone=[t[0] in SINGLE for t in tasks], pitches=[d[5] for d in done])
             arriving = [(d[0], d[1], d[2], d[3], m) for d, m in zip(done, new)]
         else:
             arriving = pool.imap_unordered(_singer, tasks)

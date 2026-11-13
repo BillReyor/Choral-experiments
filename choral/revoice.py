@@ -14,7 +14,7 @@ Whose voice: a recording of 15-30 seconds of one person singing alone.  Use your
 agreed to it."""
 import json, os, shutil, subprocess, tempfile, wave
 import numpy as np
-from scipy.ndimage import gaussian_filter1d as gf
+from scipy.ndimage import gaussian_filter1d as gf, median_filter
 
 SR = 44100
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -339,7 +339,13 @@ def _cycles(xl, a, b, f):
 def _pitch_of(src):
     """The engine's pitch, read from its own sound cycle by cycle -> (Hz at every sample, where it is voiced).
     A pitch tracker's reading wobbles by more than the singer does (17 cents, 3-20 times a second, on notes the engine
-    holds within 7): rebuilt on such a reading, a held note flutters.  The lengths of the cycles themselves do not."""
+    holds within 7): rebuilt on such a reading, a held note flutters.  The lengths of the cycles themselves do not.
+
+    The tracker also finds a pitch where there is none: in the hiss of an s it reports a note - any note, often one
+    an octave or two above the singer - and a voice rebuilt on that sings a short tone where it should hiss, somewhere
+    else each time (a bass with strong consonants did so sixteen times in one piece).  A stretch the tracker calls
+    sung is therefore believed only if its cycles can be found: where fewer than two in five of them match the one
+    before, it is not voice, and is left as the model made it."""
     from scipy.signal import resample_poly, butter, sosfiltfilt
     from . import pitch
     n = len(src)
@@ -361,11 +367,39 @@ def _pitch_of(src):
         if len(mk) < 6:
             continue
         T = np.diff(mk); ok = (fit[1:] > .8) & (np.abs(T * rough[np.minimum(mk[:-1].astype(int), n - 1)] / SR - 1) < .12)
+        if ok.mean() < .4:                                # no cycles to speak of: a hiss the tracker took for a note
+            voiced[a:b] = False
+            continue
         if ok.sum() < 4:
             continue
         mid = .5 * (mk[:-1] + mk[1:])[ok]
         f[a:b] = np.interp(np.arange(a, b), mid, gf(SR / T[ok], 1.5))          # over three cycles
     return f, voiced
+
+
+def _overtone(y, f0, t):
+    """Which note is this sound on, counted in the engine's pitch?  -> for every moment in t, 1 if it is on the
+    engine's note, 2 if nearly all its strength lies in every second overtone of that note (it is an octave up),
+    3 or 4 for every third or fourth (an octave and a fifth, two octaves).  f0: the engine's pitch at those
+    moments, 0 where it has no voice."""
+    N, F = 2048, 4096
+    c = np.minimum((np.asarray(t) * SR).astype(int), len(y) - 1)
+    pad = np.pad(y, (N // 2, N // 2))
+    out = np.ones(len(c))
+    win = np.hanning(N)
+    for a in range(0, len(c), 512):
+        cc, ff = c[a:a + 512], np.asarray(f0[a:a + 512], float)
+        spec = np.abs(np.fft.rfft(pad[cc[:, None] + np.arange(N)[None, :]] * win, F, axis=1)) ** 2
+        e = np.zeros((len(cc), 13))
+        for h in range(1, 13):
+            mid = np.clip(np.round(h * ff * F / SR).astype(int), 1, F // 2 - 3)
+            w = np.maximum(1, (.2 * ff * F / SR).astype(int))
+            for j in np.flatnonzero((ff > 0) & (h * ff < 5000)):
+                e[j, h] = spec[j, mid[j] - w[j]:mid[j] + w[j] + 1].max()
+        for m in (2, 3, 4):
+            on = e[:, m::m].sum(1); off = e[:, 1:].sum(1) - on
+            out[a:a + 512] = np.where((on > 0) & (off < .1 * on), m, out[a:a + 512])
+    return out
 
 
 CALM = .01             # seconds over which a rebuilt voice's colour and loudness are steadied everywhere
@@ -379,7 +413,7 @@ CONS = 10.             # dB: the most a consonant of a rebuilt soloist is raised
 CALM_HELD = .12        # ... over which its colour is steadied inside a held note
 
 
-def _rebuild(y, src, alone=False):
+def _rebuild(y, src, alone=False, known=None):
     """A re-voiced stretch (lined up with its original) with its sung tone built again: the model's vowel colour,
     sounded at the engine's pitch.  Needs the WORLD analysis/synthesis (pip install pyworld); returns None without
     it.  Made for a voice heard alone; a listener then preferred the whole chorus this way too, though a section
@@ -397,7 +431,13 @@ def _rebuild(y, src, alone=False):
       a lot (CALM_HELD), each such vowel as a whole from 15 ms after it begins - what flutter was left sat "just
       after the attack" until then;
     - inside a held vowel the loudness (LEVEL_HELD) and the pitch (STILL) are steadied too.
-    Where the engine has no voice - consonants, rests - the model's own sound is kept."""
+    Where the engine has no voice - consonants, rests - the model's own sound is kept.
+
+    known: the engine's pitch as the engine itself gives it (Hz for every sample, 0 where it has no voice), when
+    whoever calls has it.  Reading it back from the sound goes wrong for the brightest singers - a first tenor, a
+    bass with a pressed voice - whose strength lies in their upper overtones: the tracker hears them an octave up,
+    or anywhere between, for half a second at a time in the middle of a held note, and the voice rebuilt on that
+    reading leaps up and slides about.  ("Going out of control and gliding all over the place", a listener said.)"""
     try:
         import warnings
         with warnings.catch_warnings():
@@ -413,7 +453,13 @@ def _rebuild(y, src, alone=False):
     y = np.ascontiguousarray(y, np.float64); src = np.ascontiguousarray(src, np.float64)
     fp = 5.
     f, v = _pitch_of(src)
-    if f is None:
+    if known is not None and (known > 0).sum() > SR // 20:
+        if f is None:
+            f, v = known.astype(np.float64), known > 0
+        else:                                          # sung where the tracker hears voice and the engine has it; at the engine's pitch
+            v = v & (known > 0)
+            f = np.where(known > 0, known, f)
+    if f is None or v.sum() < 16:
         return y
     nfr = n // int(SR * fp / 1000) + 1
     t = np.arange(nfr) * fp / 1000
@@ -421,8 +467,21 @@ def _rebuild(y, src, alone=False):
     voiced = v[k]
     f0 = np.where(voiced, f[k], 0.)
     lf = np.log2(np.maximum(np.where(voiced, f[k], np.interp(k, np.flatnonzero(v), f[v])), 1.))
-    sp = pw.cheaptrick(y, f0, t, SR)
-    ap = np.minimum(pw.d4c(y, f0, t, SR), pw.d4c(src, f0, t, SR))  # no breathier than the engine sang it
+    # The model does not always sing the note it was given.  For moments at a time - a tenth of what four sections
+    # sang in one piece, a quarter of what one first tenor did - it comes back an octave higher, or an octave and a
+    # fifth, or two octaves: the same vowel on another note.  Taken apart as if it were on the engine's note, such a
+    # sound keeps its own note in its colour (strong at every second or third overtone of the engine's pitch and
+    # empty between), and put together again at the engine's pitch it is still heard up there: a voice leaping out
+    # of its section and sliding back.  So where the model's own pitch stands well above the engine's, the sound is
+    # taken apart at the pitch it really has; its colour then holds no note, and the engine's is the only one.
+    # (Taking a sound apart at too high a pitch only blurs its colour a little; at too low a one it does the harm.)
+    ty, my = pitch.yin(resample_poly(y, 1, 2), SR // 2, fmin=60., fmax=1300., hop=64)
+    its = np.where(np.isnan(my), 0., 440. * 2. ** ((np.nan_to_num(my, nan=69.) - 69.) / 12.))
+    its = median_filter(its[np.clip(np.searchsorted(ty, t), 0, len(ty) - 1)], 5, mode='nearest') if len(ty) else np.zeros(nfr)
+    apart = np.where(voiced & (its > 1.3 * f0), its, f0)
+    apart = np.maximum(apart, f0 * _overtone(y, f0, t))            # (a tracker can read such a sound an octave low: its overtones cannot)
+    sp = pw.cheaptrick(y, apart, t, SR)
+    ap = np.minimum(pw.d4c(y, apart, t, SR), pw.d4c(src, f0, t, SR))  # no breathier than the engine sang it
     ls, la = np.log(sp + 1e-16), np.log(ap + 1e-16)
     if CALM:                                                       # everywhere a little: over 10 ms the flicker goes and the syllables stay
         ls, la = gf(ls, CALM * 1000 / fp, axis=0, mode='nearest'), gf(la, CALM * 1000 / fp, axis=0, mode='nearest')
@@ -502,11 +561,18 @@ def _stops(out, src, keep):
 
 
 def _fit_job(job):
-    path, src, rebuilt, alone = job
-    return _fit(_read(path), np.asarray(src, np.float64), rebuilt, alone).astype(np.float32)
+    path, src, rebuilt, alone, *more = job
+    known = None
+    if more and more[0] is not None:                   # the engine's pitch for this stretch: (values at the control rate, how far into the first)
+        coarse, lead = more[0]
+        known = np.asarray(coarse, np.float64)[np.minimum((lead + np.arange(len(src))) // KNOWN_HOP, len(coarse) - 1)]
+    return _fit(_read(path), np.asarray(src, np.float64), rebuilt, alone, known).astype(np.float32)
 
 
-def _fit(y, src, rebuilt=False, alone=False):
+KNOWN_HOP = 100        # samples between two values of a pitch the engine hands over (its control rate: voice.HOP)
+
+
+def _fit(y, src, rebuilt=False, alone=False, known=None):
     """A re-voiced stretch, put where its original was: the same length, lined up with it, and as loud at every moment."""
     n = len(src)
     y = np.pad(y, (0, max(0, n - len(y))))[:n]
@@ -515,7 +581,7 @@ def _fit(y, src, rebuilt=False, alone=False):
     lags = range(-int(.06 * SR / HOP), int(.06 * SR / HOP) + 1)
     k = max(lags, key=lambda k: float(np.dot(a[max(0, -k):len(a) - max(0, k)], b[max(0, k):len(b) - max(0, -k)]))) * HOP
     y = np.pad(y, (0, k))[k:] if k > 0 else np.pad(y, (-k, 0))[:n]
-    z = _rebuild(y, src, alone) if rebuilt else None              # the sung tone built again at the engine's pitch
+    z = _rebuild(y, src, alone, known) if rebuilt else None       # the sung tone built again at the engine's pitch
     if z is not None:                                             # (its loudness is steadied there, note by note; made to follow the
         return z * np.sqrt(np.mean(src ** 2) / (np.mean(z ** 2) + 1e-20))      # engine's moment by moment, it was heard to fade oddly)
     y = _repitch(y, src)
@@ -613,11 +679,13 @@ def _trim():
         total -= os.path.getsize(files[0]); os.unlink(files.pop(0))
 
 
-def revoice(tracks, voices, log=print, seed=0, rebuild=True, alone=None):
+def revoice(tracks, voices, log=print, seed=0, rebuild=True, alone=None, pitches=None):
     """tracks: one dry mono track (at 44100 Hz) per singer.  voices: for each track a reference recording, or
     (recording, size) as deal() gives them.  rebuild: whether each voice's sung tone is built again at the engine's
     pitch (_rebuild; needs pyworld - without it the pitch and loudness are put back on the model's own sound).
     alone: for each track, whether it is a voice heard by itself, whose consonants are then put right as well.
+    pitches: for each track, the pitch the engine sang it at (Hz every KNOWN_HOP samples, 0 where it has no voice),
+    if the engine gave it: the sung tone is then rebuilt on that, not on a reading of the sound.
     -> the tracks again, in those voices."""
     cmd = command()
     if cmd is None:
@@ -694,7 +762,8 @@ def revoice(tracks, voices, log=print, seed=0, rebuild=True, alone=None):
         except (KeyError, ValueError):
             few = 8
         with Pool(min(8, few, cpu_count()), initializer=helper) as pool:
-            fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32), bool(rebuild), bool(alone and alone[i])) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
+            sung = lambda i, a, b: None if pitches is None or pitches[i] is None else (np.asarray(pitches[i][a // KNOWN_HOP:b // KNOWN_HOP + 2], np.float32), a % KNOWN_HOP)
+            fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32), bool(rebuild), bool(alone and alone[i]), sung(i, a, b)) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
             for (i, a, b, ka, kb), y in zip(where, fitted):
                 w = np.ones(kb - ka, np.float32)         # pieces cut from one stretch are crossed over: in 12 ms where
                 top = float(np.abs(tracks[i]).max())     # it is quiet, in 40 ms where the cut had to be made in a held note

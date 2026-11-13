@@ -350,8 +350,10 @@ def breath_rng(P, ph):
     return np.random.default_rng([P['seed'], int(round(ph[0][0] * 96)) % (1 << 32)])
 
 
-def render_phrase(ph, P, rng, out, gap=9.0):
-    """One singer, one breath.  ph = [(beat, beats, midi, syllable or '-', dynamic)]."""
+def render_phrase(ph, P, rng, out, gap=9.0, pitch_out=None):
+    """One singer, one breath.  ph = [(beat, beats, midi, syllable or '-', dynamic)].
+    pitch_out: an array at the control rate (CR values a second) to write this voice's pitch into, Hz, wherever it
+    has voice: what it sings is then known exactly to whoever works on its sound afterwards, with nothing to guess."""
     n = len(ph)
     sk, cf = P['skill'], P['conf']
     lag = P['lag'] + (rng.normal(0, .010) + (.02 * (1 - cf) if gap > .4 else 0.)) * TIGHT
@@ -644,6 +646,12 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     def at(x, t):
         return np.interp(t, tc, x)
 
+    if pitch_out is not None:
+        first_ = int(round(tA * CR))                    # (names of their own: "on" and "co" are the consonants here)
+        has_ = np.flatnonzero(amp > 2e-4)
+        has_ = has_[(first_ + has_ >= 0) & (first_ + has_ < len(pitch_out))]
+        pitch_out[first_ + has_] = f0[has_]
+
     # ---- voiced part: one glottal pulse at a time
     phi = 2 * np.pi * np.concatenate([[0], np.cumsum((f0[1:] + f0[:-1]) / 2)]) / CR
     tg = np.interp(2 * np.pi * np.arange(1, int(phi[-1] / (2 * np.pi)) + 1), phi, tc)
@@ -733,16 +741,18 @@ AIR = _air(FN)
 
 
 def render_singer(args):
-    """Worker: one singer's whole part.  args = (section, index, notes, clock[, settings])."""
+    """Worker: one singer's whole part.  args = (section, index, notes, clock[, settings[, with pitch]]).
+    With pitch: a sixth item is returned, the singer's pitch in Hz at the control rate (0 where there is no voice)."""
     sect, idx, notes, clock, *tune = args
     set_clock(*clock)
     if tune and tune[0]:
         apply_fit(tune[0])                             # this piece's settings, e.g. {'TUNE.note_decay': -10}
     P, _ = make_singer(sect, idx)
     out = np.zeros(CLOCK['n'], np.float32)
+    sung = np.zeros(int(CLOCK['n'] * CR / SR) + 2, np.float32) if len(tune) > 1 and tune[1] else None
     prev_end = None
     for ph in split_phrases(notes):
         gap = 9. if prev_end is None else T(ph[0][0]) - T(prev_end)
-        render_phrase(ph, P, breath_rng(P, ph), out, gap=gap)
+        render_phrase(ph, P, breath_rng(P, ph), out, gap=gap, pitch_out=sung)
         prev_end = ph[-1][0] + ph[-1][1]
-    return sect, P['x'], P['y'], P['star'], np.nan_to_num(out)
+    return (sect, P['x'], P['y'], P['star'], np.nan_to_num(out)) + ((sung,) if sung is not None else ())
