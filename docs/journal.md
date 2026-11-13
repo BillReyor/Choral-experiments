@@ -1421,4 +1421,11 @@ its start how many minutes of singing are left to convert.
 *The price, as agreed.* Every piece is a new take the next time it is rendered: the same
 singers on the same notes, with other small differences. The nine renders in hand are the old
 takes, and stay so until rendered again; the 11 GB of conversions in the store belong to them
-and will not be found again. Nobody has heard a new take with the real voices yet.
+and will not be found again.
+
+*Heard.* The tenth piece was rendered again as a new take - all 485 stretches, 27 minutes - and
+given to the listener beside the take they had approved. By measurement the two agree: the
+level within 0.1 dB, the spectrum by third octaves a quarter of a decibel apart on average and
+1.2 dB at the most, the bands that carry the soloist within 1.5 dB through the solo verse, and
+a recognizer gets 70% and 48% of the words where the night's render gave 71% and 49%. The
+listener's answer to whether it sounds as good: "As good".
