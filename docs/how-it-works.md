@@ -70,6 +70,13 @@ What the reader works out without being told, and from what:
 - **How long a measure is.** Counted from its notes: the total most voices agree on. A voice
   that is a single rest does not count against a voice with notes - the recognition engine gives
   such a rest whatever length it took the measure to have.
+- **Which print under a staff is words to sing.** Not all of it is. A footnote at the foot of a
+  page and a direction ("slide on beat") are set like any sentence: the words a space apart,
+  every gap alike. Words to sing are spread under their notes, and no two gaps are the same. A
+  line of three or more words set the first way is left out, and so is a line as tight beneath
+  it (the ragged end of a footnote). A line that is nothing but a part's name ("Tenor I",
+  "BASS", with or without a rehearsal letter) is the name of a staff. The run says what it left
+  out and where.
 - **Where one system ends.** Staves joined at their left end by a line are one system. The line
   must stand where the staves begin: three spaces in stands the clef, and a clef's tail, a
   measure number and the next clef's top in one column look much like a line.

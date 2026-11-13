@@ -1184,3 +1184,67 @@ with its name, as does any count of singers short of the full choir: before this
 in the plain render - without re-voicing - would have dropped every singer after the one that
 failed and mixed the rest. None of the other eight pieces has such a syllable; their renders
 stand.
+
+**Words that were not words.** The sixth piece's real render (72 minutes for 52 singers; no
+stretch needed doing again in full precision) was checked like the others and scored low: a
+recognizer made out 31% of the words from the voices together and 24% from the baritones alone,
+where the other Latin piece gives 48%. Passage by passage, it was writing down real words of
+the prayer in places where the score said it should hear something else. The text of this piece
+is fixed and old, so the reading can be checked with no answer key: count how many of the words
+read from the page belong to the prayer at all. Three faults showed, none of them a misread
+letter.
+
+- *A footnote, sung.* At the foot of the first page of music, under the lowest staff, the
+  publisher's note on how many singers may take the upper group and in what voicings the piece
+  is sold. The reader took its lines for the words of the baritones and basses: nine words of
+  English in the middle of the Latin, each of the three times through.
+- *A staff's name, sung.* The name of the soloist's staff in the next system, with a rehearsal
+  letter beside it, stands under the bass staff. Two of its words went to the basses, and from
+  them, by borrowing, to the other three parts of the choir.
+- *The trio's third voice sang a patchwork.* It has no words under its own staff. A voice
+  without words sang what "the others" sing at the same moment, and the others were looked
+  through in a fixed order that begins with the choir's first tenors. So the trio's baritone
+  took the choir's syllable wherever the choir began one and the trio's otherwise: 12 of its 89
+  words were words of the prayer, against 49 of 95 and 52 of 91 for the two voices it sings
+  with.
+
+*Telling print from lyrics.* Language would have caught the footnote here and nowhere else. What
+holds in any language is how the line is set. In a sentence the words stand a space apart and
+every gap is alike; words to sing are spread under their notes. Measured on the 387 lines of
+print under the staves of the five scanned pieces, with the gap between neighbouring words
+counted in letter-widths: in every line of running text the widest gap is under half a letter
+and at most 1.4 times the middle one; in a line of lyrics the widest gap is 2.7 letters or more,
+usually 5 to 15. One line of lyrics comes near - five words of quick text in piece 1, widest gap
+0.79 - and its gaps are anything but alike (six times the middle one). The rule: three or more
+words, widest gap under 0.6 of a letter and no more than twice the middle gap. It finds the
+footnote. It also finds, in piece 1, a direction about a slide that the baritones in one place
+and the second tenors in another had been singing as three words since that piece was first
+read; in piece 5 two lines of smudged small print, without which the second tenors have their
+own words in three places where they had fragments or none; and five lines in pieces 7 and 9 (a
+misread "poco a poco", notes for the drummer) that other rules were already keeping out.
+
+The first version of the rule was wrong twice, and both were caught only by reading all nine
+pieces again and comparing every line with the reading before. It held that whatever is printed
+beneath a line of running text is more of it: true of a footnote, but a direction stands
+*between* the staff and its words, and the line of real words beneath it went too. Now only a
+line set as tight is taken with it. And with a line removed, two later looks at the same strip
+of the page - each line read again close up, and a second search for a note left without a
+word - took their height from the lines that remained, grew into the place of the one removed,
+and brought pieces of it back as syllables. They now stop at every line of print, sung or not.
+
+*A staff's name* is a line made of nothing but part names, numerals and single letters. Besides
+the one in the sixth piece, three stray names in piece 1 went the same way, and with them out
+of the way the tenors got back a pickup word they had been missing.
+
+*Borrowing.* A voice without words now takes them from its own ensemble first - a trio's voice
+from the trio, a choir part from the choir. If none of them begins a syllable at that moment but
+one is in the middle of one, it holds its vowel (or takes the syllable up, if it is only now
+entering); another ensemble's words are borrowed only while its own is silent. Compared note by
+note on every score in the project, 12,709 notes: the trio's third voice changes on 85 notes and
+is now as right as its neighbours (52 of 91 words), and 21 notes change elsewhere. Seventeen are
+of one kind: a voice moving under a vowel its own ensemble is holding had sung another
+ensemble's word of that moment, which spoiled the word after it as well. Six of those are in the
+tenth piece, in the render the listener approved: in two measures three parts on "oo" each sang
+a word of the solo. The other four, in piece 7, are voices entering on a syllable the rest are
+holding, who now sing that syllable instead of nothing. No other note in any score sings
+differently.

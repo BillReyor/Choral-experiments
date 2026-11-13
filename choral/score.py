@@ -338,11 +338,29 @@ def _finish(sc, warn):
             if n['lyric'] is not None:
                 at[round(n['beat'] * 96)].append((part, n['lyric']))
     buddy = {'T1': 'T2', 'T2': 'T1', 'BR': 'BS', 'BS': 'BR'}
+    band = lambda p: 'trio' if p.startswith('TR') else 'solo' if p == 'SOLO' else 'choir'
+    held = defaultdict(list)            # each syllable as long as it lasts: its note and the slurred notes after it
     for part, notes in sc.parts.items():
         for n in notes:
+            if n['lyric'] not in (None, '_'):
+                held[part].append([n['beat'], n['beat'] + n['dur'], n['lyric']])
+            elif n['lyric'] == '_' and held[part] and abs(held[part][-1][1] - n['beat']) < 1e-6:
+                held[part][-1][1] = n['beat'] + n['dur']
+    for part, notes in sc.parts.items():
+        mates = [p for p in sc.parts if p != part and band(p) == band(part)]
+        for i, n in enumerate(notes):
             if n['lyric'] is None:
                 c = at.get(round(n['beat'] * 96), [])
-                pick = next((l for p, l in c if p == buddy.get(part)), None) or (c[0][1] if c else None)
+                # Its own ensemble first: a trio's third voice sings the trio's words, not the choir's beneath it.
+                pick = next((l for p, l in c if p == buddy.get(part)), None) or next((l for p, l in c if p in mates), None)
+                if pick is None:        # none of them begins a syllable here.  If one is in the middle of one, that is the
+                    mid = next((l for p in mates for a, b, l in held[p] if a < n['beat'] - 1e-6 and n['beat'] < b - 1e-6), None)     # word
+                    if mid is not None:
+                        joined = i and abs(notes[i - 1]['beat'] + notes[i - 1]['dur'] - n['beat']) < 1e-6
+                        n['lyric'] = '_' if joined else mid                 # being sung: held, or taken up on entering
+                        n['lent'] = not joined
+                        continue
+                    pick = c[0][1] if c else None                           # its ensemble is silent: the others' words
                 if pick is None:
                     warn(f'  ! measure {n["m"]} {part}: no syllable for the note on beat '
                          f'{n["beat"] - sc.measures[n["m"]][0] + 1:g}; holding the previous vowel')

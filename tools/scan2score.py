@@ -698,6 +698,8 @@ def ocr_multi(exe, img, y0, y1, work, tag, zooms):
 
 CHORD = re.compile(r'^[A-G][b#]?(m|maj|min|dim|aug|sus|add|M)?[0-9]*(sus[0-9]*|add[0-9]*)?(/[A-G][b#]?)?$')     # Ebm7, Bbadd2, Cm7/Bb
 NOT_LYRICS = re.compile(r'^(unis\.?|div\.?|cresc\.?|dim\.?|rit\.?|poco|tempo|pp|mp|mf|ff|sim\.?|[0-9]+)$', re.I)
+PART_NAME = re.compile(r'^(tenors?|bass(es)?|baritones?|bari|solo|soli|trio|tutti|cantor)[.,:]?$', re.I)       # a staff's name, where it strays under another staff
+PART_NUMBER = re.compile(r'^(I{1,3}|[A-Z]|[0-9]+|&|and)[.,:]?$')                 # "Tenor I", "Bass 2", and a rehearsal letter beside it
 
 
 def clean_word(t):
@@ -1377,13 +1379,33 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             for w in sorted(loose, key=lambda w: w[1]):
                 if not any(abs(w[1] - y) < near for y in ys):
                     ys.append(float(np.median([v[1] for v in loose if abs(v[1] - w[1]) < near])))
+            def prose(row, more=False):  # running text - a footnote, "slide on beat": its words stand a space apart, every gap
+                if len(row) < (2 if more else 3):     # alike.  Lyrics are spread under their notes, and no two gaps are the same.
+                    return False
+                row = sorted(row, key=lambda w: w[2])
+                gaps = [b[2] - a[3] for a, b in zip(row, row[1:])]
+                wide = float(np.mean([(w[3] - w[2]) / max(1, len(w[4])) for w in row]))           # of one letter
+                return max(gaps) < .6 * wide and (more or max(gaps) <= 2 * max(float(np.median(gaps)), .1 * wide))
+            every = list(ys)
+            told = [yc for yc in ys if prose([w for w in loose if abs(w[1] - yc) < near])]
+            if told:                     # beneath a line of it, a line set as tight is more of the same (the ragged end of a footnote)
+                gone = [yc for yc in ys if yc in told or yc > min(told) and prose([w for w in loose if abs(w[1] - yc) < near], True)]
+                log(f"  page {c['page']} system {c['system']}: {len(gone)} line(s) under the {role} staff are running text, not words to sing"
+                    f"  (\"{' '.join(w[4] for w in sorted((w for w in loose if abs(w[1] - min(told)) < near), key=lambda w: w[2]))[:40]}\")")
+                ys = [yc for yc in ys if yc not in gone]
+                loose = [w for w in loose if any(abs(w[1] - yc) < near for yc in ys)]
             words = []
             for yc in ys:                # each line of text read again by itself, close up: that brings out the
-                half = min([max(1.3 * unit, .75 * tall)] + [.5 * abs(yc - y) for y in ys if y != yc])      # small syllables
+                half = min([max(1.3 * unit, .75 * tall)] + [.5 * abs(yc - y) for y in every if y != yc])   # small syllables
                 tight = [w for w in ocr_multi(exe, img, yc - half, yc + half, work, tag, (3, 4, 6)) if re.search('[aeiouyAEIOUY]', w[4]) or w[4] in '-–—']
                 row = [w for w in loose if abs(w[1] - yc) < near]
-                words += [w[:1] + (yc,) + w[2:] for w in tight]
-                words += [w[:1] + (yc,) + w[2:] for w in row if not any(w[2] < t[3] and t[2] < w[3] for t in tight)]   # what only the first look saw
+                line = [w[:1] + (yc,) + w[2:] for w in tight]
+                line += [w[:1] + (yc,) + w[2:] for w in row if not any(w[2] < t[3] and t[2] < w[3] for t in tight)]   # what only the first look saw
+                said = [w[4] for w in line if re.search('[A-Za-z0-9]', w[4])]
+                if said and any(PART_NAME.match(t) for t in said) and all(PART_NAME.match(t) or PART_NUMBER.match(t) for t in said):
+                    log(f"  page {c['page']} system {c['system']}: \"{' '.join(said)}\" under the {role} staff is a staff's name, not words to sing")
+                    continue
+                words += line
             if 'bars' not in c:
                 c['bars'] = barlines(img, c['staves'], c['x0'], c['x1'], 'RH' in c['roles'], expect=M)
                 c['bars_found'] = len(c['bars']) == M + 1
@@ -1391,6 +1413,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                     log(f"  ? page {c['page']} system {c['system']}: found {len(c['bars']) - 1} measures on the page but {M} were read; words placed by even spacing")
                     c['bars'] = list(np.linspace(c['x0'], c['x1'], M + 1))
             bars = c['bars']
+            c.setdefault('printed', {})[si] = every       # every line of print under the staff, sung or not: where a closer look must stop
             texts[si] = (syllables(words, unit, img), bars, unit, sorted(ys))
             if si == 0:              # the first tenors' own words, where they differ, are printed above the staff
                 up_words = ocr_words(exe, img, max(c['top'], top - 4.4 * unit), top - .5 * unit, work, tag + 'a', zoom=4)
@@ -1617,7 +1640,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                             for n, w in zip(to, here):
                                 got[id(n)] = w[1]
                 if exe and row < len(ys):                        # a note with no word under it: look there again, close up
-                    half = min([1.3 * unit] + [.5 * abs(ys[row] - y) for y in ys if y != ys[row]])
+                    half = min([1.3 * unit] + [.5 * abs(ys[row] - y) for y in c.get('printed', {}).get(si, ys) if y != ys[row]])
                     taken = sorted(w[0] for w in lines[row])
                     for n in slots:
                         if id(n) in got or n.get('melisma'):

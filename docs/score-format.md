@@ -44,7 +44,11 @@ which catches most misread rhythms. A line that is absent is a bar of rest.
   over the last beat.
 - **Syllable** after `=`: as printed, hyphen included (`mer-`, `ry`). `=_` continues the previous
   syllable on a new pitch (a slur). A voice with no syllables sings what the other voices sing at
-  the same moment.
+  the same moment - those of its own ensemble first: a trio's voice takes the trio's words, a
+  choir part the choir's. If none of them begins a syllable just then but one is in the middle
+  of one, the voice holds its vowel, or takes that syllable up if it is only now coming in. The
+  words of another ensemble (a soloist's, for the choir) are borrowed only while its own is
+  silent.
 - **Dynamics** go between notes: `!pp !p !mp !mf !f !ff`, `!cresc`, `!dim`.
 
 `tempo:` and `time:` may change between measures; `10/8` and `6/8` are counted in eighths, with the
