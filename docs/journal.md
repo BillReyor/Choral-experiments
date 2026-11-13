@@ -1248,3 +1248,105 @@ tenth piece, in the render the listener approved: in two measures three parts on
 a word of the solo. The other four, in piece 7, are voices entering on a syllable the rest are
 holding, who now sing that syllable instead of nothing. No other note in any score sings
 differently.
+
+*After.* Five of the nine sing differently for these changes and were rendered again. What a
+recognizer makes out of each, from the voices together and from the baritones alone:
+
+| Piece | Before | After |
+|---|---|---|
+| 6 | 31% and 24% | 43% and 48% |
+| 1 | 54% and 66% | 67% and 66% |
+| 5 | 48% and 28% | 47% and 37% |
+| 7 | 28% and 19% | 28% and 23% |
+| 10 | 63% and 53% | 71% and 49% |
+
+Only the sixth piece's change is beyond doubt; counted by letters instead of whole words it
+went from 58% and 57% to 69% and 73%. The first piece's thirteen points for the voices together
+are at the edge of what two renders of the same thing differ by, and the rest are inside it: in
+those pieces a handful of notes changed, and the counts say only that nothing was broken. In
+none of the five is there a half-second where someone should be singing and the mix is silent,
+and no stretch had to be converted again in full precision.
+
+**Nine pieces from the page alone.** The test the work above was heading for. The listener gave
+nine PDFs - the first, second and fourth to tenth pieces of this record - and asked for each to
+be rendered "based only on the music". So: no practice tracks to take the timing, the room or
+the shape of the notes from, no recorded accompaniment, and none of the transcriptions made or
+corrected by hand earlier. Each piece was one command, `python -m choral PIECE.pdf --part
+baritone --voice .svc/voices`: twelve singers to a part with the men's voices, over the built-in
+piano.
+
+| Piece | How it was read | Lasts | Singers | Singing converted | First render | Words a recognizer gets, all voices | baritones alone |
+|---|---|---|---|---|---|---|---|
+| 1 | recognized (a phone scan) | 3:24 | 48 | 135 min | 43 min | 67% | 66% |
+| 2 | exactly | 2:44 | 48 | 113 min | 65 min | 53% | 47% |
+| 4 | recognized | 2:40 | 48 | 110 min | 33 min | 48% | 48% (the basses: it is in three parts) |
+| 5 | recognized | 6:04 | 49 | 174 min | 61 min | 47% | 37% |
+| 6 | recognized | 5:35 | 52 | 245 min | 72 min | 43% | 48% |
+| 7 | recognized | 3:09 | 48 | 123 min | 39 min | 28% | 23% |
+| 8 | exactly | 4:09 | 48 | 167 min | 85 min | 62% | 58% |
+| 9 | recognized (its fonts are stored under private numbers) | 2:54 | 48 | 86 min | 54 min | 55% | 48% |
+| 10 | exactly | 2:47 | 49 | 88 min | 4 min (converted the day before) | 71% | 49% |
+
+The second, eighth and ninth were converted before half precision, at about twice real time;
+the others at three to four times. The word counts are of the renders as they now stand, after
+the corrections described here.
+
+*Reading.* Eight of the nine read at the first attempt as they had read before. Three are
+notation-software exports, read exactly from their own symbols: 1,054 of their 1,066
+staff-measures add up. The sixth - unaccompanied, in Latin, a trio over the choir, lines of chant
+between the refrains - asked for most of what the reader could not yet do, and each of these is
+now a rule in it:
+
+- the language is told from the words on the page;
+- a treble and a bass staff in a brace, with a line of words between them, are the choir and not
+  a keyboard;
+- staves are one system only if the line joining them stands where they begin (a clef's tail, a
+  measure number and the next clef's top in one column look much like a line);
+- a staff with no barlines, for which the recognition engine returns nothing, is shown to it
+  again with a barline drawn at its end;
+- numbered endings: the bracket is found by its shape and the passes it is for are read under
+  its corner;
+- under a lowest staff with no keyboard beneath it, the words are looked for further down;
+- a "p" between two hairpins is not a metronome mark;
+- with no tempo printed, the guess is said in capitals (120 for a notation-software export, 100
+  for a printed page).
+
+Against the transcriptions checked by hand earlier - not used for these renders - the notes read
+from the first piece are 99-100% in the same place at the same pitch, part by part; the
+second's 97-100%; the fourth's 96-99%.
+
+*What the renders showed.* Four faults, each with its entry above: an interlude without its tune
+(the ninth: an instrument's staff had been left out), a render with nobody in it (the sixth: a
+syllable with no vowel), words that were not words (the sixth, first and fifth: a footnote, a
+direction, staves' names), and the hour a render took. The listener's ear found the first; they
+have reported on one piece so far, the ninth, "great" but for that stretch. The second was found
+in a log, the third by a word count that was too low, the fourth by a question.
+
+*Reading the word counts.* The two right-hand columns say less than they seem to. A section of
+twelve moves ten points between two renders of the same thing. The seventh piece is in two
+languages, and a recognizer listening for English writes nothing for the other, whatever is
+sung. The Latin pieces score what the recognizer knows of Latin. What the counts were good for
+is what they did here: one piece far below its like - 31% where the other Latin piece gave 48% -
+turned out to be three faults of reading.
+
+*What a correction costs.* Each singer draws his small differences - when he comes in, how he
+tunes, how he shapes a note - from one run of random numbers that lasts the whole piece. Change
+one word near the beginning and every phrase after it comes out as another take by the same
+man: the same notes, different to the byte. The store of converted singing knows a stretch by
+its bytes. So the corrected reading of the sixth piece, 18 changed lines of score, sent 1,385 of
+its 1,465 stretches to be converted again (70 minutes), and the first piece's, six changed
+lines, all 940 (44 minutes); six notes in the tenth cost 360 of 485, four in the seventh 553 of
+767; before that, one beat's difference in the ninth had cost 255 of 463. The five renders made
+again for the word faults took three hours and twenty-four minutes between them. Giving each
+phrase its own run of numbers would hold a correction to the phrase it is in.
+It would also make every piece a new take, once - the tenth, which the listener approved by
+ear, among them - so it waits for their word.
+
+*Known to be wrong still.*
+
+- The second piece prints no tempo. It is sung at 120; its practice track runs near 130.
+- The sixth: the first note of the chant is read as a rest, the chant's speed is a guess, and
+  some of the choir's syllables are misread under pencil marks.
+- The seventh: the words that are not English are sung by English spelling rules.
+- The piano plays every instrument's line, and how far forward a clarinet's tune should stand
+  among its chords has not been measured or heard.
