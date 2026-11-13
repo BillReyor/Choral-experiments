@@ -264,8 +264,8 @@ def do_render(pid, opt):
         if line.startswith('  wrote '):
             now.update(stage='Writing the tracks')
     code = run(cmd, os.path.join(src, 'render.log'), follow)
-    if now.get('stopped'):
-        return save(pid, status='read', note='Stopped. What was finished is kept: starting again goes on from there.')
+    if now.get('stopped'):                             # (the tracks made before, if any, are still there and still shown)
+        return save(pid, status='ready' if load(pid).get('tracks') else 'read', note='Stopped. What was finished is kept: starting again goes on from there.')
     if code:
         return save(pid, status='failed', error=tail(os.path.join(src, 'render.log')))
     now.update(stage='Writing the tracks')
@@ -663,6 +663,8 @@ def main():
                 waiting.append(d['id']); jobs.put(('read', d['id'], {}))
             elif d.get('status') in ('queued', 'rendering'):
                 save(d['id'], status='ready' if d.get('tracks') else 'read', note='This was interrupted. What was finished is kept: starting again goes on from there.')
+            elif d.get('status') == 'read' and d.get('tracks'):        # (an earlier version hid a piece's tracks when a second making of them was stopped)
+                save(d['id'], status='ready')
     if computer() is None:                             # first time here: see what this computer can do
         checking.update(running=True)
         jobs.put(('check', None, {'voices': voices_state()['ready']}))
