@@ -185,3 +185,39 @@ def test_a_letter_set_to_a_note_is_said_by_its_name(letter, want):
 def test_compound_may_use_the_small_common_words():
     out, warnings = say('upanddown', 3)         # "up-and-down" as the reader joins it: "up" is too short for the rule, and allowed by name
     assert out == ['AH', 'p AX n d', 'd AW n'] and not warnings
+
+
+# ------------------------------------------- a word the dictionary has, with an s it has not ----
+# A listener heard a possessive sung by its spelling, and the page called it "not a word it knows": the dictionary
+# had the word and not its 's.  So it was with most possessives - "beauty's" came out "bow-tis".
+@pytest.mark.parametrize('word, stem, nsyl, ending', [
+    ("tempest's", 'tempest', 2, 's'),            # after a sound without voice: s
+    ("velvet's", 'velvet', 2, 's'),
+    ("beauty's", 'beauty', 2, 'z'),              # after a voiced one: z
+    ("melody's", 'melody', 3, 'z'),
+    ("lavender's", 'lavender', 3, 'z'),
+    ('carousels', 'carousel', 3, 'z'),           # ... and the same for a plain plural the dictionary lacks,
+    ("jubilees'", 'jubilee', 3, 'z'),            # and for the possessive of one
+])
+def test_a_known_word_with_an_s_is_that_word_and_the_s(word, stem, nsyl, ending):
+    whole, _ = say(stem, nsyl)
+    out, warnings = say(word, nsyl)
+    assert not warnings                                       # it is a word it knows
+    assert out == whole[:-1] + [whole[-1] + ' ' + ending]     # sung as the word is, with the s on the end of it
+
+
+def test_after_a_hiss_the_s_is_a_syllable_of_its_own():
+    out, warnings = say("thrush's", 2)
+    assert not warnings and out == ['th r AH', 'sh IH z']
+    out, warnings = say("compass's", 3)
+    assert not warnings and out[2] == 's IH z'
+
+
+def test_a_short_word_ending_in_s_is_not_taken_for_a_plural():
+    out, warnings = say('nos')                                # another language's word, not two of "no": too short to tell
+    assert warnings and 'not in the dictionary' in warnings[0]
+    assert out != ['n OW z']
+
+
+def test_a_possessive_the_dictionary_has_is_left_to_it():
+    assert say("angel's", 2)[0] == say('angels', 2)[0]

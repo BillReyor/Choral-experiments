@@ -198,6 +198,30 @@ def _near(w):
     return None
 
 
+HISS = ('S', 'Z', 'SH', 'ZH', 'CH', 'JH')
+NO_VOICE = ('P', 'T', 'K', 'F', 'TH')
+
+
+def _with_s(w):
+    """A possessive or a plural the dictionary lacks, of a word it has: "melody's", "tempests", "jubilees'".  The
+    word as the dictionary says it, and the s as English adds it: "s" after a sound without voice (tempest's), "iz"
+    after a hiss (sunrise's), "z" after anything else (melody's).  Sung by its spelling, "beauty's" was "bow-tis".
+    -> [phonemes, ...] or None."""
+    if w.endswith("'s"):
+        stem = w[:-2]
+    elif w.endswith("s'"):
+        stem = w[:-2]
+    elif w.endswith('s') and "'" not in w and len(w) > 4:          # (a short word proves nothing: "zos" is not two "zo")
+        stem = w[:-1]
+    else:
+        return None
+    prons = FIXED.get(stem) or _cmu().get(stem)
+    if not prons:
+        return None
+    end = lambda p: ['IH0', 'Z'] if p[-1].rstrip('012') in HISS else ['S'] if p[-1] in NO_VOICE else ['Z']
+    return [list(p) + end(p) for p in prons]
+
+
 def _without_v(p):
     """'over' as "o'er" is sung on one note: the v gone and the weak vowel after it with it (its r kept) - O R, not O V."""
     for i, x in enumerate(p[:-1]):
@@ -255,6 +279,8 @@ def pronounce(word, nsyl, overrides, next_word=None, warn=print, prev_word=None)
         if not prons:                          # a vowel drawn out in print: "Ooo", "oooh", "aaah"
             short = re.sub(r'(.)\1{2,}', r'\1\1', w)
             prons = FIXED.get(short) or _cmu().get(short) if short != w else None
+        if not prons:                          # the word is there, its possessive or plural is not: "melody's"
+            prons = _with_s(w)
         if not prons:                          # a prefix "a-" glued on: "a-feeding", "a-stray"
             if w.startswith('a') and _cmu().get(w[1:]):
                 prons = [['AH0'] + p for p in _cmu()[w[1:]]]
