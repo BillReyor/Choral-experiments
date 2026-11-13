@@ -1,158 +1,186 @@
-# Palare-Piano
+# Palare Piano
 
-Give it the sheet music of a piece for men's chorus and it sings it: a simulated choir (tenor 1,
-tenor 2, baritone, bass) with the piano. Name your part and it also makes the rehearsal tracks:
-your part brought forward, your part left out, your part alone. The singing is done entirely in
-code - no samples, no recordings - and can then be given the sound of real men's voices.
+**Sheet music in, rehearsal tracks out.**
 
-## Install (Mac)
+Give Palare Piano the sheet music for a piece your chorus is singing, tell it which part you
+sing, and it makes practice tracks for you: your part louder than the rest, your part left out
+so you can sing against the others, and your part all by itself. It is for tenor and bass
+choruses (Tenor 1, Tenor 2, Baritone, Bass).
 
-1. Open Terminal: press ⌘-Space, type `Terminal`, press Return.
-2. Paste this line and press Return:
+It runs on your own Mac. Your music is never sent anywhere.
 
-   ```
-   curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh
-   ```
+![The first screen of Palare Piano](docs/pictures/1-start.jpg)
 
-3. A few minutes later it says it is installed, and Palare Piano opens in your browser.
+---
 
-After that you never need Terminal again: open **Palare Piano** from the Applications folder in your
-home folder, or find it with Spotlight.
+## Before you start
 
-It needs a Mac with an Apple chip (M1 or later), macOS 14 or later, about 1.5 GB of disk, and the
-internet while it installs. No password is asked for. If Apple's own developer tools are missing it
-asks Apple to install them first - a window opens; click Install. To bring it up to date, paste the
-same line again. To remove it: the same line with ` -s -- --uninstall` added after `sh`.
+You need:
 
-On other computers, or to run it from the command line, see
-[docs/install-by-hand.md](docs/install-by-hand.md).
+- **A Mac with an Apple chip, running macOS 14 or newer.** To check: click the Apple logo at the
+  top-left corner of your screen, then **About This Mac**. Next to **Chip** it should say
+  *Apple M1* (or M2, M3 and so on). Next to **macOS** the number should be 14 or higher. If it
+  says *Intel*, this will not work on your Mac.
+- **An internet connection** while it installs.
+- **About 2 GB of free space** (and 5 GB more if you later add real voices).
+- **About 10 minutes.**
 
-## Using it
+You do not need to know anything about computers beyond clicking, typing and copy-and-paste.
 
-- **Add a piece.** Drop the sheet music on the page as a PDF - exported from notation software, or
-  a scan. It is read into a score: seconds for an export, about half a minute a page for a scan.
-- **Make your tracks.** Choose your part, and you get the full rendering (*balanced*), *voices
-  only*, your part *predominant*, your part *muted* (everyone else, to sing against) and your part
-  *alone*. They play on the page and are kept in `Music/Palare Piano` in your home folder.
-- **Real voices.** Out of the box the choir is the program's own simulated voices: clear, quick
-  (a minute or two a piece), and plainly a machine. The page offers to add real men's voices - a
-  4 GB download, once. With them a piece takes far longer, roughly ten minutes for every minute of
-  music with twelve singers to a part, and sounds like a choir.
-- **When something is wrong.** The page says where the reader was unsure, and when no tempo was
-  printed and it had to guess. *Correct the score* opens what was read as text
-  ([docs/score-format.md](docs/score-format.md)); fix the note or the word, save, and make the
-  tracks again - only the corrected phrases are sung again.
-- **Nothing of yours leaves the computer.** The music and the tracks stay on it. The internet is
-  used to fetch the program's own parts, when it is installed and when real voices are added.
-  Two of those parts would report their use to their makers; they are told not to.
+## Install it (once)
 
-## Known limitations
+You will paste one line of text into a program called Terminal. It looks technical; it is only
+three steps, and you never have to do it again.
 
-- **It has never been listened to by its author.** Every judgement behind it is a measurement:
-  against isolated recordings of real singers, against accompaniment tracks, and by a speech
-  recognizer. Trust your ears over its reports.
-- **Men's chorus only** (TTBB, TTB, soloist or trio over the choir), with piano or unaccompanied.
-- **Reading scans is imperfect.** Typically 96-99% of the notes are right. About one syllable in
-  ten is wrong or missing, more with Tesseract. (A PDF exported from notation software is read
-  exactly instead, from its own symbols - in a current music font or Finale's older Maestro;
-  "8va" lines are not followed yet. A PDF that stores its music font under private numbers is
-  recognized like a scan.) Repeats, D.S., codas and numbered endings are followed - numbered
-  endings have been met in one piece so far. Always look through the `.score` file it writes.
-- **Words:** English (by dictionary) and church Latin (by rule); which of the two a scan is in
-  is told from its words (`--language` overrides). A word the dictionary does not
-  have - a name, another language, a misread - is sung as it is spelled, by rough English rules:
-  a near miss, which a `say:` line in the score corrects. Words spelled alike and said differently
-  ("lives", "tears", "read") follow a short table of what a song usually means.
-- **A full choir is harder to understand than a real one** on quick text, though single voices are
-  about as clear as real singers.
-- **Tone is the median of a dozen real singers.** A particular voice can differ from it by 10 dB
-  in places.
-- **Timing follows the accompaniment track** when there is one. Where the score as read does not
-  match the recording (a misread ending, a cut), the run says so and the timing there is a guess.
-- **From a PDF alone, the pacing is by rule.** A metronome mark is followed; a tempo given in words
-  ("Moderately slow") is looked up in a table; a fermata adds about a beat, a "rall." slows to
-  about three quarters until the next "a tempo". With no tempo on the page at all the program
-  guesses, and says so in capitals: 120 for a notation-software export (the speed such software
-  plays an unmarked score at), 100 for a printed page. The accompaniment is the built-in piano playing
-  the piano staves, with no pianist's judgement. An instrument's staff in the score (a clarinet, a
-  flute) is played by the same piano, so its tune is there when the choir is silent; drums are
-  left out, and so is a part written for a transposing instrument.
-- **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece with
-  the built-in voices, and half an hour or more with real ones.
-- **The one-step installer is for Apple-chip Macs**, and has been run from nothing on one of them.
-  Real voices have been tried on no other kind of computer.
+**1. Open Terminal.**
+Hold down the **Command** key (⌘, next to the space bar) and press the **space bar**. A search
+box appears. Type `Terminal` and press **Return** (the big key on the right; some keyboards
+call it Enter). A plain window with some text opens. That is Terminal.
 
-## The name
+**2. Copy this line.**
+Move your mouse over the grey box below. A small copy button appears at its right end: click
+it. (Or select the whole line and press ⌘C.)
 
-*Palare* is one spelling of [Polari](https://wp.lancs.ac.uk/fabulosa/whats-polari/) (from the
-Italian *parlare*, "to talk"): the slang gay men in Britain spoke among themselves, picked up from
-the theatre, the fairground and the merchant navy, in the years when being found out could mean
-prison. It let two men talk about their lives in a pub or on a bus without anyone around them
-following. The whole country heard it, mostly without knowing what it was hearing, from Julian
-and Sandy on the BBC's *Round the Horne* in the 1960s. After the law changed in 1967 there was
-less need for it and it faded, leaving English a few of its words: *naff*, *zhoosh*, *camp*,
-*drag*.
+```
+curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh
+```
 
-*Piano* is the instrument under the voices here, and the Italian for "softly". *Parlare piano*:
-to speak quietly - which is what Polari was for.
+**3. Paste it into Terminal and press Return.**
+Click once inside the Terminal window, press **⌘V** to paste, then press **Return**.
 
-The name is also a play on **player piano**: the piano that plays itself from a roll of punched
-paper. This program is one for a choir - it reads the page and performs it with nobody there.
-Kurt Vonnegut's first novel, [*Player Piano*](https://en.wikipedia.org/wiki/Player_Piano_(novel))
-(1952), makes that instrument the emblem of a world where machines do the work, and it plays in
-the bar where the people they replaced go to drink. The name keeps the book in view: what this
-makes is a practice track, something to learn a part from. The singing stays with the singers.
+Now wait. Terminal prints what it is doing. It is finished when it says
+**"Palare Piano is installed."** and a page opens in your web browser. You can then close
+Terminal.
 
-Gay choruses are the other half of that history: the same people, no longer keeping their voices
-down. The [San Francisco Gay Men's Chorus](https://www.sfgmc.org/our-story), founded by Jon Reed
-Sims in the autumn of 1978 and the first chorus to put the word "gay" in its name, sang in public
-for the first time on the steps of City Hall on 27 November 1978, at the candlelight vigil on
-the night Harvey Milk and George Moscone were killed. Its tour of nine cities in 1981 left new
-choruses behind it. [GALA Choruses](https://en.wikipedia.org/wiki/GALA_Choruses), the
-association they formed in 1982, now has more than two hundred member choruses and over ten
-thousand singers. Through the AIDS years they went on singing while they buried their own; the
-San Francisco chorus remembers the more than three hundred members it lost as its "fifth
-section".
+> **If a window from Apple pops up** asking to install "command line developer tools", click
+> **Install** (and **Agree** if it asks). This is a normal, free part of macOS that Palare Piano
+> needs. It can take 15 minutes. When it finishes, the Terminal window carries on by itself.
 
-This program was written to help one such chorus learn its notes.
+It does not ask for your password and does not change anything else on your Mac.
 
-## Credits
+## Open it next time
 
-- **Voices.** The men's voices that `tools/vocalset_voices.py` fetches for `--voice` are from
-  [VocalSet](https://zenodo.org/records/1193957): Julia Wilkins, Prem Seetharaman, Alison Wahl
-  and Bryan Pardo, "VocalSet: A Singing Voice Dataset", ISMIR 2018, licensed
-  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Fourteen seconds of each of nine of
-  its singers, with the silences cut out, serve as references for voice conversion. None of the
-  recordings are in this repository. **Anything you share that was sung with these voices - a rehearsal track included -
-  must carry this credit.**
-- **Real voices** are made by [Seed-VC](https://github.com/Plachtaa/seed-vc) (GPL-3.0), fetched when
-  you add them and run as its own program. The small driver that runs it (`choral/seedvc_driver.py`)
-  follows Seed-VC's own code, which is why this whole project is under the GPL.
-- **Each re-voiced singer's tone** is rebuilt with [WORLD](https://github.com/mmorise/World) (Masanori Morise;
-  modified BSD) through [pyworld](https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder)
-  (MIT).
-- **Reading scans** is done by [homr](https://github.com/liebharc/homr) (AGPL-3.0), likewise
-  installed and run separately.
-- **Listening checks** use [whisper.cpp](https://github.com/ggerganov/whisper.cpp) (MIT) with
-  OpenAI's Whisper models; **pronunciation** uses the CMU Pronouncing Dictionary.
+Palare Piano is now an app on your Mac.
+
+1. Hold **Command** (⌘) and press the **space bar**.
+2. Type `Palare Piano` and press **Return**.
+
+It opens as a page in your web browser (Safari, Chrome or whichever you use). It is not a
+website: it is running on your own Mac, and it works without the internet.
+
+You can also find it in **Finder**: click **Go** in the menu bar at the top of the screen, then
+**Home**, then open the **Applications** folder you see there.
+
+## Make your first tracks
+
+**1. Add your sheet music.**
+Click **Add your sheet music** and choose the PDF, or drag the PDF onto the page. A PDF from your
+director works best. A scan or a photo-copy saved as a PDF works too.
+
+No PDF handy? Click **Try a short demo first**.
+
+**2. Wait while it reads the music.**
+A few seconds for a clean PDF; about half a minute for each page of a scan.
+
+**3. Choose your part, and how it should sound.**
+
+![Choosing a part](docs/pictures/2-choose.jpg)
+
+- **Quick listen** takes about a minute. The voices are clear but sound like a machine. Good for
+  checking your notes.
+- **Real voices** sound like people singing, and take much longer (see below).
+
+**4. Click "Make my tracks".**
+You can leave it working and close the window. It carries on.
+
+**5. Press play and sing along.**
+
+![The finished tracks](docs/pictures/3-tracks.jpg)
+
+| Track | What you hear |
+|---|---|
+| **Balanced** | The whole choir with the piano |
+| **Your part predominant** | Your part louder than everyone else |
+| **Your part muted** | Everyone except your part, so you can sing your line against them |
+| **Your part alone** | Just your part |
+| **Voices only** | The choir without the piano |
+
+## Put the tracks on your phone
+
+Click **Show the files in Finder**. A folder opens with your tracks in it. From there:
+
+- **AirDrop:** select the tracks, right-click, choose **Share**, then **AirDrop**, then your
+  iPhone.
+- Or drag them into an email or message to yourself.
+
+All your pieces are kept in the **Music** folder on your Mac, inside a folder called
+**Palare Piano**.
+
+## Real voices (optional)
+
+Out of the box, the choir is sung by built-in voices. You can add real recorded voices so the
+tracks sound like people singing.
+
+- On the Palare Piano page, click **Add real voices**. It is a 4 GB download, once.
+- After that, choose **Real voices** when you make your tracks.
+- Real-voice tracks are slow to make: roughly **ten minutes for every minute of music** with the
+  full choir, about a third of that with the small choir. Start it, leave your Mac plugged in,
+  and come back later.
+
+## If something is not right
+
+**"The reader had doubts in some spots."**
+Normal, especially for scans. Listen to the tracks first. Most of the time they are fine.
+
+**A note or a word is wrong.**
+Open **Something sound wrong? More options** under the piece. **Correct a note or a word** opens
+what was read as plain text. Fix it, save, and click **Make my tracks** again. Only the part you
+changed is sung again. [How the text is written](docs/score-format.md).
+
+**"No tempo is printed in this music."**
+Type the tempo your director takes (beats a minute) into the box and click **Set the tempo**.
+
+**"This could not be read as music."**
+The PDF may not be a tenor and bass choir score, or the scan may be too faint or crooked. Try a
+cleaner copy.
+
+**It is taking a very long time.**
+Real voices are slow; the page shows how much is left. A long piece with the full choir can take
+over an hour. Use **Quick listen** when you are in a hurry.
+
+**I closed the page. Where did it go?**
+Open Palare Piano again the same way (⌘ and space bar, type `Palare Piano`, Return). Anything it
+was making has carried on.
+
+**How do I update it?**
+Do the three install steps again. Your pieces and tracks are kept.
+
+**How do I remove it?**
+Do the install steps again, but paste this line instead. Your pieces and tracks stay in your
+Music folder.
+
+```
+curl -fsSL https://raw.githubusercontent.com/BillReyor/Palare-Piano/main/install.sh | sh -s -- --uninstall
+```
+
+## Good to know
+
+- **It is a practice aid, not a performance.** It reads the page and sings what it finds. It
+  can misread a note or a word, more often on scans.
+- **Tenor and bass choirs only** (four parts, or three), with piano or unaccompanied.
+- **English and church Latin.** Other languages are sung as if spelled in English.
+- **Your music stays on your Mac.** The internet is used only to download Palare Piano itself
+  and, if you add them, the real voices.
+- **Sharing tracks made with real voices?** Each piece's folder has a small file called
+  *Credits*. Keep it with the tracks: the voices belong to real singers who allowed their use on
+  that condition.
 
 ## More
 
-- [docs/install-by-hand.md](docs/install-by-hand.md) - other computers, and the command line: an
-  accompaniment recording instead of the built-in piano, learning from practice tracks, your own
-  voice for the singers.
-- [docs/how-it-works.md](docs/how-it-works.md) - what each file does, how PDFs are read, what is
-  estimated for each piece and from what.
-- [docs/score-format.md](docs/score-format.md) - the plain-text score format.
-- [docs/journal.md](docs/journal.md) - the record of every test piece: what was measured, what was
-  changed, and what did not work.
-- `experiments/` - the stand-alone experiments that led here.
+- [About Palare Piano](docs/about.md): what it cannot do, the story behind the name, credits and
+  licence.
+- [Other computers, and the command line](docs/install-by-hand.md), for the technically minded.
+- [How it works](docs/how-it-works.md) and [the record of how it was made](docs/journal.md).
 
-Audio, sheet music and transcriptions of copyrighted arrangements are never committed
-(`.gitignore` blocks them, along with per-piece settings).
-
-## Licence
-
-Copyright (C) 2026 Bill Reyor. Palare Piano is free software: you may redistribute and change it
-under the terms of the [GNU General Public License](LICENSE), version 3 or (at your option) any
-later version. It comes with no warranty.
+Palare Piano is free software under the [GNU General Public License, version 3](LICENSE).
+*A practice track is for learning your part. The singing stays with the singers.*

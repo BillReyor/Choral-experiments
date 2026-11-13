@@ -4,86 +4,166 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Palare Piano</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 40'%3E%3Cdefs%3E%3CclipPath id='c'%3E%3Crect width='48' height='40' rx='7'/%3E%3C/clipPath%3E%3C/defs%3E%3Cg clip-path='url(%23c)'%3E%3Crect width='8' height='40' fill='%23e5484d'/%3E%3Crect x='8' width='8' height='40' fill='%23f08a24'/%3E%3Crect x='16' width='8' height='40' fill='%23f5c400'/%3E%3Crect x='24' width='8' height='40' fill='%232fa45f'/%3E%3Crect x='32' width='8' height='40' fill='%232f7de1'/%3E%3Crect x='40' width='8' height='40' fill='%238b4fd6'/%3E%3Cg fill='%23241a2e'%3E%3Crect x='5.5' width='5' height='23' rx='1.5'/%3E%3Crect x='13.5' width='5' height='23' rx='1.5'/%3E%3Crect x='29.5' width='5' height='23' rx='1.5'/%3E%3Crect x='37.5' width='5' height='23' rx='1.5'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
 <style>
+/* Colours: every text pairing here measures 6:1 or better (WCAG AA asks 4.5).  The rainbow is decoration and
+   progress only - nothing is told by colour alone: states also carry words and marks. */
 :root {
-  --bg: #f6f3ee; --card: #fffdf9; --ink: #1f1b16; --soft: #6b6257; --line: #e2dbd0; --accent: #7a3e8f; --accent-ink: #fff;
-  --warn-bg: #fff4d6; --warn-ink: #5c4300; --bad-bg: #fde4e1; --bad-ink: #7a1c12; --good: #2f6f4f; --bar: #e9e2d6;
+  --bg: #faf6fb; --card: #ffffff; --ink: #241a2e; --soft: #5d5269; --line: #e4dbec; --accent: #6b2fa0; --accent-ink: #ffffff; --link: #5a2590;
+  --chip: #f3ecf9; --info-bg: #f1eafa; --info-ink: #3b2a57; --warn-bg: #fff3cf; --warn-ink: #594300; --bad-bg: #ffe5e1; --bad-ink: #7a1c12; --good: #1c6a45; --bar: #ece4f3;
+  --shadow: 0 1px 2px rgba(36, 26, 46, .06), 0 6px 20px rgba(36, 26, 46, .06);
+  --rainbow: linear-gradient(90deg, #e5484d, #f08a24, #f5c400, #2fa45f, #2f7de1, #8b4fd6);
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #17151a; --card: #211e25; --ink: #f0ebe4; --soft: #a79fb0; --line: #37323d; --accent: #c79be0; --accent-ink: #1a1320;
-    --warn-bg: #3a3118; --warn-ink: #f3dfa0; --bad-bg: #40201d; --bad-ink: #ffc9c2; --good: #8fd3ad; --bar: #322d38; }
+  :root { --bg: #17121f; --card: #221a2e; --ink: #f4eefa; --soft: #b8adc9; --line: #3a2f4b; --accent: #cfa8f7; --accent-ink: #1d1129; --link: #d9bcfb;
+    --chip: #2d2340; --info-bg: #2c2240; --info-ink: #e4d8f8; --warn-bg: #3a3115; --warn-ink: #f6e4a6; --bad-bg: #451f1e; --bad-ink: #ffd2cc; --good: #8fe0b5; --bar: #33283f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25); }
 }
 * { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
-main { max-width: 760px; margin: 0 auto; padding: 28px 16px 60px; }
-h1 { font: 600 34px/1.1 "Iowan Old Style", Palatino, Georgia, serif; margin: 0 0 4px; letter-spacing: .2px; }
-h2 { font-size: 21px; margin: 0 0 2px; overflow-wrap: anywhere; }
+h1, h2, h3, button, .button, .pill, .choice b, .chips label, legend, .track b, .step b { font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+a { color: var(--link); }
+.top { max-width: 780px; margin: 0 auto; padding: 26px 16px 14px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.top svg { width: 54px; height: 45px; flex: none; filter: drop-shadow(0 2px 4px rgba(36, 26, 46, .18)); }
+.top .words { flex: 1; min-width: 200px; }
+h1 { font-size: 32px; line-height: 1.1; margin: 0; letter-spacing: .2px; }
+.tag { margin: 2px 0 0; color: var(--soft); }
+.stripes { height: 6px; background: linear-gradient(90deg, #1b1b1b 0 5%, #7b4f2c 5% 10%, #5bcefa 10% 15%, #f5a9b8 15% 20%, #ffffff 20% 25%, #e5484d 25% 37.5%, #f08a24 37.5% 50%, #f5c400 50% 62.5%, #2fa45f 62.5% 75%, #2f7de1 75% 87.5%, #8b4fd6 87.5% 100%); }
+main { max-width: 780px; margin: 0 auto; padding: 22px 16px 60px; }
+h2 { font-size: 22px; line-height: 1.25; margin: 0; overflow-wrap: anywhere; }
 p { margin: 0 0 10px; }
-.sub { color: var(--soft); margin-bottom: 22px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
-.drop { border: 2px dashed var(--line); text-align: center; padding: 26px 18px; }
-.drop.over { border-color: var(--accent); background: var(--bar); }
-button, .button { font: inherit; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 10px; padding: 8px 14px; cursor: pointer; text-decoration: none; display: inline-block; }
-button.main { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 10px 18px; }
+.small { font-size: 14.5px; color: var(--soft); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px; margin-bottom: 18px; box-shadow: var(--shadow); }
+.head { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 2px; }
+.pill { font-size: 13.5px; font-weight: 600; padding: 3px 11px; border-radius: 999px; background: var(--chip); color: var(--ink); white-space: nowrap; }
+.pill.good { background: transparent; color: var(--good); border: 1.5px solid currentColor; }
+.pill.bad { background: var(--bad-bg); color: var(--bad-ink); }
+
+/* adding a piece */
+.drop { border: 2px dashed var(--line); text-align: center; padding: 28px 18px 22px; position: relative; overflow: hidden; }
+.drop::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--rainbow); opacity: 0; transition: opacity .2s; }
+.drop.over { border-color: var(--accent); background: var(--chip); }
+.drop.over::before { opacity: 1; }
+.drop svg { width: 40px; height: 40px; color: var(--accent); margin-bottom: 6px; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.step { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.step i { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; font: 700 15px/1 ui-rounded, -apple-system, sans-serif; color: #241a2e; margin-bottom: 6px; }
+.step b { display: block; }
+
+/* buttons */
+button, .button { font-size: 16px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); border-radius: 12px; padding: 9px 15px; min-height: 44px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+button:hover, .button:hover { border-color: var(--accent); }
+button.main { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 17.5px; padding: 11px 22px; }
+button.main:hover { filter: brightness(1.08); }
+button.quiet { border-color: transparent; background: transparent; color: var(--link); font-weight: 500; padding-left: 4px; padding-right: 4px; min-height: 36px; text-decoration: underline; }
 button:disabled { opacity: .5; cursor: default; }
-button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-select, input[type=number] { font: inherit; padding: 7px 8px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--ink); max-width: 100%; }
-label { display: block; font-size: 14px; color: var(--soft); margin-bottom: 3px; }
-.row { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; margin: 12px 0; }
-.row > div { min-width: 0; }
-.small { font-size: 14px; color: var(--soft); }
-.flag { background: var(--warn-bg); color: var(--warn-ink); border-radius: 10px; padding: 9px 12px; margin: 10px 0; font-size: 15px; }
-.bad { background: var(--bad-bg); color: var(--bad-ink); }
-.flag input { width: 5.5em; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+input[type=number] { font: inherit; padding: 8px; width: 5.5em; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); }
+
+/* choosing a part, and how it should sound */
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+legend { padding: 0; font-weight: 600; font-size: 16.5px; line-height: 1.3; margin: 0 0 8px; }
+fieldset { margin-top: 18px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips input, .choices input { position: absolute; opacity: 0; pointer-events: none; }
+.chips label { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 16px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); font-weight: 600; cursor: pointer; }
+.chips label:hover, .choice:hover { border-color: var(--accent); }
+.chips input:checked + label { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chips input:checked + label::before { content: "✓"; }
+.chips input:focus-visible + label, .choices input:focus-visible + .choice { outline: 3px solid var(--accent); outline-offset: 2px; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.choice { display: block; height: 100%; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px 12px 40px; cursor: pointer; position: relative; background: var(--card); }
+.choice::before { content: ""; position: absolute; left: 13px; top: 15px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--soft); }
+.choices input:checked + .choice { border-color: var(--accent); background: var(--chip); }
+.choices input:checked + .choice::before { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 45%, transparent 50%); }
+.choices input:disabled + .choice { opacity: .55; cursor: default; }
+.choice b { display: block; }
+.choice span { display: block; font-size: 14.5px; color: var(--soft); }
+.choice span.time { color: var(--ink); font-weight: 600; margin-top: 4px; }
+.go { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+
+/* notes: good to know (calm), needs a decision (yellow), went wrong (red) */
+.note { border-radius: 12px; padding: 10px 14px 10px 42px; margin: 12px 0; font-size: 15.5px; position: relative; background: var(--info-bg); color: var(--info-ink); }
+.note::before { position: absolute; left: 13px; top: 11px; content: "i"; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid currentColor; font: 700 12px/15px Georgia, serif; text-align: center; }
+.note.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.note.warn::before, .note.bad::before { content: "!"; font-family: inherit; }
+.note.bad { background: var(--bad-bg); color: var(--bad-ink); }
+.note button { min-height: 38px; padding: 6px 12px; background: transparent; color: inherit; border-color: currentColor; }
 details { margin-top: 6px; }
+summary { cursor: pointer; font-weight: 600; }
+details.more { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 10px; }
+details.more > summary { color: var(--link); }
+details.more > div { padding-top: 6px; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.45 ui-monospace, Menlo, monospace; margin: 6px 0 0; max-height: 220px; overflow: auto; }
-.bar { height: 10px; background: var(--bar); border-radius: 6px; overflow: hidden; margin: 10px 0 6px; }
-.bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .6s; }
-.bar.busy > i { width: 30%; animation: slide 1.6s infinite ease-in-out; }
-@keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
-@media (prefers-reduced-motion: reduce) { .bar.busy > i { animation: none; width: 100%; opacity: .4; } }
-.track { border-top: 1px solid var(--line); padding: 10px 0; }
-.track:first-of-type { border-top: 0; }
+
+/* working */
+.bar { height: 12px; background: var(--bar); border-radius: 8px; overflow: hidden; margin: 12px 0 6px; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--rainbow); border-radius: 8px; transition: width .6s; }
+.bar.busy > i { width: 35%; animation: slide 1.7s infinite ease-in-out; }
+@keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .bar.busy > i { animation: none; width: 100%; opacity: .45; } * { transition: none !important; } }
+.stage { font-weight: 600; margin: 10px 0 0; }
+
+/* the tracks */
+.tracks { margin-top: 10px; }
+.track { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 10px; border-left: 6px solid var(--tint, var(--accent)); }
 .track b { display: block; }
-.track audio { width: 100%; margin-top: 6px; }
-.links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.links button, .links .button { font-size: 14px; padding: 6px 11px; }
-footer { color: var(--soft); font-size: 14px; margin-top: 28px; }
-footer a { color: inherit; }
-.ok { color: var(--good); }
+.track audio { width: 100%; margin-top: 8px; height: 40px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-top: 14px; }
+footer { color: var(--soft); font-size: 14.5px; margin-top: 30px; }
+footer .heart { color: var(--ink); }
 #gone { display: none; }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
-<main>
-  <h1>Palare Piano</h1>
-  <p class="sub">Sheet music in, rehearsal tracks out.</p>
-
-  <div id="gone" class="card flag bad">Palare Piano has been closed. Open it again from your Applications folder.</div>
-
-  <div class="card drop" id="drop">
-    <p><button class="main" id="choose">Add a piece</button></p>
-    <p class="small">or drop the sheet music here, as a PDF. It stays on this computer.</p>
-    <p class="small" id="demo" hidden><a href="#" id="trydemo">No PDF to hand? Try it with a short demo.</a></p>
-    <input type="file" id="file" accept=".pdf,.score,application/pdf" multiple hidden>
-    <p class="flag bad" id="adderr" hidden></p>
+<header class="top">
+  <svg viewBox="0 0 48 40" aria-hidden="true"><defs><clipPath id="keys"><rect width="48" height="40" rx="7"/></clipPath></defs><g clip-path="url(#keys)"><rect width="8" height="40" fill="#e5484d"/><rect x="8" width="8" height="40" fill="#f08a24"/><rect x="16" width="8" height="40" fill="#f5c400"/><rect x="24" width="8" height="40" fill="#2fa45f"/><rect x="32" width="8" height="40" fill="#2f7de1"/><rect x="40" width="8" height="40" fill="#8b4fd6"/><g fill="#241a2e"><rect x="5.5" width="5" height="23" rx="1.5"/><rect x="13.5" width="5" height="23" rx="1.5"/><rect x="29.5" width="5" height="23" rx="1.5"/><rect x="37.5" width="5" height="23" rx="1.5"/></g></g></svg>
+  <div class="words">
+    <h1>Palare Piano</h1>
+    <p class="tag">Sheet music in, rehearsal tracks out.</p>
   </div>
+  <span class="pill" id="voicechip" hidden></span>
+</header>
+<div class="stripes" aria-hidden="true"></div>
+<main>
+  <div id="gone" class="note bad">Palare Piano has been closed. Open it again from your Applications folder.</div>
 
-  <div id="voices"></div>
+  <section class="card drop" id="drop" aria-label="Add a piece">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>
+    <p><button class="main" id="choose">Add your sheet music</button></p>
+    <p class="small">…or drop a PDF here. A scan of the pages works too.<br>Your music never leaves this computer.</p>
+    <p class="small" id="demo" hidden><button class="quiet" id="trydemo">No PDF to hand? Try a short demo first.</button></p>
+    <input type="file" id="file" accept=".pdf,.score,application/pdf" multiple hidden>
+    <p class="note bad" id="adderr" hidden></p>
+  </section>
+
+  <section class="steps" id="howto" hidden aria-label="How it works">
+    <div class="step"><i style="background:#f5a9b8">1</i><b>Add your sheet music</b><span class="small">The PDF from your director, or a scan of the pages.</span></div>
+    <div class="step"><i style="background:#5bcefa">2</i><b>Pick your part</b><span class="small">Tenor 1, Tenor 2, Baritone or Bass.</span></div>
+    <div class="step"><i style="background:#f5c400">3</i><b>Sing along</b><span class="small">Your part brought forward, left out, or all by itself.</span></div>
+  </section>
+
   <div id="pieces"></div>
+  <div id="voices"></div>
 
   <footer>
-    <p id="where"></p>
-    <p>Real voices, where installed, are from <a href="https://zenodo.org/records/1193957" target="_blank" rel="noopener">VocalSet</a> (Wilkins, Seetharaman, Wahl and Pardo; CC BY 4.0), re-voiced with Seed-VC. Tracks made with them carry a Credits file: keep it with them if you share them.</p>
-    <p>Palare Piano is free software under the GNU General Public License, version 3. A practice track is for learning your part. The singing stays with the singers.</p>
-    <p><button id="quit">Close Palare Piano</button></p>
+    <details>
+      <summary>About Palare Piano</summary>
+      <p id="where" style="margin-top:8px"></p>
+      <p>Real voices, where added, come from <a href="https://zenodo.org/records/1193957" target="_blank" rel="noopener">VocalSet</a> (Wilkins, Seetharaman, Wahl and Pardo; CC BY 4.0), re-voiced with Seed-VC. Tracks made with them come with a Credits file: keep it with them if you share them.</p>
+      <p>Palare Piano is free software under the GNU General Public License, version 3. <em>Palare</em> is one spelling of Polari, the slang gay men in Britain once spoke so as not to be overheard; <em>piano</em> means softly.</p>
+      <p>It keeps running quietly after you close this window, so that long jobs can finish. <button id="quit">Quit Palare Piano</button></p>
+    </details>
+    <p style="margin-top:12px">A practice track is for learning your part. <span class="heart">The singing stays with the singers.</span></p>
   </footer>
 </main>
 <script>
 const TOKEN = "{{TOKEN}}";
 const $ = (s, el) => (el || document).querySelector(s);
-const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const k in (attrs || {})) { if (k === 'class') e.className = attrs[k]; else if (k.startsWith('on')) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== false && attrs[k] != null) e.setAttribute(k, attrs[k] === true ? '' : attrs[k]); } for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(c)); return e; };
-let S = null, cards = {}, voicesKey = '';
+const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const k in (attrs || {})) { if (k === 'class') e.className = attrs[k]; else if (k.startsWith('on')) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== false && attrs[k] != null) e.setAttribute(k, attrs[k] === true ? '' : attrs[k]); } for (const c of kids.flat(Infinity)) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(c)); return e; };
+let S = null, cards = {}, voicesKey = '', uid = 0;
 
 async function post(path, data, raw) {
   const r = await fetch(path, { method: 'POST', headers: Object.assign({ 'X-Palare': TOKEN }, raw ? { 'X-Filename': encodeURIComponent(raw.name) } : { 'Content-Type': 'application/json' }), body: raw || JSON.stringify(data || {}) });
@@ -92,54 +172,93 @@ async function post(path, data, raw) {
   refresh();
   return j;
 }
-const say = (pid, text) => { const c = cards[pid]; if (c) { const m = $('.msg', c.node); if (m) { m.textContent = text; m.hidden = !text; } } };
+const say = (pid, text) => { const c = cards[pid]; if (c) { const m = $('.msg', c.node); if (m) { m.textContent = text; m.hidden = !text; if (text) m.scrollIntoView({ block: 'nearest' }); } } };
 const act = (path, data) => post(path, data).catch(e => data && data.id ? say(data.id, e.message) : alert(e.message));
 
-const WHAT = { 'balanced': 'Everyone, balanced', 'predominant': 'Your part brought forward', 'muted': 'Your part left out, to sing against', 'alone': 'Your part alone', 'voices only': 'The voices without the piano' };
-function trackName(file) { const base = file.replace(/\.[^.]+$/, ''); const name = base.slice(base.lastIndexOf(' - ') + 3); const kind = Object.keys(WHAT).find(k => name.toLowerCase().endsWith(k)); return [name.charAt(0).toUpperCase() + name.slice(1), kind ? WHAT[kind] : '']; }
-const mins = s => s < 90 ? 'about a minute' : 'about ' + Math.round(s / 60) + ' minutes';
+// the five tracks: what each is for, and a colour of its own down the side (decoration: the words say it too)
+const WHAT = { 'balanced': ['The whole choir with the piano', '#8b4fd6'], 'predominant': ['Your part louder than everyone else', '#e5484d'], 'muted': ['Everyone except your part: sing your line against it', '#2f7de1'], 'alone': ['Just your part', '#2fa45f'], 'voices only': ['The choir without the piano', '#f08a24'] };
+function trackName(file) { const base = file.replace(/\.[^.]+$/, ''); const name = base.slice(base.lastIndexOf(' - ') + 3); const kind = Object.keys(WHAT).find(k => name.toLowerCase().endsWith(k)); return [name.charAt(0).toUpperCase() + name.slice(1), kind ? WHAT[kind] : ['', '']]; }
+const about = s => s < 90 ? 'about a minute' : 'about ' + Math.round(s / 60) + ' minutes';
+const partName = (r, v) => { const p = (r.parts || []).find(x => x[0] === v); return p ? p[1] : v; };
+const PILL = { reading: ['Reading', ''], read: ['Ready when you are', ''], queued: ['In line', ''], rendering: ['Making your tracks', ''], ready: ['✓ Tracks ready', 'good'], failed: ['Needs a look', 'bad'], unreadable: ['Needs a look', 'bad'] };
 
-function guess(read, voices, singers) {
-  if (voices !== 'real') return 'Takes a minute or two.';
-  const m = Math.max(1, Math.round((read.minutes || 3) * (singers == 4 ? 3.5 : 10) + 4));
-  return 'Real voices are slow: roughly ' + m + ' minutes for this piece on a recent Mac, more on an older one. You can close this window meanwhile; keep the Mac awake and plugged in.';
+// "Which part do you sing?" and "How should it sound?" -> a form, and a function that reads it
+function chooser(p) {
+  const r = p.read, last = S.last || {}, made = p.made || {}, n = 'c' + (++uid), real = S.voices.ready;
+  const want = made.part || last.part;
+  const parts = el('div', { class: 'chips' }, r.parts.map((x, i) => [el('input', { type: 'radio', name: n + 'p', id: n + 'p' + i, value: x[0], checked: x[0] === want || r.parts.length === 1 }), el('label', { for: n + 'p' + i }, x[1])]));
+  parts.addEventListener('change', () => say(p.id, ''));
+  const shared = r.parts.filter(x => x[2]).map(x => x[2]);
+  const m = r.minutes || 3, was = made.voices || last.voices, size = made.singers || last.singers;
+  const pick = was === 'built-in' || !real ? 'quick' : size == 12 ? 'full' : 'small';
+  const opts = [
+    ['quick', 'Quick listen', 'Built-in voices. Clear, but plainly a machine: good for checking the notes.', 'About a minute', false],
+    ['small', 'Real voices, small choir', 'Four singers to a part.', real ? 'About ' + Math.max(2, Math.round(m * 3.5 + 4)) + ' minutes' : 'Add real voices first (below)', !real],
+    ['full', 'Real voices, full choir', 'Twelve singers to a part: the best sound.', real ? 'About ' + Math.max(3, Math.round(m * 10 + 4)) + ' minutes' : 'Add real voices first (below)', !real]];
+  const sound = el('div', { class: 'choices' }, opts.map((o, i) => el('div', null, el('input', { type: 'radio', name: n + 's', id: n + 's' + i, value: o[0], checked: o[0] === pick, disabled: o[4] }), el('label', { class: 'choice', for: n + 's' + i }, el('b', null, o[1]), el('span', null, o[2]), el('span', { class: 'time' }, o[3])))));
+  const node = el('div', null,
+    el('fieldset', null, el('legend', null, 'Which part do you sing?'), parts, shared.length ? el('p', { class: 'small', style: 'margin-top:6px' }, shared.join(' ')) : null),
+    el('fieldset', null, el('legend', null, 'How should it sound?'), sound, real ? el('p', { class: 'small', style: 'margin-top:8px' }, 'Times are for a recent Mac; older ones take longer. You can close this window while it works. Keep the Mac plugged in.') : null));
+  const get = () => { const part = $('input[name=' + n + 'p]:checked', node), s = ($('input[name=' + n + 's]:checked', node) || {}).value || 'quick'; return { part: part && part.value, voices: s === 'quick' ? 'built-in' : 'real', singers: s === 'small' ? 4 : 12 }; };
+  return { node, get };
+}
+
+function makeButton(p, c, label) {
+  return el('button', { class: 'main', onclick: () => { const o = c.get(); if (!o.part) return say(p.id, 'Choose your part first.'); say(p.id, ''); act('/api/render', Object.assign({ id: p.id }, o)); } }, label);
+}
+
+function goodToKnow(p) {
+  const r = p.read || {}, out = [];
+  if (r.tempo_guessed) { const box = el('input', { type: 'number', min: 30, max: 240, value: r.tempo || 100, 'aria-label': 'Beats a minute' }); out.push(el('div', { class: 'note warn' }, 'No tempo is printed in this music, so it will be sung at ' + (r.tempo || 100) + ' beats a minute. If you know the tempo your director takes, set it: ', box, ' ', el('button', { onclick: () => act('/api/tempo', { id: p.id, bpm: box.value }) }, 'Set the tempo'))); }
+  if (r.unsure_count || r.spelled) {
+    const bits = [];
+    if (r.unsure_count) bits.push('The reader had doubts in ' + r.unsure_count + (r.unsure_count === 1 ? ' spot' : ' spots') + ', so a note or a word may be off here and there. Listen first: most pieces come out fine.');
+    if (r.spelled) bits.push(r.spelled + (r.spelled === 1 ? ' word is' : ' words are') + ' not in its dictionary (names, other languages) and will be sung as spelled.');
+    out.push(el('div', { class: 'note' }, bits.join(' '), r.unsure_count ? el('details', null, el('summary', null, 'Where it had doubts'), el('pre', null, r.unsure.join('\n'))) : null));
+  }
+  return out;
+}
+
+function more(p, withFix) {
+  return el('details', { class: 'more' }, el('summary', null, withFix ? 'Something sound wrong? More options' : 'More options'), el('div', null,
+    withFix ? el('p', { class: 'small' }, 'If a note or a word is wrong, you can correct what was read. It opens as plain text; change it, save, then make the tracks again. Only what you changed is sung again.') : null,
+    el('div', { class: 'row', style: 'margin-top:4px' },
+      withFix ? el('button', { onclick: () => act('/api/score', { id: p.id }) }, 'Correct a note or a word') : null,
+      withFix ? el('a', { class: 'button', href: 'https://github.com/BillReyor/Palare-Piano/blob/main/docs/score-format.md', target: '_blank', rel: 'noopener' }, 'How the text is written') : null,
+      el('button', { onclick: () => { if (confirm('Move “' + (p.title || p.id) + '” and its tracks to the Trash?')) act('/api/remove', { id: p.id }); } }, 'Remove this piece'))));
 }
 
 function build(p) {
-  const st = p.status, r = p.read || {}, kids = [el('h2', null, p.title || p.id)];
-  if (r.measures) kids.push(el('p', { class: 'small' }, r.measures + ' measures' + (r.minutes ? ', about ' + (r.minutes < 1 ? 'a minute' : r.minutes + ' minutes') : '') + ' · ' + r.parts.map(x => x[1]).join(', ') + (r.latin ? ' · Latin' : '')));
-  kids.push(el('p', { class: 'flag bad msg', hidden: true }));
-  if (st === 'reading') kids.push(el('p', { class: 'stage' }, 'Reading the music…'), el('div', { class: 'bar busy' }, el('i')));
-  if (st === 'unreadable') kids.push(el('div', { class: 'flag bad' }, 'This could not be read as music for a men’s chorus.', el('details', null, el('summary', null, 'What the reader said'), el('pre', null, (p.error || []).join('\n')))));
-  if (st === 'failed') kids.push(el('div', { class: 'flag bad' }, 'Making the tracks did not finish.', el('details', null, el('summary', null, 'What it said'), el('pre', null, (p.error || []).join('\n')))));
-  if (p.note) kids.push(el('p', { class: 'flag' }, p.note));
-  if (st === 'queued' || st === 'rendering') kids.push(el('p', { class: 'stage' }, st === 'queued' ? 'Waiting for its turn.' : 'Starting…'), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small eta' }), el('div', { class: 'links' }, el('button', { onclick: () => act('/api/stop', { id: p.id }) }, st === 'queued' ? 'Take it out of the line' : 'Stop')));
+  const st = p.status, r = p.read || {}, pill = PILL[st] || ['', ''];
+  const kids = [el('div', { class: 'head' }, el('h2', null, p.title || p.id), el('span', { class: 'pill ' + pill[1] }, pill[0]))];
+  if (r.measures) kids.push(el('p', { class: 'small' }, r.measures + ' measures' + (r.minutes ? ', about ' + (r.minutes < 1.5 ? 'a minute' : Math.round(r.minutes) + ' minutes') + ' of music' : '') + (r.latin ? ' · in Latin' : '')));
+  kids.push(el('p', { class: 'note bad msg', hidden: true, role: 'alert' }));
+
+  if (st === 'reading') kids.push(el('p', { class: 'stage' }, 'Reading the music…'), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small' }, 'A PDF made by notation software takes seconds. A scan takes about half a minute a page.'));
+  if (st === 'unreadable') kids.push(el('div', { class: 'note bad' }, 'This could not be read as music for tenor and bass voices. It may be a different kind of score, or a scan too faint to read.', el('details', null, el('summary', null, 'What the reader said'), el('pre', null, (p.error || []).join('\n')))), more(p, false));
+  if (st === 'failed') kids.push(el('div', { class: 'note bad' }, 'Making the tracks did not finish. You can try again; what was finished is kept.', el('details', null, el('summary', null, 'What it said'), el('pre', null, (p.error || []).join('\n')))));
+  if (p.note) kids.push(el('p', { class: 'note' }, p.note));
+
+  if (st === 'queued' || st === 'rendering') kids.push(el('p', { class: 'stage' }, st === 'queued' ? 'Waiting for its turn: one piece is made at a time.' : 'Starting…'), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small eta' }),
+    el('div', { class: 'row' }, el('button', { onclick: () => act('/api/stop', { id: p.id }) }, st === 'queued' ? 'Take it out of the line' : 'Stop'), st === 'rendering' ? el('span', { class: 'small' }, 'You can close this window; it keeps going.') : null));
+
   if (st === 'ready' && p.tracks.length) {
     const made = p.made || {};
-    kids.push(el('p', { class: 'small ok' }, 'Your tracks, with ' + (made.voices === 'real' ? 'real voices' : 'the built-in voices') + (made.singers ? ', ' + made.singers + ' singers to a part' : '') + '.'));
-    kids.push(el('div', null, p.tracks.map(f => { const [name, what] = trackName(f); const url = '/file/' + encodeURIComponent(p.id) + '/' + encodeURIComponent(f); return el('div', { class: 'track' }, el('b', null, name), el('span', { class: 'small' }, what), el('audio', { controls: true, preload: 'none', src: url })); })));
+    kids.push(el('p', { class: 'small' }, 'Made for ' + partName(r, made.part) + ' with ' + (made.voices === 'real' ? 'real voices, ' + (made.singers == 4 ? 'four' : 'twelve') + ' singers to a part' : 'the built-in voices') + '. Press play and sing along.'));
+    kids.push(el('div', { class: 'tracks' }, p.tracks.map(f => { const [name, w] = trackName(f); const url = '/file/' + encodeURIComponent(p.id) + '/' + encodeURIComponent(f); return el('div', { class: 'track', style: w[1] ? '--tint:' + w[1] : null }, el('b', null, name), el('span', { class: 'small' }, w[0]), el('audio', { controls: true, preload: 'none', src: url })); })));
+    kids.push(el('div', { class: 'row' }, el('button', { onclick: () => act('/api/reveal', { id: p.id }) }, 'Show the files in Finder'), el('span', { class: 'small' }, 'To put them on your phone, AirDrop them from there.')));
+    kids.push(...goodToKnow(p));
+    const c = chooser(p);
+    kids.push(el('details', { class: 'more' }, el('summary', null, 'Make another version (another part, other voices)'), el('div', null, c.node, el('div', { class: 'go' }, makeButton(p, c, 'Make these tracks'), el('span', { class: 'small' }, 'This replaces the tracks above.')))));
+    kids.push(more(p, true));
   }
-  if (st === 'read' || st === 'ready' || st === 'failed') {
-    if (r.tempo_guessed) { const box = el('input', { type: 'number', min: 30, max: 240, value: r.tempo || 100, 'aria-label': 'Beats a minute' }); kids.push(el('div', { class: 'flag' }, 'No tempo is printed in this music. It will be sung at ' + (r.tempo || 100) + ' beats a minute unless you set one: ', box, ' ', el('button', { onclick: () => act('/api/tempo', { id: p.id, bpm: box.value }) }, 'Set the tempo'))); }
-    if (r.unsure_count) kids.push(el('div', { class: 'flag' }, 'The reader was unsure in ' + r.unsure_count + (r.unsure_count === 1 ? ' place' : ' places') + ', so a few notes or words may be wrong there.', el('details', null, el('summary', null, 'Where'), el('pre', null, r.unsure.join('\n')))));
-    if (r.spelled) kids.push(el('p', { class: 'small' }, r.spelled + (r.spelled === 1 ? ' word is' : ' words are') + ' not in the dictionary and will be sung as spelled.'));
-    const last = S.last || {}, made = p.made || {};
-    const want = made.part || last.part;
-    const part = el('select', { class: 'part', 'aria-label': 'Your part' }, el('option', { value: '' }, 'Choose your part'), r.parts.map(x => el('option', { value: x[0], selected: x[0] === want }, x[1])));
-    const voices = el('select', { class: 'voices', 'aria-label': 'Voices' }, el('option', { value: 'real', disabled: !S.voices.ready, selected: S.voices.ready && (made.voices || last.voices) !== 'built-in' }, S.voices.ready ? 'Real men’s voices' : 'Real men’s voices (not added yet)'), el('option', { value: 'built-in', selected: !S.voices.ready || (made.voices || last.voices) === 'built-in' }, 'Built-in voices (quick)'));
-    const size = el('select', { class: 'size', 'aria-label': 'Choir' }, el('option', { value: 12, selected: (made.singers || last.singers) != 4 }, 'Full choir, 12 to a part'), el('option', { value: 4, selected: (made.singers || last.singers) == 4 }, 'Small choir, 4 to a part'));
-    const hint = el('p', { class: 'small hint' });
-    const upd = () => { hint.textContent = guess(r, voices.value, size.value); };
-    voices.addEventListener('change', upd); size.addEventListener('change', upd); upd();
-    kids.push(el('div', { class: 'row' }, el('div', null, el('label', null, 'Your part'), part), el('div', null, el('label', null, 'Voices'), voices), el('div', null, el('label', null, 'Choir'), size)), hint,
-      el('p', null, el('button', { class: 'main', onclick: () => { if (!part.value) return say(p.id, 'Choose your part first.'); say(p.id, ''); act('/api/render', { id: p.id, part: part.value, voices: voices.value, singers: size.value }); } }, st === 'ready' ? 'Make them again' : 'Make my tracks')));
+  if (st === 'read' || st === 'failed') {
+    kids.push(...goodToKnow(p));
+    const c = chooser(p);
+    kids.push(c.node, el('div', { class: 'go' }, makeButton(p, c, st === 'failed' ? 'Try again' : 'Make my tracks')));
+    kids.push(more(p, true));
   }
-  const links = [];
-  if (st === 'ready') links.push(el('button', { onclick: () => act('/api/reveal', { id: p.id }) }, 'Show the files'));
-  if (r.measures && st !== 'queued' && st !== 'rendering') links.push(el('button', { onclick: () => act('/api/score', { id: p.id }), title: 'Opens the score as text. Correct a wrong note or word there, save, and make the tracks again.' }, 'Correct the score'), el('a', { class: 'button', href: 'https://github.com/BillReyor/Palare-Piano/blob/main/docs/score-format.md', target: '_blank', rel: 'noopener' }, 'How a score is written'));
-  if (st !== 'queued' && st !== 'rendering' && st !== 'reading') links.push(el('button', { onclick: () => { if (confirm('Move “' + (p.title || p.id) + '” and its tracks to the Trash?')) act('/api/remove', { id: p.id }); } }, 'Remove'));
-  if (links.length) kids.push(el('div', { class: 'links' }, links));
-  return el('div', { class: 'card' }, kids);
+  return el('section', { class: 'card', 'aria-label': p.title || p.id }, kids);
 }
 
 function live(p, node) {
@@ -147,34 +266,36 @@ function live(p, node) {
   if (stage && !j && p.status === 'reading') stage.textContent = 'Waiting its turn to be read…';
   if (!stage || !j) return;
   stage.textContent = (j.stage || 'Working') + '…';
-  if (bar) { const has = j.progress != null; bar.classList.toggle('busy', !has); $('i', bar).style.width = has ? Math.max(2, Math.round(j.progress * 100)) + '%' : ''; }
-  if (eta) eta.textContent = j.progress != null ? Math.round(j.progress * 100) + '% done' + (j.eta ? ', ' + mins(j.eta) + ' left' : '') : '';
+  if (bar) { const has = j.progress != null; bar.classList.toggle('busy', !has); $('i', bar).style.width = has ? Math.max(3, Math.round(j.progress * 100)) + '%' : ''; }
+  if (eta) eta.textContent = j.progress != null ? Math.round(j.progress * 100) + '% done' + (j.eta ? ', ' + about(j.eta) + ' left' : '') : '';
 }
 
 function drawVoices() {
   const v = S.voices, key = JSON.stringify([v.ready, v.running, v.can, !!v.error]);
-  const box = $('#voices');
+  const box = $('#voices'), chip = $('#voicechip');
+  chip.hidden = false; chip.className = 'pill' + (v.ready ? ' good' : ''); chip.textContent = v.ready ? '✓ Real voices' : v.running ? 'Adding real voices…' : 'Built-in voices';
   if (key !== voicesKey) {
     voicesKey = key; box.textContent = '';
-    if (v.ready) box.append(el('p', { class: 'small ok' }, 'Real voices are installed.'));
-    else if (v.running) box.append(el('div', { class: 'card' }, el('h2', null, 'Adding real voices'), el('p', { class: 'stage' }), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small' }, 'This downloads about 4 GB and takes around half an hour. You can add pieces and make tracks with the built-in voices meanwhile.')));
-    else if (v.can) box.append(el('div', { class: 'card' }, el('h2', null, 'The singers can have real voices'), el('p', null, 'Out of the box the choir is sung by built-in voices, which are clear but plainly a machine. Real men’s voices sound far better. Adding them downloads about 4 GB and takes around half an hour, once.'), v.error ? el('div', { class: 'flag bad' }, 'Adding the voices did not finish.', el('details', null, el('summary', null, 'What it said'), el('pre', null, v.error))) : null, el('p', null, el('button', { class: 'main', onclick: () => act('/api/voices') }, v.error ? 'Try again' : 'Add real voices'))));
-    else box.append(el('p', { class: 'small' }, v.why));
+    if (v.running) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'Adding real voices'), el('span', { class: 'pill' }, 'Working')), el('p', { class: 'stage' }), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small' }, 'This downloads about 4 GB and can take half an hour on a slow connection. Meanwhile you can add pieces and make quick-listen tracks.')));
+    else if (!v.ready && v.can) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'Want it to sound like a real choir?'), el('span', { class: 'pill' }, 'Optional')), el('p', null, 'Right now the choir is sung by built-in voices: clear, quick, and plainly a machine. You can add real recorded voices, and the tracks will sound like people singing.'), el('p', { class: 'small' }, 'It is a 4 GB download, once. After that, real-voice tracks take a good while to make: roughly ten minutes for every minute of music with the full choir.'), v.error ? el('div', { class: 'note bad' }, 'Adding the voices did not finish. Check the internet connection and try again.', el('details', null, el('summary', null, 'What it said'), el('pre', null, v.error))) : null, el('div', { class: 'go' }, el('button', { class: 'main', onclick: () => act('/api/voices') }, v.error ? 'Try again' : 'Add real voices'))));
+    else if (!v.ready) box.append(el('p', { class: 'small' }, v.why));
   }
-  if (v.running) { const s = $('.stage', box), bar = $('.bar', box); if (s) s.textContent = (v.stage || 'Starting') + '…'; if (bar) { const has = v.progress != null; bar.classList.toggle('busy', !has); $('i', bar).style.width = has ? Math.round(v.progress * 100) + '%' : ''; } }
+  if (v.running) { const s = $('.stage', box), bar = $('.bar', box); if (s) s.textContent = (v.stage || 'Starting') + '…'; if (bar) { const has = v.progress != null; bar.classList.toggle('busy', !has); $('i', bar).style.width = has ? Math.max(3, Math.round(v.progress * 100)) + '%' : ''; } }
 }
 
 function draw() {
   $('#where').textContent = 'Your pieces and tracks are kept in ' + S.library + '.';
   $('#demo').hidden = !(S.demo && !S.pieces.length);
+  $('#howto').hidden = S.pieces.length > 0;
   drawVoices();
   const list = $('#pieces'), seen = {};
   S.pieces.forEach((p, i) => {
     const key = JSON.stringify([p.status, p.tracks, p.read, p.error, p.note, p.made, p.title, S.voices.ready]);
     let c = cards[p.id];
     if (!c || c.key !== key) {
-      const busy = c && c.node.contains(document.activeElement) && c.key.split(',')[0] === key.split(',')[0] && ['INPUT', 'SELECT'].includes(document.activeElement.tagName);
-      if (!busy) { const node = build(p); if (c) c.node.replaceWith(node); c = cards[p.id] = { key, node }; }
+      const using = c && c.node.contains(document.activeElement) && JSON.parse(c.key)[0] === p.status && document.activeElement.tagName === 'INPUT';
+      const playing = c && [...c.node.querySelectorAll('audio')].some(a => !a.paused) && JSON.stringify(JSON.parse(c.key)[1]) === JSON.stringify(p.tracks);
+      if (!using && !playing) { const node = build(p); if (c) c.node.replaceWith(node); c = cards[p.id] = { key, node }; }
     }
     if (list.children[i] !== c.node) list.insertBefore(c.node, list.children[i] || null);
     live(p, c.node); seen[p.id] = 1;
@@ -198,13 +319,13 @@ async function addFiles(files) {
 }
 $('#choose').onclick = () => $('#file').click();
 $('#file').onchange = e => { addFiles([...e.target.files]); e.target.value = ''; };
-$('#trydemo').onclick = e => { e.preventDefault(); post('/api/demo').catch(x => alert(x.message)); };
+$('#trydemo').onclick = () => post('/api/demo').catch(x => alert(x.message));
 const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => addFiles([...e.dataTransfer.files]));
 window.addEventListener('dragover', e => e.preventDefault()); window.addEventListener('drop', e => e.preventDefault());
-$('#quit').onclick = () => { if (confirm('Close Palare Piano? Anything being made is stopped; what was finished is kept.')) fetch('/api/quit', { method: 'POST', headers: { 'X-Palare': TOKEN } }).finally(() => { $('#gone').style.display = 'block'; }); };
+$('#quit').onclick = () => { if (confirm('Quit Palare Piano? Anything being made is stopped; what was finished is kept.')) fetch('/api/quit', { method: 'POST', headers: { 'X-Palare': TOKEN } }).finally(() => { $('#gone').style.display = 'block'; }); };
 </script>
 </body>
 </html>

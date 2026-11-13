@@ -1488,3 +1488,52 @@ identifier and the database.
 they are asked for has never run. Any Mac but this one: an older chip will be slower, by how much
 is unknown. Intel Macs, Windows and Linux, which get instructions and no installer. And nobody
 who is not a programmer has tried it yet.
+
+**A page a singer would want to open.** Two requests from the listener, one after the other. The
+page should be "much more visually appealing for an LGBTQIA chorus member", with an eye kept
+out for anything confusing, in colours that are "a little more friendly" without costing it any
+function. And the README should be something a person with "little to no computer experience"
+can follow - "from gen-z to boomers" - with none of the story of how the program was made.
+
+*What was confusing*, found by reading the first page as someone who sings and does not program:
+
+- Three menus - part, voices, size of choir - of which the last two were one question asked
+  twice: how good, and how long am I willing to wait? They are now three choices side by side,
+  each with what it sounds like and how long it takes for this piece (one minute; 14; 33, for a
+  three-minute piece).
+- The part was a menu that opened on "Choose your part", and pressing the button without
+  choosing was an error. The parts are now buttons in a row; one press, and the last choice is
+  remembered.
+- "The reader was unsure in 75 places" stood in a yellow box above everything, with the reader's
+  own log lines under it. It is true and stays, but said as what to do about it - listen first,
+  most pieces come out fine - in a calm colour, with the log folded away. Yellow is kept for the
+  one note that asks for a decision: no tempo was printed.
+- Correcting the score, the link to how a score is written and removing a piece sat beside the
+  main button. They are folded under "Something sound wrong?".
+- After the tracks were made, the whole form came back under them. It is folded under "Make
+  another version", and what the tracks were made for is said in a sentence.
+- Nothing said how to get a track onto a phone. "Show the files in Finder" now says so.
+- Nothing said what to do first. An empty page shows the three steps.
+- "Close Palare Piano" did not say why a page needs closing. It is under About, with the reason:
+  the program goes on working behind the page so that long jobs finish.
+- "Real men's voices", and a piece that "could not be read as music for a men's chorus": a
+  chorus of tenors and basses is not only men. The page says real voices, and tenor and bass
+  voices. The README says the same.
+
+*The look.* A mark of six piano keys in the six colours, with the black keys where a piano has
+them; under the heading a band in the colours of the Progress flag; the progress bar fills in
+the rainbow; each of the five tracks has a colour of its own down its edge. None of it carries
+meaning by itself - every state has its words and a mark as well - and it sits on a plain
+ground: text against its background measures 6.3 to 1 or better in every pairing, in the light
+scheme and the dark (4.5 is the usual requirement). Buttons are large enough for a finger, the
+page keeps its shape at the width of a phone, and nothing moves for someone who has asked their
+computer for less motion.
+
+*The README* is now the instructions and nothing else: how to tell whether the Mac will do, the
+three steps of installing with every key named, how to open it again, the five steps to a first
+set of tracks with pictures of the page, how to put tracks on a phone, and what to do about the
+six or seven things that can go wrong. The limits, the name, the credits and the licence moved
+to `docs/about.md`.
+
+*Not tested:* by a singer. Everything here is a programmer's guess at what a non-programmer
+finds clear, checked against a screen and not against a person.

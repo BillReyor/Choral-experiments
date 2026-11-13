@@ -138,11 +138,11 @@ def what_was_read(pid):
     same = lambda p, q: [(n['beat'], n['dur'], n['midi']) for n in sc.parts[p]] == [(n['beat'], n['dur'], n['midi']) for n in sc.parts[q]]
     have = [p for p in NAMES if sc.parts.get(p)]
     parts = []
-    for p in have:
+    for p in have:                                     # (what to ask for, what to call it, a word of explanation if any)
         if p == 'BS' and 'BR' in have and same('BR', 'BS'):
-            parts = [x for x in parts if x[0] != 'baritone'] + [('bass', 'Bass (baritones and basses sing one line)')]
+            parts = [x for x in parts if x[0] != 'baritone'] + [('bass', 'Bass', 'Baritones and basses sing one line in this piece.')]
         elif p == 'T2' and 'T1' in have and same('T1', 'T2'):
-            parts = [x for x in parts if x[0] != 'tenor1'] + [('tenor1', 'Tenor (the tenors sing one line)')]
+            parts = [x for x in parts if x[0] != 'tenor1'] + [('tenor1', 'Tenor', 'The tenors sing one line in this piece.')]
         else:
             parts.append((ASK[p], NAMES[p]))
     text = open(score_of(pid)).read()
@@ -175,11 +175,7 @@ def do_read(pid):
     now.update(stage='Reading the music', progress=None, eta=None)
     src = os.path.join(folder(pid), 'source')
 
-    def follow(line):
-        m = re.search(r'finding the staves on (\d+) page', line)
-        if m:
-            now['stage'] = 'Reading the music (a scan takes about half a minute a page)'
-    code = run([sys.executable, '-m', 'choral', music(pid), '--read'], os.path.join(src, 'read.log'), follow)
+    code = run([sys.executable, '-m', 'choral', music(pid), '--read'], os.path.join(src, 'read.log'))
     if now.get('stopped'):
         return save(pid, status='unreadable', error=['Stopped.'])
     if code or not os.path.exists(score_of(pid)):
@@ -326,7 +322,7 @@ def act(path, q, body):
         d = load(pid)
         if d.get('status') not in ('read', 'ready', 'failed') or pid in waiting or now.get('id') == pid:
             raise ValueError('This piece is busy.')
-        if q.get('part') not in [p for p, _ in d['read']['parts']]:
+        if q.get('part') not in [p[0] for p in d['read']['parts']]:
             raise ValueError('Choose your part first.')
         with lock:
             waiting.append(pid)
