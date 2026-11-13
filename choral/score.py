@@ -381,6 +381,11 @@ def _finish(sc, warn):
                 prons = lyrics.pronounce(word, len(w), sc.say, nxt, warn, prv)
             for (n, _), syl in zip(w, prons):
                 n['phon'] = syl
+        from .voice import VOW, DIPH
+        for n in heads:                     # a syllable with nothing to sing it on - a misread "t-" - keeps the vowel before it
+            if n.get('phon', '-') != '-' and not any(t in VOW or t in DIPH for t in n['phon'].split()):
+                warn(f'  ! measure {n["m"]} {part}: "{n["lyric"]}" has no vowel to sing; holding the previous vowel')
+                n['phon'] = '-'
         for n in notes:
             if n['lyric'] == '_':
                 n['phon'] = '-'

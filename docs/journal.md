@@ -1167,3 +1167,20 @@ Not measured, because it cannot be here: how a clarinet's tune sits on a piano a
 lie around it. It is set forward by as much as the top note of a chord. And the fix cost a
 conversion: moving the later music by one beat changed 255 of the piece's 463 stretches, which
 had to be converted again, where a change to the accompaniment alone reuses them all.
+
+**A render of nobody.** The sixth piece, last of the nine rendered from their PDFs alone, came
+back in 84 seconds: four files of the right length and a log that said, in passing, that 0
+singers had been re-voiced. One syllable did it. Under pencil marks the reader had taken a
+syllable of the choir's text for "t-", which has no vowel; the engine looks for the vowel of
+every syllable and, finding none, raised the error Python uses to say that a sequence has ended.
+Raised inside a worker, that error does not arrive as an error: the list of singers simply ends
+there, at its first member. So the render went on with no singers and wrote its files.
+
+Three changes, the third the one that matters. A syllable with no vowel now keeps the vowel
+before it, and the reader of the score says which syllable in which measure (fifteen notes in
+this piece: one printed syllable, five parts, three times through). The engine does the same for
+any such note that reaches it another way. And a singer that cannot be sung now stops the render
+with its name, as does any count of singers short of the full choir: before this, the same error
+in the plain render - without re-voicing - would have dropped every singer after the one that
+failed and mixed the rest. None of the other eight pieces has such a syllable; their renders
+stand.

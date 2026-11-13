@@ -121,6 +121,15 @@ def loud(x):
     return float(np.sqrt(np.percentile(blk, 90)) + 1e-12)
 
 
+def _singer(task):
+    """One singer's part.  An error of the kind that ends a loop (StopIteration), escaping from a worker, would end
+    the list of singers without a word - a render of a few singers, or of none, written out as if it were whole."""
+    try:
+        return voice.render_singer(task)
+    except StopIteration as e:
+        raise RuntimeError(f'singer {task[1]} of {task[0]} could not be sung: {e!r}') from e
+
+
 def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
     """Every singer of every section -> {section: array (3, N, 2)}: what the main microphone pair
     hears, what goes to the hall, and the leaders' close mics.  tune: voice settings for this piece
@@ -145,15 +154,17 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
     with Pool(min(10, cpu_count())) as pool:
         if voices:                                     # every singer first, then all of them to the voice model together
             from . import revoice
-            done = list(pool.imap(voice.render_singer, tasks))
+            done = list(pool.imap(_singer, tasks))
             log('voices sung in %.0fs' % (time.time() - t0))
             mid = lambda ns: float(np.median(np.repeat([np.mean(n[2]) for n in ns], [max(1, int(round(8 * n[1]))) for n in ns]))) if ns else 60.   # the middle of its notes, by how long each lasts
             given = revoice.deal(voices, [(t[0], t[1]) for t in tasks], {t[0]: mid(t[2]) for t in tasks}, log, NAMES)   # low voices to the low sections
             new = revoice.revoice([d[4] for d in done], given, log, alone=[t[0] in SINGLE for t in tasks])
             arriving = [(d[0], d[1], d[2], d[3], m) for d, m in zip(done, new)]
         else:
-            arriving = pool.imap_unordered(voice.render_singer, tasks)
+            arriving = pool.imap_unordered(_singer, tasks)
+        sung = 0
         for sect, x, y, star, mono in arriving:
+            sung += 1
             dry, send, spot = stems[sect]
             if sect in SINGLE:
                 mono = mono * (SOLO_GAIN if sect == 'SOLO' else .75 * SOLO_GAIN)
@@ -171,6 +182,8 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
             if star:
                 th = (np.clip(x / 4.5, -1, 1) * .6 + 1) * np.pi / 4
                 spot[:, 0] += mono * np.cos(th); spot[:, 1] += mono * np.sin(th)
+    if sung != len(tasks):
+        raise SystemExit(f'Only {sung} of the {len(tasks)} singers were sung: nothing is written.')
     log(('voices sung and re-voiced in %.0fs' if voices else 'voices sung in %.0fs') % (time.time() - t0))
     return stems
 

@@ -359,6 +359,8 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     ncon = [[0, 0] for _ in range(n)]                  # consonants in each note's onset and coda
     for i, x in enumerate(ph):
         s = x[3]
+        if s != '-' and not any(tk in VOW or tk in DIPH for tk in s.split()):
+            s = '-'                                    # nothing to sing it on: the vowel before it goes on
         if s == '-':
             head[i] = False
             vow[i] = cur_v
