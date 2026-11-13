@@ -1573,5 +1573,11 @@ and they come in as they finish, in a different order each run. (With real voice
 taken in order, and a render repeats.) Old code against new correlates 0.987 as well, so the
 change is within what two runs differ by. The echo was left alone.
 
+*Bringing a copy up to date.* The program stays running behind its page, so an update used to
+put new files under an old running copy: the new page talking to the old program. The installer
+now closes a copy that is open before it changes anything, and opens the new one afterwards. If
+the open copy is in the middle of reading or making something it stops and says so, and nothing
+is touched. Both were tried in an empty home folder.
+
 *Not done:* anything that makes the program itself lighter. A Mac with 8 GB is as badly off as
 it was, unless someone else makes its owner's tracks.

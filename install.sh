@@ -64,6 +64,21 @@ UV="$BASE/bin/uv"
 [ -x "$UV" ] || fail "uv did not install where expected ($BASE/bin)."
 export UV_PYTHON_INSTALL_DIR="$BASE/python" UV_CACHE_DIR="$BASE/cache" UV_PYTHON_PREFERENCE=only-managed UV_NO_PROGRESS=1
 
+# ---- a copy that is running is closed first, so that what opens afterwards is the new one - unless it is busy
+NOTE="$HOME/Music/$NAME/.server.json"
+if [ -f "$NOTE" ]; then
+    pid="$(sed -n 's/.*"pid": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
+    port="$(sed -n 's/.*"port": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
+    if [ -n "$pid" ] && ps -p "$pid" -o command= 2>/dev/null | grep -q "choral.app"; then
+        if curl -s -m 3 "http://127.0.0.1:$port/api/state" | grep -q '"job": {'; then
+            fail "$NAME is in the middle of making something. Let it finish, or stop it on its page, and then run the same line again."
+        fi
+        say "Closing the copy of $NAME that is open, to bring it up to date..."
+        kill "$pid" 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
 # ---- the program
 say "Fetching the program..."
 TMP="$(mktemp -d)"
