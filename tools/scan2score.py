@@ -792,6 +792,50 @@ def mend_ligatures(words, unit):
     return [tuple(w) for w in out]
 
 
+LOOKALIKE = (('i', 'l'), ('l', 'i'), ('I', 'l'), ('1', 'l'), ('1', 'i'), ('rn', 'm'), ('m', 'rn'), ('cl', 'd'), ('vv', 'w'), ('0', 'o'))
+
+
+def mend_lookalikes(line, ok, log=None, where=''):
+    """One line of words as text recognition gave them, [[x, syllable], ...], with the letters it mistook put right.
+    Small print misleads it in a few known ways - an l read as an i ("span-gied"), rn as m, cl as d.  The syllables
+    of a printed word (joined along their hyphens) that make no word, and that one such exchange turns into a word
+    of six letters or more - by themselves, or beside other syllables of the same printed word that are words as
+    they stand ("star-" before "span-gled") - are taken to have been misread, if there is only one such exchange.
+
+    It is kept this narrow on purpose.  Sung text is full of things no dictionary has - Hebrew, Latin, a syllable
+    whose word began on the line before - and the dictionary is full of names: allowed short words, or words run
+    together freely, it spoiled four right readings in three pieces while putting two wrong ones right."""
+    letters = lambda t: re.sub(r"[^a-z0-9']", '', t.lower().replace('’', "'"))
+    known = lambda w: w in ok or (w.endswith("'s") and w[:-2] in ok)
+    i = 0
+    while i < len(line):
+        j = i
+        while line[j][1].endswith('-') and j + 1 < len(line):
+            j += 1
+        chain = line[i:j + 1]
+        parts = [letters(w[1]) for w in chain]
+        n = len(parts)
+        fine = lambda p, q: p == q or known(''.join(parts[p:q]))
+        if not known(''.join(parts)) and not (i == 0 and n > 1) and not chain[-1][1].endswith('-'):
+            fits = set()
+            for k, w in enumerate(chain):
+                for old, new in LOOKALIKE:
+                    for m in re.finditer(re.escape(old), w[1]):
+                        text = w[1][:m.start()] + new + w[1][m.end():]
+                        for p in range(k + 1):
+                            for q in range(k + 1, n + 1):
+                                run = ''.join(parts[p:k] + [letters(text)] + parts[k + 1:q])
+                                if len(run) >= 6 and known(run) and not known(''.join(parts[p:q])) and fine(0, p) and fine(q, n):
+                                    fits.add((k, text))
+            if len(fits) == 1:
+                k, text = next(iter(fits))
+                if log:
+                    log(f'  {where}"{chain[k][1]}" in "{"".join(w[1] for w in chain)}" makes no word and "{text}" does: taken for a letter misread')
+                chain[k][1] = text
+        i = j + 1
+    return line
+
+
 def clean_word(t):
     import unicodedata
     t = ''.join(ch for ch in unicodedata.normalize('NFKD', t) if not unicodedata.combining(ch))
@@ -1634,6 +1678,8 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             fixed = []
             for line in lines:
                 line = [list(w) for w in line]
+                if words_ok and not TEXT['pages']:  # (a PDF's own text has no misread letters)
+                    mend_lookalikes(line, words_ok, log, f"page {c['page']} system {c['system']}: ")
                 if words_ok and len(line) > 1:      # divide the line into words: real words are preferred, and what
                     k_ = [key(w[1]) for w in line]  # was seen on the page (a hyphen, or none) is the tie-breaker
                     hy = [w[1].endswith('-') for w in line]

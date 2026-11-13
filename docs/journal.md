@@ -1942,3 +1942,15 @@ reading of the real voice with a tracker's reading of the engine, a few points t
 took the median: the leaps were outvoted, and odd readings in the low parts were put down to
 the tracker. A tracker is the wrong witness here twice over - it is what the rebuilding itself
 was misled by. The tests above ask the sound a narrower question it cannot get wrong.
+
+**A letter misread.** The listener, of the same piece: one word of the anthem's title comes out
+wrong, its last syllable said "ee". Text recognition had read an l as an i in small print; the
+word, hyphenated across three notes, was then no word at all and was sung as it was spelled.
+The reader now puts such a letter back - l for i, m for rn, d for cl - where the exchange turns
+syllables that make no word into a word of six letters or more, and only one exchange does.
+It had to be made that narrow. Allowed shorter words, or words run together freely, it spoiled
+four right readings in three other pieces (a Hebrew word, an alleluia, a word broken across a
+line) while putting two wrong ones right: sung text is full of things no dictionary has, and the
+dictionary is full of names. As it stands it changes this one word in the ten pieces and nothing
+else. A recognizer cannot tell the difference - it writes the right word either way, knowing the
+song - so this one rests on the engine's own account of what it sings, and on the listener.
