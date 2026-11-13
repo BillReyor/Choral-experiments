@@ -1,13 +1,14 @@
 """Does an installed copy work?  Open it the way a person would and do what a singer does, by its page's own requests.
 
-    python tools/try_install.py [--part-all] [--keep]
+    python tools/try_install.py [--part-all] [--plain] [--keep]
 
 Run after install.sh (Mac, Linux) or install.ps1 (Windows).  It needs nothing but Python: it finds the installed copy
 (PALARE_HOME, or where the installer puts it), starts it by what the installer left to start it with - the launcher on
 a Mac, the script on Linux, the Start-menu shortcut on Windows - with a library of its own in a temporary folder, and
 then, as the page would: adds the demo piece, waits for it to be read, moves a note and puts it back, makes the tracks
 with the built-in voices, fetches one and listens for sound in it, makes the files to share, waits for the computer
-check, removes the piece and quits.  Anything that does not go as it should ends the run with what went wrong and the
+check, removes the piece and quits.  --part-all makes the tracks for every part and the files to share; --plain has
+the tracks left as they were written (.wav), so that they can be listened to here: is there sound in them?  Anything that does not go as it should ends the run with what went wrong and the
 last lines the program wrote.  This is what the automatic tests on GitHub run on each system (.github/workflows)."""
 import json, os, re, subprocess, sys, tempfile, time, urllib.error, urllib.parse, urllib.request
 
@@ -86,6 +87,8 @@ class Trial:
         if not os.path.exists(v['start']):
             raise SystemExit(f'NOT RIGHT: what should start it is not there: {v["start"]}')
         os.environ.update(PALARE_LIBRARY=self.lib, PALARE_PORT=str(PORT), PALARE_NO_BROWSER='1')
+        if '--plain' in sys.argv:
+            os.environ['PALARE_PLAIN_TRACKS'] = '1'
         if os.name == 'nt':
             os.startfile(v['start'])                   # the shortcut, as a double-click would
         else:
@@ -134,8 +137,9 @@ class Trial:
             raise SystemExit(self.wrong(f'{len(p["tracks"])} tracks where {want} were expected: {p["tracks"]}'))
         for t in p['tracks']:
             data = get('/file/' + urllib.parse.quote(pid) + '/' + '/'.join(urllib.parse.quote(x) for x in t.split('/')), raw=True)
-            if len(data) < 30000:
-                raise SystemExit(self.wrong(f'the track {t} is only {len(data)} bytes'))
+            size = len(data)
+            if size < 30000:
+                raise SystemExit(self.wrong(f'the track {t} is only {size} bytes'))
             if t.endswith('.wav'):                     # (a squeezed track is taken on trust; a plain one is listened to)
                 import array, io, wave
                 with wave.open(io.BytesIO(data)) as w:
@@ -143,7 +147,12 @@ class Trial:
                 loud = max(abs(x) for x in a[::7]) if a else 0
                 if loud < 1000:
                     raise SystemExit(self.wrong(f'the track {t} is silent (its loudest moment is {loud} of 32768)'))
-        print(f'  every track was fetched from the page and has sound in it ({"squeezed to .m4a" if p["tracks"][0].endswith(".m4a") else "kept as .wav: nothing here to squeeze them with"})', flush=True)
+        kind = os.path.splitext(p['tracks'][0])[1]
+        if '--plain' in sys.argv and kind != '.wav':
+            raise SystemExit(self.wrong(f'the tracks were to be left as written, and are {kind}'))
+        if '--plain' not in sys.argv and kind == '.wav':
+            raise SystemExit(self.wrong('the tracks were not saved small: nothing here did it (the Mac\'s converter, ffmpeg, or the MP3 encoder the installer adds)'))
+        print(f'  every track was fetched from the page ({kind}, about {size // 1024} KB each)' + (' and has sound in it' if kind == '.wav' else ''), flush=True)
         if everyone:
             self.post('/api/share', id=pid)
             zips = [f for _, _, fs in os.walk(os.path.join(self.lib, pid)) for f in fs if f.endswith('.zip')]

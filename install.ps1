@@ -147,6 +147,8 @@ function Install-PalarePiano {
         Say "Installing Python and the program's packages..."
         if (-not (Test-Path $Py)) { Run 'Python could not be installed.' $Uv @('venv', '-q', '--seed', '--python', $Python, (Join-Path $App '.venv')) }
         Run "The program's packages could not be installed." $Uv @('pip', 'install', '-q', '--python', $Py, '-r', (Join-Path $App 'install\app.txt'))
+        $small = $true                                 # what saves the tracks small; without it they are left as .wav files
+        try { Run 'x' $Uv @('pip', 'install', '-q', '--python', $Py, '-r', (Join-Path $App 'install\tracks.txt')) } catch { $small = $false }
 
         Say 'Installing the reader for scanned music...'
         $OmrPy = Join-Path $App '.venv-omr\Scripts\python.exe'
@@ -184,7 +186,7 @@ function Install-PalarePiano {
         Write-Host "From now on, open `"$Name`" from the Start menu, or from its icon on the Desktop."
         $tess = (Get-Command tesseract -ErrorAction SilentlyContinue) -or (Test-Path (Join-Path $env:ProgramFiles 'Tesseract-OCR\tesseract.exe'))
         if (-not $tess) { Write-Host 'One more thing, for scanned music only: its words are read by a free program called Tesseract, which is not on this computer. The README says how to add it. Music saved as a PDF by notation software does not need it.' }
-        if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { Write-Host 'Tracks will be saved as .wav files, which are large. With ffmpeg installed they are saved small, as .m4a (the README says how).' }
+        if (-not $small -and -not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { Write-Host 'Tracks will be saved as .wav files, which are large: the part that saves them small could not be installed here.' }
         Write-Host 'To bring it up to date later, use the button on its page, or paste the same line again.'
         if (-not $env:PALARE_NO_OPEN) {
             Write-Host 'Opening it now...'

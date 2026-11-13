@@ -53,12 +53,12 @@ jobs:
 
       - name: Use it as a singer would (Mac, Linux)
         if: runner.os != 'Windows'
-        run: python3 tools/try_install.py --part-all
+        run: python3 tools/try_install.py --part-all --plain
 
       - name: Use it as a singer would (Windows)
         if: runner.os == 'Windows'
         shell: powershell
-        run: python tools\try_install.py --part-all
+        run: python tools\try_install.py --part-all --plain
 
       - name: The readers are there
         shell: bash

@@ -1,0 +1,3 @@
+# What saves the tracks small on Windows and Linux: an MP3 encoder (LAME, LGPL, through lameenc).
+# A Mac has a converter of its own and does not install this.  Without it the tracks are left as .wav files.
+lameenc==1.9.0

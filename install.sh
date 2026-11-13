@@ -102,7 +102,7 @@ UV="$BASE/bin/uv"
 export UV_PYTHON_INSTALL_DIR="$BASE/python" UV_CACHE_DIR="$BASE/cache" UV_PYTHON_PREFERENCE=only-managed UV_NO_PROGRESS=1
 
 # ---- a copy that is running is closed first, so that what opens afterwards is the new one - unless it is busy
-NOTE="$HOME/Music/$NAME/.server.json"
+NOTE="${PALARE_LIBRARY:-$HOME/Music/$NAME}/.server.json"
 if [ -f "$NOTE" ]; then
     pid="$(sed -n 's/.*"pid": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
     port="$(sed -n 's/.*"port": *\([0-9][0-9]*\).*/\1/p' "$NOTE")"
@@ -151,6 +151,9 @@ find "$APP" -mindepth 1 -maxdepth 1 ! -name .venv ! -name .venv-omr ! -name .svc
 say "Installing Python and the program's packages..."
 [ -x "$APP/.venv/bin/python" ] || "$UV" venv -q --seed --python 3.12 "$APP/.venv"
 "$UV" pip install -q --python "$APP/.venv/bin/python" -r "$APP/install/app.txt"
+if [ "$OS" != "Darwin" ]; then                         # what saves the tracks small (a Mac has a converter of its own)
+    "$UV" pip install -q --python "$APP/.venv/bin/python" -r "$APP/install/tracks.txt" >/dev/null 2>&1 || true
+fi
 
 say "Installing the reader for scanned music..."
 [ -x "$APP/.venv-omr/bin/python" ] || "$UV" venv -q --seed --python 3.12 "$APP/.venv-omr"
@@ -211,7 +214,8 @@ if [ "$OS" = "Darwin" ]; then
 else
     echo "From now on, open \"$NAME\" from your applications menu."
     command -v tesseract >/dev/null 2>&1 || echo "One more thing, for scanned music only: its words are read by a program called Tesseract, which is not on this computer. Install it (on Ubuntu: sudo apt install tesseract-ocr) and scans will have their words. Music saved as a PDF by notation software does not need it."
-    command -v ffmpeg >/dev/null 2>&1 || echo "Tracks will be saved as .wav files, which are large. With ffmpeg installed (on Ubuntu: sudo apt install ffmpeg) they are saved small, as .m4a."
+    command -v ffmpeg >/dev/null 2>&1 || "$APP/.venv/bin/python" -c "import lameenc" 2>/dev/null \
+        || echo "Tracks will be saved as .wav files, which are large. With ffmpeg installed (on Ubuntu: sudo apt install ffmpeg) they are saved small."
 fi
 echo "To bring it up to date later, use the button on its page, or paste the same line again."
 if [ -z "${PALARE_NO_OPEN:-}" ]; then

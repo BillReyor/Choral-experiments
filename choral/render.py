@@ -11,7 +11,7 @@ import argparse, os, time, wave
 import numpy as np
 from multiprocessing import Pool, cpu_count
 from scipy.signal import fftconvolve, butter, sosfilt
-from . import voice, piano, score as scoremod
+from . import helper, voice, piano, score as scoremod
 
 SR = voice.SR
 _E = lambda k, d: float(os.environ.get(k, d))
@@ -161,7 +161,7 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
              for i in ((1,) if sect in SINGLE else range(singers))]            # singer 1 is a section leader: on a close mic
     stems = {sect: np.zeros((3, N, 2), np.float32) for sect in voice.SECT if sc.parts[sect]}
     geo = np.random.default_rng(99)
-    with Pool(at_once(10)) as pool:
+    with Pool(at_once(10), initializer=helper) as pool:
         if voices:                                     # every singer first, then all of them to the voice model together
             from . import revoice
             done = list(pool.imap(_singer, tasks))

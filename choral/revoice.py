@@ -688,11 +688,12 @@ def revoice(tracks, voices, log=print, seed=0, rebuild=True, alone=None):
             raise SystemExit('The voice-conversion model failed' + (f' ({len(missing)} of {len(jobs)} stretches missing)' if missing else '') + ':\n' + said[-1500:])
         out = [np.zeros(len(x), np.float32) for x in tracks]
         from multiprocessing import Pool, cpu_count
+        from . import helper
         try:
             few = max(1, int(os.environ['CHORAL_WORKERS']))      # (a machine short of memory: see render.at_once)
         except (KeyError, ValueError):
             few = 8
-        with Pool(min(8, few, cpu_count())) as pool:
+        with Pool(min(8, few, cpu_count()), initializer=helper) as pool:
             fitted = pool.imap(_fit_job, [(j['out'], np.asarray(tracks[i][a:b], np.float32), bool(rebuild), bool(alone and alone[i])) for j, (i, a, b, ka, kb) in zip(jobs, where)], chunksize=2)
             for (i, a, b, ka, kb), y in zip(where, fitted):
                 w = np.ones(kb - ka, np.float32)         # pieces cut from one stretch are crossed over: in 12 ms where

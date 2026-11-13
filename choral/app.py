@@ -352,13 +352,7 @@ def do_render(pid, opt):
     for f in sorted(os.listdir(wavs)):
         if not f.endswith('.wav'):
             continue
-        out = f[:-4] + '.m4a'
-        squeeze = ['afconvert', '-f', 'm4af', '-d', 'aac', '-b', '192000', os.path.join(wavs, f), os.path.join(wavs, out)] if shutil.which('afconvert') else \
-            ['ffmpeg', '-y', '-loglevel', 'error', '-i', os.path.join(wavs, f), '-c:a', 'aac', '-b:a', '192k', os.path.join(wavs, out)] if shutil.which('ffmpeg') else None
-        if squeeze and not subprocess.run(squeeze, capture_output=True, **hidden()).returncode:
-            names[f[:-4]] = out
-        else:                                          # no converter here: the track as it was written
-            names[f[:-4]] = f
+        names[f[:-4]] = squeeze(os.path.join(wavs, f)) or f       # (with nothing here to make it small: the track as it was written)
     rank = lambda f: next((i for i, k in enumerate(ORDER) if f.rsplit('.', 1)[0].endswith(k)), 9)
     made = []
     if everyone:                                       # a folder for each part, whole in itself: its three tracks and the two all share
@@ -377,6 +371,31 @@ def do_render(pid, opt):
     shutil.rmtree(wavs, ignore_errors=True)
     save(pid, status='ready', tracks=made, made=dict(part=opt['part'], voices='real' if real else 'built-in', singers=singers, when=time.time()), error=None, note=None)
     settings(part=opt['part'], voices='real' if real else 'built-in', singers=singers)
+
+
+def squeeze(wav):
+    """A track as it was written (a .wav file, large) -> a small one beside it, made with what this computer has: the
+    Mac's own converter, or ffmpeg (-> .m4a), or the MP3 encoder the installer adds on Windows and Linux (-> .mp3).
+    -> the small file's name, or None where there is nothing to make one with."""
+    stem = wav[:-4]
+    if os.environ.get('PALARE_PLAIN_TRACKS'):          # (for tests, which listen to the track as it was written)
+        return None
+    for cmd in (['afconvert', '-f', 'm4af', '-d', 'aac', '-b', '192000', wav, stem + '.m4a'],
+                ['ffmpeg', '-y', '-loglevel', 'error', '-i', wav, '-c:a', 'aac', '-b:a', '192k', stem + '.m4a']):
+        if shutil.which(cmd[0]) and not subprocess.run(cmd, capture_output=True, **hidden()).returncode:
+            return os.path.basename(stem + '.m4a')
+    try:
+        import lameenc, wave
+        with wave.open(wav) as w:
+            enc = lameenc.Encoder()
+            enc.set_bit_rate(192); enc.set_in_sample_rate(w.getframerate()); enc.set_channels(w.getnchannels()); enc.set_quality(2)
+            getattr(enc, 'silence', lambda: None)()
+            data = bytes(enc.encode(w.readframes(w.getnframes()))) + bytes(enc.flush())
+        with open(stem + '.mp3', 'wb') as o:
+            o.write(data)
+        return os.path.basename(stem + '.mp3')
+    except Exception:
+        return None
 
 
 def share(pid):
@@ -657,7 +676,7 @@ class Page(BaseHTTPRequestHandler):
                 size = os.path.getsize(f)
             except (ValueError, OSError):
                 return self.send(404, {'error': 'no such track'})
-            kind = {'.m4a': 'audio/mp4', '.wav': 'audio/wav', '.txt': 'text/plain; charset=utf-8'}.get(os.path.splitext(f)[1].lower(), 'application/octet-stream')
+            kind = {'.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.txt': 'text/plain; charset=utf-8'}.get(os.path.splitext(f)[1].lower(), 'application/octet-stream')
             a, b = 0, size - 1
             m = re.match(r'bytes=(\d*)-(\d*)', self.headers.get('Range') or '')
             if m and (m.group(1) or m.group(2)):       # a player asks for the part it wants

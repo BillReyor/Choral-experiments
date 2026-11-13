@@ -26,7 +26,7 @@ releases are found at 12 dB under it, and what follows a release is never listed
 """
 import numpy as np
 from scipy.signal import resample_poly
-from . import voice, render as R
+from . import helper, voice, render as R
 
 SR, NFFT, HOP = 22050, 1024, 128
 CENTRES = [float(hz) for hz, _ in voice.FIT['eq']]          # the bands of the voice's own tone curve
@@ -207,7 +207,7 @@ def simulate(sc, part, timing=None, singers=SINGERS, settings=None, pool=True):
     jobs = [(part, int(i), R.engine_notes(sc, part), clock, dict(settings or {})) for i in singers]
     if pool:
         from multiprocessing import Pool
-        with Pool(len(jobs)) as p:
+        with Pool(len(jobs), initializer=helper) as p:
             outs = p.map(voice.render_singer, jobs)
     else:
         outs = [voice.render_singer(j) for j in jobs]
