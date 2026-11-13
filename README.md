@@ -42,7 +42,8 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
   with. This is the one thing here that is not done in code: an outside voice-conversion model,
   installed separately ([docs/how-it-works.md](docs/how-it-works.md)), re-voices each simulated
   singer, keeping the notes, words and timing the engine sang. It is slow - a three-minute piece
-  takes 15 to 50 minutes, by the size of the choir - but only the first time for a piece.
+  takes 15 to 50 minutes, by the size of the choir - but only the first time for a piece: after
+  a correction to the score, only the phrases it touches are converted again.
 
 ## Install
 

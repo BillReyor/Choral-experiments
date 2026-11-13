@@ -209,9 +209,25 @@ of full precision and the same sound - over 32 stretches the spectra lie 0.13 dB
 second draw of the same singer lies 1.8 dB away, and a recognizer hears the same words. Have the
 driver do a stretch again in full precision if it comes out as not-a-number or silence. Running
 several copies of the model side by side gains nothing - the graphics chip is already full - and
-neither does giving it four stretches at once. What
-has been converted is kept (`.svc/cache`, up to 4 GB): the engine sings a piece the same way every
-time, so rendering it again - for another part's rehearsal tracks, say - takes no conversion.
+neither does giving it four stretches at once.
+
+What has been converted is kept (`.svc/cache`, up to 4 GB; `CHORAL_CACHE_GB` sets another size),
+each stretch under the very bytes that were handed over. The engine sings a piece the same way
+every time, so rendering it again - for another part's rehearsal tracks, say - takes no
+conversion. After a correction to the score, only what the correction touches is converted again:
+
+- Each breath of each singer draws its chance - how late he is, how he tunes and shapes each note -
+  from a run of random numbers of its own, named by the singer and the beat the phrase starts on
+  (`voice.breath_rng`). A phrase is the same take whatever was changed before it.
+- Where a singer's part is cut into stretches is measured against its loudest moment taken to the
+  nearest 6 dB, so that a new take of the loudest phrase does not move every cut in the part.
+- Conversions are kept as they finish, ten at a time. A render stopped half way through goes on
+  from there the next time, and stopping a render stops the model.
+
+The unit is the phrase, from one rest to the next. One corrected word in the middle of a
+three-minute piece sends about a twentieth of it to the model again. In slow music with few rests
+a phrase can last half a minute, and a correction there costs all of it. A change that moves the
+music in time - a tempo, the length of a measure - still converts everything after it.
 
 ## What gets estimated for each piece
 

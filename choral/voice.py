@@ -270,7 +270,8 @@ PER_SECTION = 12
 
 def make_singer(sect, idx, neutral=False):
     k = list(SECT).index(sect)
-    rng = np.random.default_rng(7000 + 100 * k + idx + 100000 * SEED)
+    seed = 7000 + 100 * k + idx + 100000 * SEED
+    rng = np.random.default_rng(seed)
     c = SECT[sect]
     row, col = idx // 4, idx % 4
     star = idx in (1, 6)                               # two per section who never quite blend
@@ -299,6 +300,7 @@ def make_singer(sect, idx, neutral=False):
                  vd=6., conf=.8, skill=.8, lag=0., cs=CDUR, sib=1., scen=6500., fry=0., gain=1., star=False, neutral=True,
                  hi=np.array([FIT['f4'], FIT['f5'], 4650, 5600, 6600, 7700, 8800, 9900, 11000.]) * c['fs'],
                  hibw=np.array([220 / FIT['ring'], 260 / FIT['ring'], 400, 450, 500, 600, 700, 800, 900.]))
+    P['seed'] = seed
     P['hiP'], P['hiN'] = upper(FP, P), upper(FN, P)
     one = np.ones(1)
     X = glottal(FP, 200., 1.) * tract(FP, P['hiP'], P, np.array([VOW['AA']]) * P['fs'], one, 0 * one, 1000 * one, 0 * one)
@@ -335,6 +337,17 @@ def split_phrases(notes):
     if cur:
         out.append(cur)
     return out
+
+
+def breath_rng(P, ph):
+    """The chance in one breath of one singer - how late he is, how he tunes and shapes each note, the noise in his
+    consonants: a run of random numbers of its own, named by the singer and the beat the phrase starts on.
+
+    It used to be one run for the whole piece.  Then a word corrected in the second measure changed every phrase the
+    singer sang after it - the same notes, another take - and since converted singing is kept by the very bytes
+    that were handed over (revoice.py), a word corrected near the start sent nearly the whole piece through the voice
+    model again: forty minutes and more.  Now a phrase is the same take whatever was changed before it."""
+    return np.random.default_rng([P['seed'], int(round(ph[0][0] * 96)) % (1 << 32)])
 
 
 def render_phrase(ph, P, rng, out, gap=9.0):
@@ -703,11 +716,11 @@ def render_singer(args):
     set_clock(*clock)
     if tune and tune[0]:
         apply_fit(tune[0])                             # this piece's settings, e.g. {'TUNE.note_decay': -10}
-    P, rng = make_singer(sect, idx)
+    P, _ = make_singer(sect, idx)
     out = np.zeros(CLOCK['n'], np.float32)
     prev_end = None
     for ph in split_phrases(notes):
         gap = 9. if prev_end is None else T(ph[0][0]) - T(prev_end)
-        render_phrase(ph, P, rng, out, gap=gap)
+        render_phrase(ph, P, breath_rng(P, ph), out, gap=gap)
         prev_end = ph[-1][0] + ph[-1][1]
     return sect, P['x'], P['y'], P['star'], np.nan_to_num(out)

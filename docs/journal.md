@@ -1350,3 +1350,75 @@ ear, among them - so it waits for their word.
 - The seventh: the words that are not English are sung by English spelling rules.
 - The piano plays every instrument's line, and how far forward a clarinet's tune should stand
   among its chords has not been measured or heard.
+
+**A corrected word no longer costs the piece.** The entry above leaves a choice with the
+listener: make a correction cheap to render again, at the price of every piece becoming a new
+take once. Asked, they said "make it".
+
+*A measure first.* A copy of the program was run up to the point where the singers go to the
+voice model, and what would be handed over was written down instead: every stretch, with a
+digest of the same bytes the store of converted singing is keyed on. Run with the engine as it
+was, on the five pieces as they stood before and after the word fixes, it gave the counts in
+the night's logs to the stretch - 1,385 of 1,465, 940 of 940, 695 of 987, 360 of 485 and 553 of
+767 to convert again. So what it says of a changed engine can be believed, in half a minute a
+piece, without an hour of conversion per trial.
+
+*What was changed.*
+
+- Each breath of each singer has its own run of random numbers, named by the singer and the
+  beat the phrase starts on, where there was one run for the whole piece. The singers
+  themselves - their voices, their skill, where they stand - are drawn as before.
+- That alone left the low parts of the sixth piece almost wholly to convert again, and one tenor
+  of its twenty-four. The cause was in the cutting, not the singing. Where a part is cut into
+  stretches was measured against the loudest moment anywhere in the part: 48 dB under it counts
+  as silence, 35 dB under it as quiet enough to cut in. A new take of the loudest phrase moved
+  that level a little, and with it every edge and every cut in the part by a few milliseconds -
+  the same singing, handed over as other bytes. The loudest moment is now taken to the nearest
+  6 dB. On the same singing the cuts come out as before in kind: the same number of stretches to
+  within two in a thousand, and as many cuts in a held note (533 for 532 in the sixth piece, 48
+  for 48 in the tenth).
+- Conversions go into the store as they finish, ten at a time, where they used to go in when
+  the whole piece was done; and a render that is stopped stops the model.
+
+*What a correction costs now.* The night's five corrections again, and one more: a single word
+changed in one staff in the middle of the first piece.
+
+| Piece | What changed | To convert again, before | Now |
+|---|---|---|---|
+| 6 | the words of 27 notes in each low part, 83 in one trio voice, 3 in each of three other parts | 1,385 of 1,465 stretches (232 min of singing) | 808 of 1,464 (137 min) |
+| 1 | six lines of score | 940 of 940 (135 min) | 97 of 938 (18 min) |
+| 5 | six lines, and six notes | 695 of 987 (122 min) | 210 of 992 (37 min) |
+| 10 | six notes | 360 of 485 (66 min) | 60 of 485 (13 min) |
+| 7 | four notes | 553 of 767 (88 min) | 84 of 769 (16 min) |
+| 1 | one word | 412 of 940 (54 min) | 48 of 938 (8 min) |
+
+The same score read twice hands over the same bytes: no stretch of 938, none of 1,464.
+
+*What is left.* The unit is the phrase, from one rest to the next, because the engine sings a
+phrase as one thing: a changed consonant shifts every draw after it, and the voice runs through
+without a break. The sixth piece is the hard case. Its choir sings eighteen seconds at a time
+without a rest, and once forty-nine; its correction touched most of those phrases in the low
+parts; so more than half of it would still be converted again. Three of its twenty-four low
+singers go again entirely: their loudest moment lay in a corrected phrase and its new take
+crossed from one 6 dB step into the next. A change that moves the music in time converts
+everything after it, as before. And the fitting that follows the model, a few minutes a piece,
+is still done in full each time.
+
+*The same in kind.* The first piece sung by the engine as it was and as it is, without the
+voice model: a recognizer gets 75% of the words from all the voices and 78% from the baritones
+alone before, 77% and 77% after. The level differs by 0.02 dB, and the spectrum, by third
+octaves, by a quarter of a decibel on average and 1.3 dB at the most - what one take differs
+from another by.
+
+*With the real voices.* The public demo score written out four times over - twenty measures,
+sixteen singers, 128 stretches. The first time all 128 were converted, in six minutes. Rendered
+again unchanged: none, in 42 seconds. With one word corrected in the third verse: 38, in two
+minutes twenty. Then another word was corrected and the render stopped from outside when ten of
+its 32 stretches were done. The model stopped with it, nothing was left in the temporary
+folder, and the next run found 106 of the 128 converted and did the other 22. A run now says at
+its start how many minutes of singing are left to convert.
+
+*The price, as agreed.* Every piece is a new take the next time it is rendered: the same
+singers on the same notes, with other small differences. The nine renders in hand are the old
+takes, and stay so until rendered again; the 11 GB of conversions in the store belong to them
+and will not be found again. Nobody has heard a new take with the real voices yet.

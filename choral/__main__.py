@@ -108,7 +108,9 @@ def read_music(path, log, language=None, again=False):
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    import signal
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))    # stopped from outside: leave as on Ctrl-C, so that the
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)     # voice model stops too
     ap.add_argument('music'); ap.add_argument('--out'); ap.add_argument('--part')
     ap.add_argument('--accompaniment'); ap.add_argument('--balanced'); ap.add_argument('--predominant'); ap.add_argument('--muted')
     ap.add_argument('--tune', action='store_true'); ap.add_argument('--only'); ap.add_argument('--singers', type=int)

@@ -56,9 +56,12 @@ def stretches(x, sr=SR, floor=-48., gap=1.5, pad=.3):
     moment there is.  Each piece is handed over with `pad` seconds of its neighbour as context and only the piece
     itself is kept."""
     env = _env(x, .02)
-    on = env > env.max() * 10 ** (floor / 20)
-    if not on.any() or env.max() < 1e-6:
+    if env.max() < 1e-6:
         return []
+    top = 2. ** round(float(np.log2(env.max())))          # the loudest moment, to the nearest 6 dB.  Not as it is: one
+    on = env > top * 10 ** (floor / 20)                   # corrected word in the loudest phrase would then move every
+    if not on.any():                                      # edge and every cut in the part by milliseconds, and the
+        return []                                         # whole part would be handed to the model as new (see _kept)
     edges = np.flatnonzero(np.diff(np.r_[0, on.astype(np.int8), 0])) * HOP
     spans = [[a, b] for a, b in zip(edges[::2], edges[1::2])]
     out = [spans[0]]
@@ -68,7 +71,7 @@ def stretches(x, sr=SR, floor=-48., gap=1.5, pad=.3):
         else:
             out.append([a, b])
     p = int(pad * sr); pieces = []
-    quiet = _env(x, .03) < env.max() * 10 ** (-35 / 20)          # per HOP samples
+    quiet = _env(x, .03) < top * 10 ** (-35 / 20)                # per HOP samples
 
     def cut(a, b):
         got = []
@@ -646,17 +649,33 @@ def revoice(tracks, voices, log=print, seed=0, rebuild=True, alone=None):
         kept = [_kept(j, cmd) for j in jobs]             # the engine sings a piece the same way every time: a second
         todo = [j for j, f in zip(jobs, kept) if not os.path.exists(f)]         # rendering finds its stretches converted
         if len(todo) < len(jobs):
-            log(f'  {len(jobs) - len(todo)} of the {len(jobs)} stretches were converted before and are reused')
+            left = sum(kb - ka for (_, _, _, ka, kb), f in zip(where, kept) if not os.path.exists(f)) / SR
+            log(f'  {len(jobs) - len(todo)} of the {len(jobs)} stretches were converted before and are reused'
+                + (f': {left / 60:.0f} minutes of singing are left to convert' if todo else ''))
         said, code = '', 0
         if todo:
+            import re
             jf = os.path.join(work, 'jobs.json')
             json.dump(todo, open(jf, 'w'))
+            place = {j['out']: f for j, f in zip(jobs, kept)}
+            safe = 0
             with open(os.path.join(work, 'errors.txt'), 'w+') as err:
                 r = subprocess.Popen(cmd + [jf], stdout=subprocess.PIPE, stderr=err, text=True)
-                for line in r.stdout:                     # said as it happens: this is the long step
-                    if 're-voiced' in line or 'model loaded' in line:
-                        log(line.rstrip())
-                code = r.wait()
+                try:
+                    for line in r.stdout:                 # said as it happens: this is the long step
+                        if 're-voiced' in line or 'model loaded' in line:
+                            log(line.rstrip())
+                        m = re.search(r're-voiced (\d+) of \d+ stretches', line)
+                        if m:                             # a model that counts aloud has finished that many, in the order given:
+                            upto = min(int(m.group(1)), len(todo))    # they are kept now, so that a render stopped half way
+                            for j in todo[safe:upto]:                 # through its hour has lost a few stretches, not all of them
+                                if os.path.exists(j['out']):
+                                    shutil.copy(j['out'], place[j['out']] + '.part'); os.replace(place[j['out']] + '.part', place[j['out']])
+                            safe = max(safe, upto)
+                    code = r.wait()
+                finally:
+                    if r.poll() is None:                  # the render was stopped: the model is not left running by itself
+                        r.kill()
                 err.seek(0); said = err.read()
         for j, f in zip(jobs, kept):
             if os.path.exists(f):
