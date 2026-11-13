@@ -164,3 +164,47 @@ def test_find_matches_whole_and_partial_words(demo_score):
     assert fix.find(demo_score, 'Shenandoah!') == [2]
     assert fix.find(demo_score, 'zebra') == []
     assert fix.find(demo_score, '!!') == []
+
+
+# ---- what a note would sound as if it were moved: the page plays it at the click, without waiting
+MOVES = {'up': dict(step=1), 'down': dict(step=-1), '#': dict(sign='#'), 'b': dict(sign='b'), 'n': dict(sign='n'), '': dict(sign='')}
+
+
+def test_measure_says_what_each_note_would_sound_as_if_it_were_moved(demo_score, tmp_path):
+    # A corrected note used to sound only once the change had been written and the piece looked over again: a
+    # quarter of a second on a quiet computer, seconds on one busy making tracks - and a browser lets a page make
+    # sound only just after a click.  So the measure says beforehand what each move would sound as.
+    import shutil
+    tried = 0
+    for n in (2, 3):                                   # (in one flat, with chords: the key signature and the staff both matter)
+        m = fix.measure(demo_score, n)
+        for st in m['staves']:
+            for nt in st['notes']:
+                for q in nt['pitches']:
+                    assert set(q['would']) == set(MOVES)
+                    for how, kw in MOVES.items():
+                        work = str(tmp_path / 'tried.score')
+                        shutil.copy(demo_score, work)
+                        after = fix.move(work, n, st['line'], nt['t'], q['k'], **kw)
+                        there = next(s for s in after['staves'] if s['line'] == st['line'])['notes']
+                        got = next(x for x in there if x['t'] == nt['t'])['pitches'][q['k']]['midi']
+                        assert q['would'][how] == got, (n, st['name'], nt['t'], q['k'], how)
+                        tried += 1
+    assert tried > 150
+
+
+def test_a_move_that_would_be_refused_has_no_sound(tmp_path):
+    f = tmp_path / 'edge.score'
+    f.write_text('title: x\ntempo: 100\ntime: 4/4\nkey: 0\n\n== 1\nLOW: c1/h c6/h\n')
+    low, high = [nt['pitches'][0] for nt in fix.measure(str(f), 1)['staves'][0]['notes']]
+    assert low['would']['down'] is None and low['would']['up'] is not None        # "that is as far as a voice goes"
+    assert high['would']['up'] is None and high['would']['down'] is not None
+
+
+def test_what_a_move_would_sound_as_follows_the_signs_before_it(tmp_path):
+    f = tmp_path / 'signs.score'
+    f.write_text('title: x\ntempo: 100\ntime: 4/4\nkey: -1\n\n== 1\nLOW: f#3/q e3/q bn3/q a3/q\n')
+    e, a = [nt['pitches'][0] for nt in fix.measure(str(f), 1)['staves'][0]['notes']][1::2]
+    assert e['would']['up'] == 54              # up from E to F: the sharp printed earlier in the measure still holds
+    assert a['would']['up'] == 59              # up from A to B: the natural printed earlier holds, not the key's flat
+    assert a['would']['b'] == 56 and a['would']['#'] == 58 and a['would']['n'] == a['would'][''] == 57

@@ -455,3 +455,25 @@ def test_squeeze_with_nothing_to_make_a_small_file_says_so(tmp_path, monkeypatch
     monkeypatch.setitem(sys.modules, 'lameenc', None)                            # not installed
     assert app.squeeze(a_wav(tmp_path / 'a.wav')) is None
     assert os.listdir(tmp_path) == ['a.wav']
+
+
+# ---- the page's own sound ("Fix a note or a word")
+def page_function(name):
+    """The text of one of the page's functions.  (There is nothing here to run the page's script with: what can be
+    held to is the order in which it does things.)"""
+    html = open(os.path.join(os.path.dirname(app.__file__), 'app.html'), encoding='utf-8').read()
+    start = html.index('function ' + name + '(')
+    return html[start:html.index('\n}', start)]
+
+
+def test_the_page_wakes_its_sound_in_the_click_before_it_waits_for_anything():
+    # A browser lets a page make sound only just after a click.  A moved note used to sound when the change had been
+    # written - seconds later on a computer busy making tracks - and by then the browser no longer allowed it.
+    move = page_function('moveNote')
+    assert 'sound()' in move and move.index('sound()') < move.index('await')
+    assert '.would' in move and move.index('play(') < move.index("fixPost(pid, '/api/fix/move'")      # ... and sounds before it is sent
+
+
+def test_the_page_says_so_when_the_browser_gives_it_no_sound():
+    play = page_function('play')
+    assert 'currentTime' in play and 'NO_SOUND' in play and 'close()' in play        # looked at, made again once, then said

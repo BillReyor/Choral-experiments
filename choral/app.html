@@ -56,6 +56,7 @@ button, .button { font-size: 16px; border: 1.5px solid var(--line); background: 
 button:hover, .button:hover { border-color: var(--accent); }
 button.main { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 17.5px; padding: 11px 22px; }
 button.main:hover { filter: brightness(1.08); }
+button.sounding { border-color: var(--accent); box-shadow: 0 0 0 3px var(--chip); }
 button.quiet { border-color: transparent; background: transparent; color: var(--link); font-weight: 500; padding-left: 4px; padding-right: 4px; min-height: 36px; text-decoration: underline; }
 button:disabled { opacity: .5; cursor: default; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -336,7 +337,26 @@ const SVG = (tag, attrs, ...kids) => { const e = document.createElementNS('http:
 const SIGN = { '#': '♯', 'b': '♭', 'n': '♮', '##': '𝄪', 'bb': '𝄫' }, STEPH = 6, BOTTOM = 90;
 let AC = null;
 function tone(midi, when, dur) { const o = AC.createOscillator(), g = AC.createGain(); o.type = 'triangle'; o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12); g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(.15, when + .02); g.gain.setValueAtTime(.15, when + Math.max(.03, dur - .06)); g.gain.linearRampToValueAtTime(0, when + dur); o.connect(g); g.connect(AC.destination); o.start(when); o.stop(when + dur + .03); }
-function hear(m, staves) { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume(); const t0 = AC.currentTime + .06, beat = 60 / (m.tempo || 100); staves.forEach(st => { let t = 0; st.notes.forEach(nt => { if (!nt.rest) nt.pitches.forEach(q => tone(q.midi, t0 + t * beat, Math.max(.12, nt.beats * beat * .96))); t += nt.beats; }); }); }
+// The page's own sound: the notes of "Fix a note or a word".  A browser lets a page make sound only just after a click,
+// so sound() is called in the click itself, before anything is waited for: it makes the output if there is none (or
+// the browser has closed it) and wakes it if the browser has put it to sleep.
+function sound() { const C = window.AudioContext || window.webkitAudioContext; if (!AC || AC.state === 'closed') AC = new C(); if (AC.state !== 'running') { const r = AC.resume(); if (r && r.catch) r.catch(() => {}); } return AC; }
+// play(pid, plan): plan(t0) sets the notes out from the moment t0 on the sound's own clock and says how many seconds
+// they last.  A second later the clock is looked at: if it has not moved, the output is stuck - a browser that
+// has slept, a computer busy making tracks - and it is thrown away, made again and the notes set out once more.
+// If that does not move either, the page says so instead of staying silent.
+const NO_SOUND = 'Your browser is not letting this page make sound just now. Click the button once more. If it stays silent, reload this page (your corrections are kept).';
+function play(pid, plan, btn, again) {
+  const ac = sound(), from = ac.currentTime, secs = plan(from + .08);
+  if (btn) { btn.classList.add('sounding'); setTimeout(() => btn.classList.remove('sounding'), Math.max(300, secs * 1000 + 150)); }
+  setTimeout(() => {
+    const f = fixing[pid];
+    if (ac !== AC || (ac.state === 'running' && ac.currentTime > from + .1)) { if (ac === AC && f && f.msg === NO_SOUND) { f.msg = ''; paintFixer(pid); } return; }
+    if (!again) { try { ac.close(); } catch (e) {} AC = null; return play(pid, plan, btn, true); }
+    if (f) { f.msg = NO_SOUND; paintFixer(pid); }
+  }, again ? 1500 : 900);
+}
+function hear(pid, m, staves, btn) { const beat = 60 / (m.tempo || 100); play(pid, t0 => { let end = 0; staves.forEach(st => { let t = 0; st.notes.forEach(nt => { if (!nt.rest) nt.pitches.forEach(q => tone(q.midi, t0 + t * beat, Math.max(.12, nt.beats * beat * .96))); t += nt.beats; }); end = Math.max(end, t); }); return end * beat; }, btn); }
 
 function noteColumn(pid, m, st, nt) {
   const f = fixing[pid], unsure = isUnsure(f, nt), base = st.clef === 'treble' ? 30 : 18, y = step => BOTTOM - (step - base) * STEPH, cx = 43;
@@ -385,7 +405,20 @@ async function fixPost(pid, path, data) {
   catch (e) { f.msg = e.message; }
   finally { paintFixer(pid); }
 }
-async function moveNote(pid, how) { const f = fixing[pid], k = f.picked; if (!k) return; const j = await fixPost(pid, '/api/fix/move', Object.assign({ line: k.line, t: k.t, k: k.k }, how)); if (j && j.measure) { const st = j.measure.staves.find(s => s.line === k.line), nt = st && st.notes.find(x => x.t === k.t), q = nt && nt.pitches.find(x => x.k === k.k); if (q) { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume(); tone(q.midi, AC.currentTime + .03, .5); } } }
+// A note that is moved sounds at the click, as what the measure said it would sound as there (fix.measure: "would") -
+// not when the change has been written, which on a computer busy making tracks can be seconds later.
+async function moveNote(pid, how) {
+  const f = fixing[pid]; if (!f.picked) return;
+  sound();                                                     // (woken in the click, whatever is waited for below)
+  if (f.moving) await f.moving.catch(() => {});                // one change at a time: the next is reckoned from where this one leaves the note
+  const k = f.picked; if (!k) return;
+  const at = m => { const st = m && m.staves.find(s => s.line === k.line), nt = st && st.notes.find(x => x.t === k.t); return nt && nt.pitches.find(x => x.k === k.k); };
+  const q = at(f.m), midi = q && q.would ? q.would[how.step ? (how.step > 0 ? 'up' : 'down') : how.sign] : null;
+  if (midi != null) play(pid, t0 => { tone(midi, t0 - .05, .5); return .5; });
+  f.moving = fixPost(pid, '/api/fix/move', Object.assign({ line: k.line, t: k.t, k: k.k }, how));
+  const j = await f.moving; f.moving = null;
+  if (midi == null && j && j.measure && at(j.measure) && !(q && q.would)) play(pid, t0 => { tone(at(j.measure).midi, t0 - .05, .5); return .5; });
+}
 async function goMeasure(pid, n, reviewing) { const f = fixing[pid]; if (n == null || !f.outline.measures.includes(n)) { f.msg = 'There is no measure ' + n + ' in this piece. It runs from ' + f.m.first + ' to ' + f.m.last + '.'; return paintFixer(pid); } f.picked = null; f.found = null; if (!reviewing) f.review = null; f.m = Object.assign({}, f.m, { n }); await fixPost(pid, '/api/fix/measure', { n }); }
 
 async function toDoubt(pid, d) { const f = fixing[pid]; f.review = d.key; f.show = true; f.all = false; if (d.measures && d.measures.length && !d.measures.includes(f.m.n)) await goMeasure(pid, d.measures[0], true); else paintFixer(pid); }
@@ -423,14 +456,14 @@ function paintFixer(pid) {
     el('div', { class: 'fixnav' },
       el('span', { class: 'where' }, el('button', { disabled: m.prev == null, onclick: () => goMeasure(pid, m.prev), 'aria-label': 'Previous measure' }, '◀'), 'Measure', num, el('button', { disabled: m.next == null, onclick: () => goMeasure(pid, m.next), 'aria-label': 'Next measure' }, '▶')),
       el('span', { class: 'where' }, 'or find', word, el('button', { onclick: find }, 'Find')),
-      el('button', { onclick: () => hear(m, m.staves) }, '▶ Hear this measure')),
+      el('button', { onclick: e => hear(pid, m, m.staves, e.currentTarget) }, '▶ Hear this measure')),
     f.found ? el('p', { class: 'small' }, '“' + f.found.text + '” is sung in measure' + (f.found.at.length > 1 ? 's ' : ' '), f.found.at.map((n, i) => [i ? ', ' : '', n === m.n ? el('b', null, n) : el('button', { class: 'quiet', onclick: () => { const keepFound = f.found; goMeasure(pid, n).then(() => { f.found = keepFound; paintFixer(pid); }); } }, n)]), '.') : null,
     f.msg ? el('p', { class: 'note bad', role: 'alert' }, f.msg) : null,
     reviewBox(pid)];
   if (f.outline.locked) kids.push(el('p', { class: 'note warn' }, 'The words of this piece are kept in a separate file, so they cannot be changed here. Notes can.'));
   const marked = st => st.notes.some(nt => isUnsure(f, nt)), focus = !!f.review && !f.all && m.staves.some(marked);      // looking at a doubt: only the lines it is about
   m.staves.filter(st => !focus || marked(st)).forEach(st => {
-    kids.push(el('div', { class: 'staffname' }, el('span', null, el('b', null, st.label), st.hint ? el('span', { class: 'small' }, '  ' + st.hint) : null), el('button', { onclick: () => hear(m, [st]) }, '▶ Hear this line')));
+    kids.push(el('div', { class: 'staffname' }, el('span', null, el('b', null, st.label), st.hint ? el('span', { class: 'small' }, '  ' + st.hint) : null), el('button', { onclick: e => hear(pid, m, [st], e.currentTarget) }, '▶ Hear this line')));
     kids.push(el('div', { class: 'staff' }, clefColumn(st), st.notes.map(nt => noteColumn(pid, m, st, nt))));
     const k = f.picked;
     if (k && k.line === st.line) {

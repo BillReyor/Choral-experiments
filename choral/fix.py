@@ -146,12 +146,23 @@ def measure(path, n, unsure=()):
                 for k, p in enumerate(m['p'].split('+')):
                     q = PITCH.match(p)
                     letter, sign, octave = q[1], q[2] or '', q[3]
+                    before = dict(acc)                     # the signs in force where this note stands, its own aside
                     if sign:
                         acc[(letter, octave)] = {'##': 2, 'bb': -2, '#': 1, 'b': -1, 'n': 0}[sign]
                     alter = acc.get((letter, octave), _keysig(b['key'], letter))
                     midi = 12 * (int(octave) + 1) + scoremod.STEP[letter] + alter + shift
-                    note['pitches'].append(dict(k=k, letter=letter.upper(), sign=sign, octave=int(octave), step=int(octave) * 7 + LETTERS.index(letter),
-                                                midi=midi, sounds=letter.upper() + SIGNS[alter], tie=bool(q[4])))
+                    # What it would sound as if it were moved (move(), below) - a step up or down the staff, or given
+                    # a sign, or none: the page plays that at the click.  Waiting until the change was written, the
+                    # sound came seconds late on a computer busy making tracks, and a browser allows a page to make
+                    # sound only just after a click.  None: a move that would be refused.
+                    place = int(octave) * 7 + LETTERS.index(letter)
+                    as_ = lambda l, o, a=None: 12 * (int(o) + 1) + scoremod.STEP[l] + shift + \
+                        (before.get((l, str(o)), _keysig(b['key'], l)) if a is None else a)
+                    stepped = lambda d: as_(LETTERS[(place + d) % 7], (place + d) // 7) if 7 <= place + d <= 42 else None
+                    would = {'up': stepped(1), 'down': stepped(-1), '#': as_(letter, octave, 1), 'b': as_(letter, octave, -1),
+                             'n': as_(letter, octave, 0), '': as_(letter, octave)}
+                    note['pitches'].append(dict(k=k, letter=letter.upper(), sign=sign, octave=int(octave), step=place,
+                                                midi=midi, sounds=letter.upper() + SIGNS[alter], tie=bool(q[4]), would=would))
             notes.append(note)
         label, hint = STAVES.get(name, (name, ''))
         staves.append(dict(line=i, name=name, label=label, hint=hint, clef=clefs.get(name, 'bass'), notes=notes))
