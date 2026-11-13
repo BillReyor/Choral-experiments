@@ -37,7 +37,7 @@ jobs:
     env:
       PALARE_NO_OPEN: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install it (Mac, Linux)
         if: runner.os != 'Windows'

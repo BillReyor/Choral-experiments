@@ -36,8 +36,17 @@ cannot do, where the name comes from, and whose work it stands on.
   left out, and so is a part written for a transposing instrument.
 - **Slow.** Half a minute a page to read a scan; about a minute to sing a three-minute piece with
   the built-in voices, and half an hour or more with real ones.
-- **The one-step installer is for Apple-chip Macs**, and has been run from nothing on one of them.
-  Real voices have been tried on no other kind of computer.
+- **Windows and Linux are newer than the Mac, and less tried.** The one-step installers have been
+  run from nothing on an Apple-chip Mac, on Ubuntu 24.04 (in a container on an ARM chip, and on
+  GitHub's Intel-kind machines) and on GitHub's Windows machines, where a test then opens the
+  installed program and does what a singer does with the demo piece. No person has yet used it on
+  a Windows PC, and no sheet music has been read on Windows: only on the Mac and on Linux, where
+  three pieces were read the same as on the Mac (the two notation-software PDFs line for line; the
+  scan with the same notes but for two lines, and the words as well as each system's version of
+  Tesseract reads them).
+- **Real voices are for Apple-chip Macs only.** They have been tried on no other kind of computer.
+- **On Windows and Linux the words of a scan need Tesseract**, which the installer does not add
+  (it wants an administrator). Without it a scan is read with its notes and no words.
 
 ## The name
 
@@ -90,6 +99,10 @@ This program was written to help one such chorus learn its notes.
   (MIT).
 - **Reading scans** is done by [homr](https://github.com/liebharc/homr) (AGPL-3.0), likewise
   installed and run separately.
+- **Tracks on Windows and Linux** are saved as MP3 by [LAME](https://lame.sourceforge.io/) (LGPL)
+  through [lameenc](https://github.com/chrisstaite/lameenc); a Mac uses its own converter.
+- **Installing** is done by [uv](https://docs.astral.sh/uv/) (Apache-2.0 or MIT), which fetches the
+  program's own Python.
 - **Listening checks** use [whisper.cpp](https://github.com/ggerganov/whisper.cpp) (MIT) with
   OpenAI's Whisper models; **pronunciation** uses the CMU Pronouncing Dictionary.
 

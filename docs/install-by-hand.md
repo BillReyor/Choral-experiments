@@ -1,8 +1,8 @@
 # Installing by hand, and the command line
 
-The [README](../README.md) installs Palare Piano on a Mac in one step and runs it from a page in the
-browser. This is the other way: for Linux and Windows, for Intel Macs, and for anyone who wants the
-commands. Everything the page does is one of these commands underneath.
+The [README](../README.md) installs Palare Piano in one step - on a Mac, on Windows or on Linux - and
+runs it from a page in the browser. This is the other way: for Intel Macs, and for anyone who wants
+the commands. Everything the page does is one of these commands underneath.
 
 ## Quickstart
 
@@ -51,7 +51,7 @@ python -m choral MUSIC.pdf --part baritone --accompaniment ACC.mp3 \
 | Everything above from a `.score` file or a PDF exported from notation software (MuseScore, Dorico, Sibelius, Finale): read exactly, in seconds | Python 3.10+, `pip install -r requirements.txt` |
 | Scans and photocopies | the [homr](https://github.com/liebharc/homr) recognition engine beside the project: `python3.12 -m venv .venv-omr && .venv-omr/bin/pip install "homr[cpu]"` (AGPL; it is called as a separate program) |
 | Words from a scan | nothing on macOS (with the Xcode command-line tools); elsewhere [Tesseract](https://tesseract-ocr.github.io/). A PDF that carries its text needs neither. |
-| Audio other than WAV | `ffmpeg` (or macOS's `afconvert`) |
+| Audio other than WAV | `ffmpeg` (or macOS's `afconvert`); the page also saves its tracks as MP3 with `pip install -r install/tracks.txt` |
 | `--voice` | `python -m choral.setup_voices`, which installs the voice model, fetches the voices and tries them once (about 4 GB; it needs a C compiler for one package, pyworld). It has been tried on Apple-chip Macs only; [how-it-works.md](how-it-works.md) says what it sets up, for doing it by hand elsewhere |
 | `--tune`, and the listening checks in `tools/` | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) and a model, named in `WHISPER_MODEL` |
 
@@ -65,11 +65,32 @@ python -m choral.app
 starts the page the installer's app opens (`choral/app.py`): a web server only this computer can
 reach, which keeps pieces in `~/Music/Palare Piano` (`PALARE_LIBRARY` names another folder).
 
-## What the Mac installer does
+## What the installers do
 
-`install.sh` puts everything under `~/Library/Application Support/Palare-Piano`: [uv](https://docs.astral.sh/uv/),
+`install.sh` (Mac, Linux) and `install.ps1` (Windows) put everything in one folder: [uv](https://docs.astral.sh/uv/),
 a Python of its own that uv fetches, this program, and two sets of packages at the versions they
-were tested with (`install/app.txt` for the program, `install/scan-reader.txt` for homr). It makes
-`~/Applications/Palare Piano.app`, a launcher that runs `python -m choral.app`. It asks for no
-password and touches nothing else. Real voices are added later from the page, by
-`python -m choral.setup_voices` (`install/voice-model.txt`).
+were tested with (`install/app.txt` for the program, `install/scan-reader.txt` for homr; on Windows
+and Linux also `install/tracks.txt`, the MP3 encoder). They leave one thing to open it with, which
+runs `python -m choral.app`, and a note of which version was installed (`version.json`), which is
+what the page's update button goes by. They ask for no password and touch nothing else.
+
+| | the program's folder | what opens it |
+|---|---|---|
+| Mac | `~/Library/Application Support/Palare-Piano` | `~/Applications/Palare Piano.app` |
+| Linux | `~/.local/share/Palare-Piano` | `~/.local/share/applications/palare-piano.desktop` |
+| Windows | `%LOCALAPPDATA%\Palare-Piano` | a shortcut in the Start menu and on the Desktop |
+
+Real voices are added later from the page, on a Mac, by `python -m choral.setup_voices`
+(`install/voice-model.txt`).
+
+## Testing an install
+
+```
+python tools/try_install.py --part-all
+```
+
+opens an installed copy by what the installer left to open it with and does what a singer does, by
+the page's own requests: adds the demo piece, moves a note and puts it back, makes the tracks,
+fetches them, makes the files to share, waits for the computer check, removes the piece, quits.
+`.github/workflows/install.yml` runs the installer and this on Linux, Windows and a Mac at every
+change. The repository holds no sheet music but the demo piece, so reading a PDF is not part of it.

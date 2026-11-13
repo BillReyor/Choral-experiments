@@ -1721,3 +1721,41 @@ button runs the installer as a program of its own: it closes the running copy, p
 in its place and starts it, and the page that was open notices that it is talking to another
 run of the program and begins afresh. It is refused while a piece is being made. What is sent
 is the version, in the address of a public page; nothing of the user's.
+
+**Other computers.** The listener: how can this run on Windows or Linux - and could containers
+do for testing? They could for half of it: Linux runs in a container on this Mac, Windows does
+not, so Windows is tried on GitHub's machines by a test that runs at every change. What was
+Mac-only turned out to be little: the program that makes tracks small, the one that keeps the
+computer awake, how a folder is shown, how a job is stopped, how memory is counted, and the
+assumption that text is UTF-8 (on Windows it is not, unless Python is told). The installer for
+Linux is the Mac's with other places; Windows has one of its own, in PowerShell.
+
+*What the tests are.* `tools/try_install.py` plays the singer against an installed copy: it
+opens it by the launcher the installer left, adds the demo piece, moves a note and puts it back,
+makes the tracks for every part, fetches each from the page and listens for sound in it, makes
+the files to share, reads the computer check, removes the piece and quits. On GitHub this follows
+the real installer on Linux, Windows and a Mac; then the installer is run over itself, the test
+again, and the uninstall.
+
+*What they found.* Windows passed the first time it was ever run, which says more about the test
+than about Windows: it has no sheet music to read. Linux did not. In a container, about one run
+in twelve never ended. The helper processes that sing the voices are, on Linux, copies of the
+program that starts them, and so they answered a request to stop as it does - politely, when
+next they get round to it; a helper waiting for work that would never come did not get round to
+it, and the program waited for that helper for ever. Helpers now simply stop: sixty runs
+afterwards all ended. Nothing on the Mac ever showed this, because there a helper is started
+afresh instead of copied.
+
+*Reading, on Linux.* Three of the pieces were read in the container with the same reader code
+as on the Mac. The two from notation software came out line for line the same. The scan had the
+same notes but for two lines; its words differed where two versions of Tesseract differ, and so
+did the tempo, which is read from the page by the same means (80 on one, 63 on the other).
+
+*Tracks.* Without a converter the tracks were left as written: four megabytes for the demo,
+forty for a real piece, which nobody can email to a section. Windows and Linux now get a small
+MP3 encoder with the program. One of its tracks, decoded again on the Mac, matches the track as
+written to 0.9999.
+
+*Not tried:* a person at a Windows PC; reading any sheet music on Windows; Tesseract on Windows;
+the update button on Windows (on Linux it brought a copy one version old up to date in nine
+seconds); a Linux other than Ubuntu 24.04.
