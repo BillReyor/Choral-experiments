@@ -268,9 +268,11 @@ def run(cmd, logfile, follow=None):
         return p.wait()
 
 
-def do_read(pid):
+def do_read(pid, again=False):
     now.update(stage='Reading the music', progress=None, eta=None)
     src = os.path.join(folder(pid), 'source')
+    if again and music(pid).lower().endswith('.pdf') and os.path.exists(score_of(pid)) and not os.path.exists(score_of(pid) + '.as-read'):
+        os.remove(score_of(pid))                       # what was read before and never touched: read the PDF afresh
 
     code = run([sys.executable, '-m', 'choral', music(pid), '--read'], os.path.join(src, 'read.log'))
     if now.get('stopped'):
@@ -440,7 +442,7 @@ def worker():
             elif not os.path.exists(info_file(pid)):
                 pass                                   # removed while it waited
             elif kind == 'read':
-                do_read(pid)
+                do_read(pid, opt.get('again'))
             else:
                 save(pid, status='rendering', note=None)
                 do_render(pid, opt)
@@ -552,6 +554,14 @@ def act(path, q, body):
         return {}
     if path == '/api/score':
         subprocess.run(['open', '-e', score_of(pid)] if sys.platform == 'darwin' else ['xdg-open', score_of(pid)])
+        return {}
+    if path == '/api/readagain':                       # a piece that could not be read: try once more (a newer reader may manage it)
+        with lock:
+            if now.get('id') == pid or pid in waiting:
+                raise ValueError('This piece is busy.')
+            waiting.append(pid)
+        save(pid, status='reading', error=None)
+        jobs.put(('read', pid, {'again': True}))
         return {}
     if path == '/api/reread':                          # after the score was corrected by hand: look at it again
         save(pid, read=what_was_read(pid))
@@ -725,10 +735,16 @@ def main():
     if server is None:
         raise SystemExit('No free port between 8765 and 8789 on this computer.')
     json.dump({'port': port, 'pid': os.getpid()}, open(note, 'w'))
+    v = (version() or {}).get('version')
+    newer_here = bool(v) and settings().get('version') not in (None, v)      # this is the first start of a newer version
+    if v:
+        settings(version=v)
     with lock:                                         # whatever was under way when it was last closed did not finish
         for d in pieces():
             if d.get('status') in ('reading',):
                 waiting.append(d['id']); jobs.put(('read', d['id'], {}))
+            elif d.get('status') == 'unreadable' and newer_here:        # the newer reader may manage what the older could not
+                waiting.append(d['id']); save(d['id'], status='reading', error=None); jobs.put(('read', d['id'], {'again': True}))
             elif d.get('status') in ('queued', 'rendering'):
                 save(d['id'], status='ready' if d.get('tracks') else 'read', note='This was interrupted. What was finished is kept: starting again goes on from there.')
             elif d.get('status') == 'read' and d.get('tracks'):        # (an earlier version hid a piece's tracks when a second making of them was stopped)

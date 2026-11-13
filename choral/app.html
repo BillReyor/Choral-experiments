@@ -421,7 +421,8 @@ function build(p) {
   kids.push(el('p', { class: 'note bad msg', hidden: true, role: 'alert' }));
 
   if (st === 'reading') kids.push(el('p', { class: 'stage' }, 'Reading the music…'), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small' }, 'A PDF made by notation software takes seconds. A scan takes about half a minute a page.'));
-  if (st === 'unreadable') kids.push(el('div', { class: 'note bad' }, 'This could not be read as music for tenor and bass voices. It may be a different kind of score, or a scan too faint to read.', el('details', null, el('summary', null, 'What the reader said'), el('pre', null, (p.error || []).join('\n')))), more(p, false));
+  if (st === 'unreadable') kids.push(el('div', { class: 'note bad' }, 'This could not be read as music for tenor and bass voices. It may be a different kind of score, or a scan too faint to read.', el('details', null, el('summary', null, 'What the reader said'), el('pre', null, (p.error || []).join('\n'))),
+    el('div', { class: 'row', style: 'margin-top:8px' }, el('button', { onclick: () => act('/api/readagain', { id: p.id }) }, 'Try reading it again'), el('span', { class: 'small', style: 'color:inherit' }, 'Worth doing after Palare Piano has been updated.'))), more(p, false));
   if (st === 'failed') kids.push(el('div', { class: 'note bad' }, 'Making the tracks did not finish. You can try again; what was finished is kept.', el('details', null, el('summary', null, 'What it said'), el('pre', null, (p.error || []).join('\n')))));
   if (p.note) kids.push(el('p', { class: 'note' }, p.note));
   if (p.stale && st === 'ready' && p.made) kids.push(el('div', { class: 'note warn' }, 'You have changed the music since these tracks were made. ', el('button', { onclick: () => act('/api/render', { id: p.id, part: p.made.part, voices: p.made.voices, singers: p.made.singers }) }, 'Make the tracks again')));
