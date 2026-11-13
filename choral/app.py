@@ -19,6 +19,7 @@ TOKEN = secrets.token_urlsafe(18)          # the page carries it; nothing else o
 NAMES = {'T1': 'Tenor 1', 'T2': 'Tenor 2', 'BR': 'Baritone', 'BS': 'Bass', 'SOLO': 'Solo'}
 ASK = {'T1': 'tenor1', 'T2': 'tenor2', 'BR': 'baritone', 'BS': 'bass', 'SOLO': 'solo'}
 ORDER = ('balanced', 'predominant', 'muted', 'alone', 'voices only')
+SHARE = 'To share'                         # the folder of zip files, one for each part
 CREDIT = ('The voices on these tracks are from VocalSet: Julia Wilkins, Prem Seetharaman, Alison Wahl and Bryan Pardo,\n'
           '"VocalSet: A Singing Voice Dataset", ISMIR 2018, https://zenodo.org/records/1193957, licensed CC BY 4.0\n'
           '(https://creativecommons.org/licenses/by/4.0/).  The notes, words and timing were sung by Palare Piano and\n'
@@ -197,7 +198,10 @@ def do_render(pid, opt):
     shutil.rmtree(wavs, ignore_errors=True)
     real = opt.get('voices') == 'real' and voices_state()['ready']
     singers = 4 if str(opt.get('singers')) == '4' else 12
-    cmd = [sys.executable, '-m', 'choral', music(pid), '--part', opt['part'], '--singers', str(singers), '--out', wavs]
+    everyone = opt['part'] == 'all'                    # tracks for every part, to hand round the chorus
+    parts = load(pid)['read']['parts']
+    asked = ','.join(x[0] for x in parts) if everyone else opt['part']
+    cmd = [sys.executable, '-m', 'choral', music(pid), '--part', asked, '--singers', str(singers), '--out', wavs]
     if real:
         cmd += ['--voice', VOICES]
     now.update(stage='Reading the music', progress=None, eta=None)
@@ -228,29 +232,67 @@ def do_render(pid, opt):
     if code:
         return save(pid, status='failed', error=tail(os.path.join(src, 'render.log')))
     now.update(stage='Writing the tracks')
-    old = load(pid).get('tracks', [])
-    made = []
+    here = folder(pid)
+    for f in load(pid).get('tracks', []):              # what was made before goes: these replace it
+        if os.path.exists(os.path.join(here, f)):
+            os.remove(os.path.join(here, f))
+    for d in [x[1] for x in parts] + [SHARE]:
+        if os.path.isdir(os.path.join(here, d)):
+            shutil.rmtree(os.path.join(here, d))
+    if os.path.exists(os.path.join(here, 'Credits.txt')):
+        os.remove(os.path.join(here, 'Credits.txt'))
+    names = {}                                         # the name of each mix -> the track file made from it
     for f in sorted(os.listdir(wavs)):
         if not f.endswith('.wav'):
             continue
         out = f[:-4] + '.m4a'
-        if shutil.which('afconvert') and not subprocess.run(['afconvert', '-f', 'm4af', '-d', 'aac', '-b', '192000', os.path.join(wavs, f), os.path.join(folder(pid), out)], capture_output=True).returncode:
-            made.append(out)
+        if shutil.which('afconvert') and not subprocess.run(['afconvert', '-f', 'm4af', '-d', 'aac', '-b', '192000', os.path.join(wavs, f), os.path.join(wavs, out)], capture_output=True).returncode:
+            names[f[:-4]] = out
         else:                                          # no converter here: the track as it was written
-            shutil.move(os.path.join(wavs, f), os.path.join(folder(pid), f)); made.append(f)
-    shutil.rmtree(wavs, ignore_errors=True)
-    for f in old:
-        if f not in made and os.path.exists(os.path.join(folder(pid), f)):
-            os.remove(os.path.join(folder(pid), f))
+            names[f[:-4]] = f
     rank = lambda f: next((i for i, k in enumerate(ORDER) if f.rsplit('.', 1)[0].endswith(k)), 9)
-    made.sort(key=rank)
-    credit = os.path.join(folder(pid), 'Credits.txt')
-    if real:
-        open(credit, 'w').write(CREDIT)
-    elif os.path.exists(credit):
-        os.remove(credit)
+    made = []
+    if everyone:                                       # a folder for each part, whole in itself: its three tracks and the two all share
+        for _, label, *_ in parts:
+            os.makedirs(os.path.join(here, label), exist_ok=True)
+            mine = [f for n, f in names.items() if n.endswith((' - balanced', ' - voices only', f' - {label} predominant', f' - {label} muted', f' - {label} alone'))]
+            for f in sorted(mine, key=rank):
+                shutil.copy(os.path.join(wavs, f), os.path.join(here, label, f)); made.append(f'{label}/{f}')
+            if real:
+                open(os.path.join(here, label, 'Credits.txt'), 'w').write(CREDIT)
+    else:
+        for f in sorted(names.values(), key=rank):
+            shutil.move(os.path.join(wavs, f), os.path.join(here, f)); made.append(f)
+        if real:
+            open(os.path.join(here, 'Credits.txt'), 'w').write(CREDIT)
+    shutil.rmtree(wavs, ignore_errors=True)
     save(pid, status='ready', tracks=made, made=dict(part=opt['part'], voices='real' if real else 'built-in', singers=singers, when=time.time()), error=None, note=None)
     settings(part=opt['part'], voices='real' if real else 'built-in', singers=singers)
+
+
+def share(pid):
+    """One zip file for each part, in a folder of their own: what to send to each section.  -> that folder."""
+    import zipfile
+    d, here = load(pid), folder(pid)
+    if (d.get('made') or {}).get('part') != 'all':
+        return here
+    out = os.path.join(here, SHARE)
+    os.makedirs(out, exist_ok=True)
+    groups = {}
+    for t in d.get('tracks', []):
+        label, _, f = t.partition('/')
+        groups.setdefault(label, []).append(f)
+    title = re.sub(r'[^\w \-,.()\']', '', d.get('title') or pid).strip(' .') or pid
+    for label, files in groups.items():
+        z = os.path.join(out, f'{title} - {label}.zip')
+        newest = max(os.path.getmtime(os.path.join(here, label, f)) for f in files)
+        if os.path.exists(z) and os.path.getmtime(z) >= newest:
+            continue
+        with zipfile.ZipFile(z + '.part', 'w', zipfile.ZIP_STORED) as zf:      # (the tracks are compressed already)
+            for f in files + (['Credits.txt'] if os.path.exists(os.path.join(here, label, 'Credits.txt')) else []):
+                zf.write(os.path.join(here, label, f), f'{title} - {label}/{f}')
+        os.replace(z + '.part', z)
+    return out
 
 
 def do_setup():
@@ -322,7 +364,7 @@ def act(path, q, body):
         d = load(pid)
         if d.get('status') not in ('read', 'ready', 'failed') or pid in waiting or now.get('id') == pid:
             raise ValueError('This piece is busy.')
-        if q.get('part') not in [p[0] for p in d['read']['parts']]:
+        if q.get('part') not in [p[0] for p in d['read']['parts']] + (['all'] if len(d['read']['parts']) > 1 else []):
             raise ValueError('Choose your part first.')
         with lock:
             waiting.append(pid)
@@ -352,6 +394,10 @@ def act(path, q, body):
         return {}
     if path == '/api/reveal':
         subprocess.run(['open', folder(pid)] if sys.platform == 'darwin' else ['xdg-open', folder(pid)])
+        return {}
+    if path == '/api/share':
+        where = share(pid)
+        subprocess.run(['open', where] if sys.platform == 'darwin' else ['xdg-open', where])
         return {}
     if path == '/api/score':
         subprocess.run(['open', '-e', score_of(pid)] if sys.platform == 'darwin' else ['xdg-open', score_of(pid)])
@@ -422,7 +468,9 @@ class Page(BaseHTTPRequestHandler):
         if url.path.startswith('/file/'):
             try:
                 _, _, pid, name = urllib.parse.unquote(url.path).split('/', 3)
-                f = os.path.join(folder(pid), os.path.basename(name))
+                if name not in load(pid).get('tracks', []):        # only what this piece's tracks are: nothing else on the disk
+                    raise ValueError(name)
+                f = os.path.join(folder(pid), name)
                 size = os.path.getsize(f)
             except (ValueError, OSError):
                 return self.send(404, {'error': 'no such track'})

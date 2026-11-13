@@ -177,7 +177,9 @@ const act = (path, data) => post(path, data).catch(e => data && data.id ? say(da
 
 // the five tracks: what each is for, and a colour of its own down the side (decoration: the words say it too)
 const WHAT = { 'balanced': ['The whole choir with the piano', '#8b4fd6'], 'predominant': ['Your part louder than everyone else', '#e5484d'], 'muted': ['Everyone except your part: sing your line against it', '#2f7de1'], 'alone': ['Just your part', '#2fa45f'], 'voices only': ['The choir without the piano', '#f08a24'] };
-function trackName(file) { const base = file.replace(/\.[^.]+$/, ''); const name = base.slice(base.lastIndexOf(' - ') + 3); const kind = Object.keys(WHAT).find(k => name.toLowerCase().endsWith(k)); return [name.charAt(0).toUpperCase() + name.slice(1), kind ? WHAT[kind] : ['', '']]; }
+function trackName(file, theirs) { const base = file.replace(/\.[^.]+$/, ''); const name = base.slice(base.lastIndexOf(' - ') + 3); const kind = Object.keys(WHAT).find(k => name.toLowerCase().endsWith(k)); const w = kind ? WHAT[kind] : ['', '']; return [name.charAt(0).toUpperCase() + name.slice(1), [theirs && THEIRS[kind] || w[0], w[1]]]; }
+const THEIRS = { 'predominant': 'This part louder than everyone else', 'muted': 'Everyone except this part, to sing against', 'alone': 'Just this part' };   // in a set made for the whole chorus
+const trackNode = (p, f, theirs) => { const [name, w] = trackName(f, theirs); const url = '/file/' + encodeURIComponent(p.id) + '/' + f.split('/').map(encodeURIComponent).join('/'); return el('div', { class: 'track', style: w[1] ? '--tint:' + w[1] : null }, el('b', null, name), el('span', { class: 'small' }, w[0]), el('audio', { controls: true, preload: 'none', src: url })); };
 const about = s => s < 90 ? 'about a minute' : 'about ' + Math.round(s / 60) + ' minutes';
 const partName = (r, v) => { const p = (r.parts || []).find(x => x[0] === v); return p ? p[1] : v; };
 const PILL = { reading: ['Reading', ''], read: ['Ready when you are', ''], queued: ['In line', ''], rendering: ['Making your tracks', ''], ready: ['✓ Tracks ready', 'good'], failed: ['Needs a look', 'bad'], unreadable: ['Needs a look', 'bad'] };
@@ -186,8 +188,10 @@ const PILL = { reading: ['Reading', ''], read: ['Ready when you are', ''], queue
 function chooser(p) {
   const r = p.read, last = S.last || {}, made = p.made || {}, n = 'c' + (++uid), real = S.voices.ready;
   const want = made.part || last.part;
-  const parts = el('div', { class: 'chips' }, r.parts.map((x, i) => [el('input', { type: 'radio', name: n + 'p', id: n + 'p' + i, value: x[0], checked: x[0] === want || r.parts.length === 1 }), el('label', { for: n + 'p' + i }, x[1])]));
-  parts.addEventListener('change', () => say(p.id, ''));
+  const list = r.parts.length > 1 ? r.parts.concat([['all', 'Every part, to share']]) : r.parts;
+  const parts = el('div', { class: 'chips' }, list.map((x, i) => [el('input', { type: 'radio', name: n + 'p', id: n + 'p' + i, value: x[0], checked: x[0] === want || r.parts.length === 1 }), el('label', { for: n + 'p' + i }, x[1])]));
+  const forAll = el('p', { class: 'small', style: 'margin-top:6px', hidden: want !== 'all' }, 'Makes a set of tracks for each part, to hand round your chorus. It takes hardly any longer than one part.');
+  parts.addEventListener('change', e => { say(p.id, ''); forAll.hidden = e.target.value !== 'all'; });
   const shared = r.parts.filter(x => x[2]).map(x => x[2]);
   const m = r.minutes || 3, was = made.voices || last.voices, size = made.singers || last.singers;
   const pick = was === 'built-in' || !real ? 'quick' : size == 12 ? 'full' : 'small';
@@ -197,7 +201,7 @@ function chooser(p) {
     ['full', 'Real voices, full choir', 'Twelve singers to a part: the best sound.', real ? 'About ' + Math.max(3, Math.round(m * 10 + 4)) + ' minutes' : 'Add real voices first (below)', !real]];
   const sound = el('div', { class: 'choices' }, opts.map((o, i) => el('div', null, el('input', { type: 'radio', name: n + 's', id: n + 's' + i, value: o[0], checked: o[0] === pick, disabled: o[4] }), el('label', { class: 'choice', for: n + 's' + i }, el('b', null, o[1]), el('span', null, o[2]), el('span', { class: 'time' }, o[3])))));
   const node = el('div', null,
-    el('fieldset', null, el('legend', null, 'Which part do you sing?'), parts, shared.length ? el('p', { class: 'small', style: 'margin-top:6px' }, shared.join(' ')) : null),
+    el('fieldset', null, el('legend', null, 'Which part do you sing?'), parts, forAll, shared.length ? el('p', { class: 'small', style: 'margin-top:6px' }, shared.join(' ')) : null),
     el('fieldset', null, el('legend', null, 'How should it sound?'), sound, real ? el('p', { class: 'small', style: 'margin-top:8px' }, 'Times are for a recent Mac; older ones take longer. You can close this window while it works. Keep the Mac plugged in.') : null));
   const get = () => { const part = $('input[name=' + n + 'p]:checked', node), s = ($('input[name=' + n + 's]:checked', node) || {}).value || 'quick'; return { part: part && part.value, voices: s === 'quick' ? 'built-in' : 'real', singers: s === 'small' ? 4 : 12 }; };
   return { node, get };
@@ -243,10 +247,22 @@ function build(p) {
     el('div', { class: 'row' }, el('button', { onclick: () => act('/api/stop', { id: p.id }) }, st === 'queued' ? 'Take it out of the line' : 'Stop'), st === 'rendering' ? el('span', { class: 'small' }, 'You can close this window; it keeps going.') : null));
 
   if (st === 'ready' && p.tracks.length) {
-    const made = p.made || {};
-    kids.push(el('p', { class: 'small' }, 'Made for ' + partName(r, made.part) + ' with ' + (made.voices === 'real' ? 'real voices, ' + (made.singers == 4 ? 'four' : 'twelve') + ' singers to a part' : 'the built-in voices') + '. Press play and sing along.'));
-    kids.push(el('div', { class: 'tracks' }, p.tracks.map(f => { const [name, w] = trackName(f); const url = '/file/' + encodeURIComponent(p.id) + '/' + encodeURIComponent(f); return el('div', { class: 'track', style: w[1] ? '--tint:' + w[1] : null }, el('b', null, name), el('span', { class: 'small' }, w[0]), el('audio', { controls: true, preload: 'none', src: url })); })));
-    kids.push(el('div', { class: 'row' }, el('button', { onclick: () => act('/api/reveal', { id: p.id }) }, 'Show the files in Finder'), el('span', { class: 'small' }, 'To put them on your phone, AirDrop them from there.')));
+    const made = p.made || {}, how = made.voices === 'real' ? 'real voices, ' + (made.singers == 4 ? 'four' : 'twelve') + ' singers to a part' : 'the built-in voices';
+    if (made.part === 'all') {
+      const groups = {}, n = 't' + (++uid), panes = {};
+      p.tracks.forEach(t => { const g = t.split('/')[0]; (groups[g] = groups[g] || []).push(t); });
+      const names = Object.keys(groups);
+      kids.push(el('p', { class: 'small' }, 'Made for every part with ' + how + '. Each part has its own set of tracks.'));
+      const tabs = el('div', { class: 'chips' }, names.map((g, i) => [el('input', { type: 'radio', name: n, id: n + i, value: g, checked: i === 0 }), el('label', { for: n + i }, g)]));
+      const box = el('div', { class: 'tracks' }, names.map((g, i) => panes[g] = el('div', { hidden: i !== 0 }, groups[g].map(f => trackNode(p, f, true)))));
+      tabs.addEventListener('change', e => names.forEach(g => { panes[g].hidden = g !== e.target.value; if (panes[g].hidden) panes[g].querySelectorAll('audio').forEach(a => a.pause()); }));
+      kids.push(el('fieldset', null, el('legend', null, 'Whose tracks do you want to hear?'), tabs), box);
+      kids.push(el('div', { class: 'note' }, el('b', null, 'To share them with your chorus: '), 'this makes one zip file for each part and shows them in Finder. Send each section its own file, by email, AirDrop or a shared folder. Singers only need a phone to play them.', el('div', { class: 'row', style: 'margin-top:8px' }, el('button', { onclick: () => act('/api/share', { id: p.id }) }, 'Get the files to share'))));
+    } else {
+      kids.push(el('p', { class: 'small' }, 'Made for ' + partName(r, made.part) + ' with ' + how + '. Press play and sing along.'));
+      kids.push(el('div', { class: 'tracks' }, p.tracks.map(f => trackNode(p, f, false))));
+      kids.push(el('div', { class: 'row' }, el('button', { onclick: () => act('/api/reveal', { id: p.id }) }, 'Show the files in Finder'), el('span', { class: 'small' }, 'To put them on your phone, AirDrop them from there.')));
+    }
     kids.push(...goodToKnow(p));
     const c = chooser(p);
     kids.push(el('details', { class: 'more' }, el('summary', null, 'Make another version (another part, other voices)'), el('div', null, c.node, el('div', { class: 'go' }, makeButton(p, c, 'Make these tracks'), el('span', { class: 'small' }, 'This replaces the tracks above.')))));

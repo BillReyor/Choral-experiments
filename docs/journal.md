@@ -1537,3 +1537,41 @@ to `docs/about.md`.
 
 *Not tested:* by a singer. Everything here is a programmer's guess at what a non-programmer
 finds clear, checked against a screen and not against a person.
+
+**For people without a fast computer.** The listener's question: what can be done to make this
+more usable for people who do not have high-powered computers? Measured first, on the one
+machine there is (an M5 Max, 18 cores, 128 GB), on a piece of three minutes and a half:
+
+| | Time | Memory at its peak |
+|---|---|---|
+| Built-in voices, twelve to a part | 61 s | about 7 GB, all its processes together |
+| Real voices | four times as fast as the singing lasts | about 9 GB, the voice model alone |
+
+So memory is the first wall, before speed: a Mac with 8 GB is tight even for a quick listen. How
+much slower an older chip is nobody here knows.
+
+Five things could be done, and were put to the listener in this order: let one person make the
+tracks for every part and hand them round; fit the program to the machine it is on (less
+memory, estimates measured on that machine, a quartet in place of a choir); installers for
+Windows and Intel Macs, with the built-in voices; one chorus computer that others reach from
+their own devices; a website. The listener asked for the first.
+
+*Every part, to share.* The parts menu has one more choice. The singing is the same whoever the
+tracks are for - only the mixes differ - so every part of a four-part piece took 65 seconds
+where one part took 61, fourteen mixes for five. Each part gets a folder that is whole in
+itself, its own three tracks and the two that all share, and a button makes one zip file for
+each part to send to its section. A singer then needs a phone and nothing else.
+
+*Two things found on the way.* The fourteen mixes used to be made together and then written;
+they are now made and written one at a time. That was meant to save memory, and on this piece
+it saved none: the peak is the singing, ten singers at once, not the mixing (7.0 GB before, 7.2
+after). It should matter for a long piece, where fourteen mixes are several gigabytes, and that
+has not been measured. And comparing old code with new showed that no two renders with the
+built-in voices are the same to the byte, or near it: the same piece twice correlates 0.987 on
+its worst track. Each singer's first echo off the back wall is drawn as the singers come in,
+and they come in as they finish, in a different order each run. (With real voices they are
+taken in order, and a render repeats.) Old code against new correlates 0.987 as well, so the
+change is within what two runs differ by. The echo was left alone.
+
+*Not done:* anything that makes the program itself lighter. A Mac with 8 GB is as badly off as
+it was, unless someone else makes its owner's tracks.

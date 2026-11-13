@@ -238,19 +238,25 @@ def master(x):
     return x * .93 / np.abs(x).max()
 
 
-def versions(vox, back, P, parts=()):
-    """Named mixes.  vox is {section: stereo} (or {'all': stereo}); back is the accompaniment.
-    parts is a list of (name, [sections]) to single out, e.g. ('Bass', ['BR', 'BS']) in a TTB piece."""
+def versions(vox, back, P, parts=(), only=None):
+    """Named mixes, one at a time: (name, stereo).  vox is {section: stereo} (or {'all': stereo}); back is the
+    accompaniment.  parts is a list of (name, [sections]) to single out, e.g. ('Bass', ['BR', 'BS']) in a TTB piece;
+    only names the one mix wanted.  They are handed over one by one, to be written and let go: every part of a
+    four-part piece is fourteen mixes, and held together they are several gigabytes."""
     full = sum(vox.values()); b = P['backing'] * back
-    out = {'voices only': full}
-    if np.abs(back).max() > 0:
-        out['balanced'] = full + b
+    want = lambda name: only is None or only.lower() == name.lower()
+    if want('voices only'):
+        yield 'voices only', master(full)
+    if np.abs(back).max() > 0 and want('balanced'):
+        yield 'balanced', master(full + b)
     for name, sections in parts:
         mine = sum(vox[s] for s in sections)
-        out[f'{name} predominant'] = mine + P['others'] * (full - mine) + P['under'] * b
-        out[f'{name} muted'] = full - mine + b
-        out[f'{name} alone'] = mine
-    return {k: master(v) for k, v in out.items()}
+        if want(f'{name} predominant'):
+            yield f'{name} predominant', master(mine + P['others'] * (full - mine) + P['under'] * b)
+        if want(f'{name} muted'):
+            yield f'{name} muted', master(full - mine + b)
+        if want(f'{name} alone'):
+            yield f'{name} alone', master(mine)
 
 
 def render(sc, per_section=12, log=print, preset=None):
@@ -260,7 +266,7 @@ def render(sc, per_section=12, log=print, preset=None):
     total = float(np.interp(sc.beats, *clock)) + 4.0
     stems = sing(sc, (*clock, total), P['singers'], log, late=P.get('solo_late', 0.))
     vox = {'all': choir(stems, P)}
-    out = versions(vox, backing(sc, len(vox['all']), voice.T, P), P)
+    out = dict(versions(vox, backing(sc, len(vox['all']), voice.T, P), P))
     return out.get('balanced', out['voices only']), out['voices only'], (*clock, total)
 
 

@@ -216,13 +216,10 @@ def main():
     # ---- mix and write
     vox = R.mix_voices(stems, P) if part else {'all': R.choir(stems, P)}
     N = next(iter(vox.values())).shape[0]
-    out = R.versions(vox, R.backing(sc, N, voice.T, P, track), P, groups)
     outdir = a.out or 'out'
     os.makedirs(outdir, exist_ok=True)
     safe = re.sub(r'[^\w \-]', '', title).strip()
-    for name, x in out.items():
-        if a.only and a.only.lower() != name.lower():
-            continue
+    for name, x in R.versions(vox, R.backing(sc, N, voice.T, P, track), P, groups, only=a.only):     # each written as it is mixed
         f = os.path.join(outdir, f'{safe} - {name}.wav')
         R.write_wav(f, x)
         log(f'  wrote {f}')

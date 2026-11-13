@@ -27,6 +27,10 @@ You need:
 
 You do not need to know anything about computers beyond clicking, typing and copy-and-paste.
 
+**No suitable Mac?** You may not need one. Someone in your chorus who has one can make the tracks
+for every part and send them round: see [Make tracks for your whole chorus](#make-tracks-for-your-whole-chorus).
+To play them you only need a phone.
+
 ## Install it (once)
 
 You will paste one line of text into a program called Terminal. It looks technical; it is only
@@ -115,6 +119,21 @@ Click **Show the files in Finder**. A folder opens with your tracks in it. From 
 
 All your pieces are kept in the **Music** folder on your Mac, inside a folder called
 **Palare Piano**.
+
+## Make tracks for your whole chorus
+
+One person can make the tracks for everybody, so that nobody else has to install anything.
+
+1. Under **Which part do you sing?** choose **Every part, to share**.
+2. Make the tracks as usual. It takes hardly any longer than making one part.
+3. Click **Get the files to share**. A folder opens with one zip file for each part.
+4. Send each section its file: by email, by AirDrop, or in a shared folder (Google Drive, Dropbox,
+   iCloud).
+
+Each singer opens their section's file on a phone or a computer and presses play. Every file
+holds the same five tracks, made for that part.
+
+![Tracks for every part](docs/pictures/4-everyone.jpg)
 
 ## Real voices (optional)
 
