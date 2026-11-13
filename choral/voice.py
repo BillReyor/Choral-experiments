@@ -361,6 +361,24 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     te = np.append(ts[1:], max(tend, ts[-1] + .09))
     mids = np.array([x[2][P['idx'] % len(x[2])] if isinstance(x[2], tuple) else x[2] for x in ph], float)
     dyns = np.array([x[4] for x in ph], float)
+    # ---- spoken, not sung (an x-shaped notehead): said in rhythm, each man at his own speaking pitch
+    # A spoken syllable is as long as saying it takes, whatever the note's value.  Its pitch is nobody's note: about
+    # an octave and a third under where the voice sings comfortably, a little different for every singer (so that a
+    # section speaking together is a crowd and not a chord), higher on the beat than off it, sinking through the
+    # breath, and falling within each syllable as speech does.  Where the x stands on the staff counts for a little:
+    # a higher x is said a little higher.  None of this has been heard by its author; see docs/journal.md.
+    # (The pitch: a man's lively speaking voice, 113 Hz for the basses to 148 Hz for the first tenors.)
+    said = np.array([len(x) > 5 and bool(x[5]) for x in ph])
+    if said.any():
+        te = np.where(said, np.minimum(te, ts + rng.uniform(.27, .36, n)), te)
+        own = float(np.random.default_rng([P['seed'], 4242]).normal(0, 1.6))
+        beat = np.array([x[0] for x in ph], float)
+        on_beat = np.abs(beat - np.round(beat)) < .04
+        through = np.cumsum(said) / said.sum()
+        tone = (48 + .45 * (P['comfy'] - 62) + own + np.clip(.35 * (mids - np.median(mids[said])), -3, 3) + 2.2 * on_beat - 2. * through
+                + rng.normal(0, .8, n))
+        tone[np.flatnonzero(said)[-1]] -= 1.
+        mids = np.where(said, tone, mids)
 
     # ---- syllables -> onset / vowel / coda per note (melisma notes marked '-')
     on = [[] for _ in range(n)]
@@ -562,9 +580,11 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     dy = gf(dyns[ni], 12, mode='nearest')
     vrate = P['vr'] * (1 + .07 * slow(rng, M, 40))
     vdepth = P['vd'] * FIT['vib'] * np.clip((tc - vstart[ni] - P['vdel']) / .35, 0, 1) * (1 + .25 * slow(rng, M, 50)) * (.6 + .5 * dy)
+    vdepth = vdepth * (1 - said[ni])                   # nobody speaks with vibrato
+    fall = np.where(said[ni], 90 - 300 * np.clip((tc - ts[ni]) / np.maximum(te - ts, .05)[ni], 0, 1), 0.)    # cents, through a spoken syllable
     vib = gf(vdepth, 8, mode='nearest') * np.sin(2 * np.pi * np.cumsum(vrate) / CR + rng.uniform(0, 6.28))
     cents = (P['bias'] - P['flat'] * np.maximum(0, mid - P['comfy']) + consensus(P['sect'], tc)
-             + hunt + vib + micro + 4 * slow(rng, M, 60) + 3.5 * slow(rng, M, 3) + TUNE['flutter'] * slow(rng, M, 7))
+             + hunt + vib + micro + 4 * slow(rng, M, 60) + 3.5 * slow(rng, M, 3) + TUNE['flutter'] * slow(rng, M, 7)) + fall
     f0 = 440 * 2 ** ((mid - 69) / 12 + cents / 1200)
 
     # ---- effort: phrase arc, accents, followers sneaking in, running out of air
@@ -573,7 +593,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
     eff *= 1 - .1 * (1 - cf) * np.exp(-np.clip(tc - ts[0], 0, None) / .06)
     eff *= 10 ** (TUNE['note_decay'] * np.clip(tc - ts[ni] - .12, 0, 1.2) / 20 / TUNE['amp_exp'])   # bell-like or sustained
     eff = np.clip(eff, .05, 1.15)
-    lift = 10 ** (np.clip(TUNE['lift'] * (mid - (P['comfy'] - 7)), -3, 3) / 20)        # singers get louder as they go up
+    lift = 10 ** (np.clip(TUNE['lift'] * (np.where(said[ni], P['comfy'] - 4., mid) - (P['comfy'] - 7)), -3, 3) / 20)        # singers get louder as they go up (speech is as loud as it is)
     # Each note has a shape of its own.  In soft, slow singing real voices grow into every note: it begins some
     # 7-9 dB under its peak, reaches it about two thirds of the way through and eases off again - further on a
     # long note.  The first note of a phrase takes longer to arrive; the last one does not swell and tapers
@@ -598,6 +618,7 @@ def render_phrase(ph, P, rng, out, gap=9.0):
             tap[i] *= float(np.clip(.6 + (dyns[i] - .42) / .25, .6, 1.))     # at pianissimo a little less: there is not much left to fade
     u_v = np.clip((tc - ts[ni]) / np.maximum(vends - ts, .05)[ni], 0, 1)      # how far through the note's vowel
     shape_db = shape_db - tap[ni] * np.clip((u_v - .6) / .34, 0, 1) * vowelness
+    shape_db = shape_db - np.where(said[ni], 6. * u_v ** 1.5, 0.)             # a spoken syllable is struck and dies away
     amp = av * eff ** TUNE['amp_exp'] * lift * (1 + .04 * slow(rng, M, 25)) * 10 ** (gf(shape_db, 6, mode='nearest') / 20)
     rd = np.clip(P['rd0'] + FIT['rd'] + FIT['alive'] * .07 * slow(rng, M, 45) + TUNE['rd_effort'] * (1 - eff)
                  + TUNE['rd_edge'] * (1 - np.clip(av / .3, 0, 1)), .45, 2.6)

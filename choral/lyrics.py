@@ -198,6 +198,38 @@ def _near(w):
     return None
 
 
+SMALL = set('a i o of in on to the and or by at up go no so we me my be he do it is as an out off for'.split())
+
+
+def _compound(w, nsyl):
+    """Words printed with hyphens between them and sung to as many notes as they have syllables - "mer-ry-go-round" -
+    arrive here as one word no dictionary has.  If it divides into two to four dictionary words (each of three
+    letters or more, or one of the small common ones) whose syllables are exactly the notes it is set to, it is said
+    as those words.  -> [phonemes] or None."""
+    w = w.replace("'", '')
+    if not 5 <= len(w) <= 24 or not w.isalpha():
+        return None
+    d = _cmu()
+    count = lambda p: sum(x[-1:].isdigit() for x in p)
+    best = None
+
+    def walk(i, parts, phones):
+        nonlocal best
+        if i == len(w):
+            if len(parts) >= 2 and count(phones) == nsyl and (best is None or len(parts) < len(best[0])):
+                best = (list(parts), list(phones))
+            return
+        if len(parts) == 4:
+            return
+        for j in range(len(w), i, -1):
+            piece = w[i:j]
+            if (len(piece) >= 3 or piece in SMALL) and piece in d:
+                walk(j, parts + [piece], phones + d[piece][0])
+
+    walk(0, [], [])
+    return [best[1]] if best else None
+
+
 def pronounce(word, nsyl, overrides, next_word=None, warn=print, prev_word=None):
     """Return nsyl engine syllables for a word."""
     w = word.strip("'") if word not in overrides else word
@@ -220,6 +252,8 @@ def pronounce(word, nsyl, overrides, next_word=None, warn=print, prev_word=None)
                 prons = [['AH0'] + p for p in _cmu()[w[1:]]]
         if not prons:
             prons = _near(w.strip("'")) or _near(w)
+        if not prons:
+            prons = _compound(w, nsyl)
         if not prons:
             g = guess(w)
             if not g:

@@ -26,6 +26,14 @@ cannot do, where the name comes from, and whose work it stands on.
   in places.
 - **Timing follows the accompaniment track** when there is one. Where the score as read does not
   match the recording (a misread ending, a cut), the run says so and the timing there is a guess.
+- **Swing is the long-short eighth notes and nothing more.** Where the music is marked "swing" the
+  eighths go two to one, and a bracket marked "straight" is sung evenly. The accents and the
+  laying-back that make swing swing are not attempted.
+- **Spoken notes are a first attempt.** Notes with an x for a head are said in rhythm, each singer
+  at a speaking pitch of his own, falling through the syllable. A recognizer understands them at
+  least as well as the same words sung; whether they sound like men speaking has been judged by
+  no ear yet. They are read from a PDF exported by notation software; on a scan, mark them in
+  "Fix a note or a word".
 - **From a PDF alone, the pacing is by rule.** A metronome mark is followed; a tempo given in words
   ("Moderately slow") is looked up in a table; a fermata adds about a beat, a "rall." slows to
   about three quarters until the next "a tempo". With no tempo on the page at all the program

@@ -622,6 +622,8 @@ def act(path, q, body):
                 fix.move(sf, n, int(q['line']), int(q['t']), int(q['k']), int(q.get('step') or 0), q.get('sign'))
             elif path == '/api/fix/word':
                 fix.word(sf, n, int(q['line']), int(q['t']), q.get('text', ''))
+            elif path == '/api/fix/spoken':
+                fix.spoken(sf, n, int(q['line']), int(q['t']), bool(q.get('on')))
             elif path == '/api/fix/find':
                 return dict(found=fix.find(sf, q.get('text', '')))
             elif path == '/api/fix/undo':

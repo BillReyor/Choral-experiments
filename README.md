@@ -243,6 +243,8 @@ You can fix it on the page, with your sheet music beside you:
 3. **A wrong note:** click it, then click **Higher** or **Lower** until it sits where your
    music has it. Sharp, flat and natural are there too. You hear the note each time.
 4. **A wrong word:** type the right one in the box under its note.
+   **A note that is spoken, not sung** (an x for its head in your music): click it, then click
+   **Spoken**.
 5. Click **Hear this measure** to check it, then **Done**, then **Make the tracks again**. Only
    what you changed is sung again.
 

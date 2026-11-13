@@ -20,6 +20,7 @@ import collections, re
 from fractions import Fraction
 import numpy as np
 
+SPOKEN = (0xE0A7, 0xE0A8, 0xE0A9)                           # x-shaped noteheads: said, not sung
 HEADS = {0xE0A4: 1, 0xE0A3: 2, 0xE0A2: 4, 0xE0A0: 8, 0xF4BE: 1, 0xF4BD: 2, 0xF4BC: 4, 0xF4BB: 8,     # black, half, whole (and oversized forms)
          0xE0A9: 1, 0xE0A8: 2, 0xE0A7: 4,                                                          # x-shaped (spoken, clapped)
          0xE0DB: 1, 0xE0D9: 2, 0xE0D8: 4, 0xE0AF: 1, 0xE0BE: 1, 0xE0BD: 2}                         # diamonds, slashes
@@ -345,7 +346,7 @@ def _staff_events(st, lo, hi, glyphs, vert_stems, beams, x0, x1, bars, size0):
         h['stem'] = None
     for v in stems:
         for h in heads:
-            slack = (.7 if h['c'] in (0xE0A7, 0xE0A8, 0xE0A9) else .3) * sp     # a stem ends at a notehead's own height (an x-shaped one: at its corner)
+            slack = (.7 if h['c'] in SPOKEN else .3) * sp     # a stem ends at a notehead's own height (an x-shaped one: at its corner)
             if v[1] - slack <= h['y'] <= v[2] + slack and (abs(h['x'] + W - v[0]) < .42 * W or abs(h['x'] - v[0]) < .3 * W):
                 if h['stem'] is None or abs((v[1] + v[2]) / 2 - h['y']) < abs((h['stem'][1] + h['stem'][2]) / 2 - h['y']) - 3 * sp:
                     h['stem'] = v
@@ -557,7 +558,7 @@ def read(pdf, zoom=2.6, log=print):
                                 for j, h in enumerate(sorted([h for h in e['heads'] if not h['small']] or e['heads'], key=lambda h: h['k'])):     # (a cue-size note in a chord is an option, not sung)
                                     midi, name = _pitch(h['k'], *alt[id(h)])
                                     notes.append(dict(on=on, ql=ql, midi=midi, name=name, voice=str(vi), chord=j > 0, x=(h['x'] + W / 2) * zoom,
-                                                      tie=bool(h.get('tie')), slur=list(h.get('slur', [])), exact=True))
+                                                      tie=bool(h.get('tie')), slur=list(h.get('slur', [])), exact=True, spoken=h['c'] in SPOKEN))
                     ends = [n['on'] + (n['ql'] if n['ql'] else length) for n in notes]
                     m = dict(len=None, time=None, notes=notes, end=max(ends) if ends else None, nominal=length)
                     if any(bars[mi] - 1 <= x < bars[mi + 1] for x, t in f['tsigs']):

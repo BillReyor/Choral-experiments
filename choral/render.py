@@ -77,10 +77,14 @@ def clock_for(sc, timing=None, absolute=False):
 
 
 def engine_notes(sc, part):
-    """Score notes -> engine notes (beat, beats, midi, phonemes, dynamic), expanding slides."""
+    """Score notes -> engine notes (beat, beats, midi, phonemes, dynamic), expanding slides.  A note that is spoken,
+    not sung (an x-shaped notehead; "x" after its value in the score) has a sixth item, True."""
     notes, out = sc.parts[part], []
     for i, n in enumerate(notes):
         dy = sc.dyn('voice', n['beat'])
+        if 'x' in n['flags']:
+            out.append((n['beat'], n['dur'], n['midi'], n['phon'], dy, True))
+            continue
         if '%gl' in n['flags'] and i + 1 < len(notes) and n['dur'] > 1:
             nxt = notes[i + 1]['midi']
             a = np.array(n['midi'] if isinstance(n['midi'], tuple) else (n['midi'],), float)

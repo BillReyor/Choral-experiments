@@ -41,7 +41,9 @@ which catches most misread rhythms. A line that is absent is a bar of rest.
   page prints them: `f#4`, `bb3`, `an4` (natural), `f##4`, `bbb3` (double sharp, double flat). Chords join with `+`: `c4+eb4+g4`. Rest: `r`.
 - **Duration**: `w h q e s t` (whole … thirty-second), dots as dots (`q.`), `e3` for a triplet eighth.
 - **Marks** after the duration: `~` tie (or after one pitch of a chord, `c4~+e4/q`, to tie only that note), `>` accent, `'` staccato, `%gl` slide into the next note
-  over the last beat.
+  over the last beat, `x` spoken instead of sung (`eb4/ex=Hey`: the x-shaped notehead of printed
+  music). A spoken note is said in rhythm at each singer's own speaking pitch; where it is written
+  on the staff only nudges it a little higher or lower.
 - **Syllable** after `=`: as printed, hyphen included (`mer-`, `ry`). `=_` continues the previous
   syllable on a new pitch (a slur). A voice with no syllables sings what the other voices sing at
   the same moment - those of its own ensemble first: a trio's voice takes the trio's words, a
@@ -127,6 +129,20 @@ stretch: 3 2 1.8          // from beat 3 of the next measure, two beats take 1.8
 A fermata is one such line; a rallentando is a row of them, each a little slower than the last.
 The reader writes them from the fermatas and the "rall." ... "a tempo" it finds in a PDF. They
 are ignored when the timing comes from a recording.
+
+## Swing
+
+```
+swing: on                 // from the next measure, the two eighth notes of a beat are long and short (2 to 1)
+swing: 60                 // the same, lighter: the first eighth takes 60 hundredths of the beat
+swing: off                // even eighths again
+straight: 3 2             // from beat 3 of the next measure, two beats are even in the middle of the swing
+```
+
+Voices and accompaniment swing together. Triplets stay even. The reader writes `swing: on` where a
+heading says so ("Swing", "Uptempo swing", "Shuffle"), `swing: off` at "Straight 8ths" or "Even
+eighths", and a `straight:` line for the notes under a bracket marked "straight" (from a PDF
+exported by notation software; on a scan the bracket is not looked for).
 
 ## Timing measured from a recording
 

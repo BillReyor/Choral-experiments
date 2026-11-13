@@ -124,7 +124,12 @@ class Trial:
         back = next(s for s in m['measure']['staves'] if s['line'] == staff['line'])['notes'][note['t']]['pitches'][0]['midi']
         if back != was or m['changed']:
             raise SystemExit(self.wrong('the fixer did not put the note back'))
-        print('  the fixer moves a note and puts it back', flush=True)
+        m = self.post('/api/fix/spoken', id=pid, n=2, line=staff['line'], t=note['t'], on=True)
+        said = next(s for s in m['measure']['staves'] if s['line'] == staff['line'])['notes'][note['t']]['spoken']
+        m = self.post('/api/fix/undo', id=pid, n=2)
+        if not said or next(s for s in m['measure']['staves'] if s['line'] == staff['line'])['notes'][note['t']]['spoken']:
+            raise SystemExit(self.wrong('the fixer did not mark the note as spoken, or did not put it back'))
+        print('  the fixer moves a note, marks one as spoken, and puts both back', flush=True)
 
         part = 'all' if everyone else parts[min(1, len(parts) - 1)][0]
         self.post('/api/render', id=pid, part=part, voices='built-in', singers=4)

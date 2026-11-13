@@ -369,7 +369,7 @@ def tokens(line, syl=None, up=0):
         whole = (b == n['on'] + n['ql'])
         name = n['name'][:-1] + str(int(n['name'][-1]) + up)
         for i, c in enumerate(parts):
-            t = f"{name}/{c}" + ('~' if i + 1 < len(parts) or (whole and n['tie']) else '')
+            t = f"{name}/{c}" + ('x' if n.get('spoken') else '') + ('~' if i + 1 < len(parts) or (whole and n['tie']) else '')
             if syl is not None and i == 0 and a == n['on'] and id(n) in syl:
                 t += '=' + syl[id(n)]
             toks.append(t)
@@ -709,6 +709,66 @@ PART_NAME = re.compile(r'^(tenors?|bass(es)?|baritones?|bari|solo|soli|trio|tutt
 PART_NUMBER = re.compile(r'^(I{1,3}|[A-Z]|[0-9]+|&|and)[.,:]?$')                 # "Tenor I", "Bass 2", and a rehearsal letter beside it
 
 
+_ENGLISH = []
+
+
+def english_words():
+    """Every word the English dictionary knows, and the sung syllables that are no dictionary's words (pum, oo, ah).
+    None where the dictionary is not installed."""
+    if not _ENGLISH:
+        try:
+            import cmudict
+            sys.path.insert(0, HERE)
+            from choral import lyrics as _ly
+            _ENGLISH.append(set(cmudict.dict()) | set(_ly.FIXED))
+        except Exception:
+            _ENGLISH.append(None)
+    return _ENGLISH[0]
+
+
+INITIALS = re.compile(r"[A-Z]{1,5}(?:['’]s)?[.,;:!?]*-?")       # "M", "TV", "V's", "N." - letters said by name
+LIGATURES = ('fi', 'fl', 'ffi', 'ffl', 'ff')
+
+
+def mend_ligatures(words, unit):
+    """Two letters cast as one piece of type - the "fi" of "five", the "ffi" of "office" - come out of some PDFs as
+    a character that has nothing to do with them (a digit, in the file this was written for: "9ve", "of-9ce").  A digit
+    standing among the letters of a sung word is taken for such a piece, and the pair of letters that makes a word
+    of it is put back.  Where none does, the word is left as it was found."""
+    ok = english_words()
+    odd = lambda t: bool(re.fullmatch(r"[A-Za-z'’]*\d[A-Za-z'’]*[.,;:!?]*-?", t)) and not re.fullmatch(r"\d+(st|nd|rd|th|s)?[.,;:!?]*", t.lower())
+    if not ok or not any(odd(w[4]) for w in words):
+        return words
+    letters = lambda t: re.sub(r"[^a-z']", '', t.lower().replace('’', "'"))
+    out = [list(w) for w in words]
+    rows = []
+    for w in sorted(out, key=lambda w: w[1]):
+        if rows and w[1] - rows[-1][-1][1] < 1.2 * unit:
+            rows[-1].append(w)
+        else:
+            rows.append([w])
+    for row in rows:
+        row.sort(key=lambda w: w[2])
+        for i, w in enumerate(row):
+            m = re.fullmatch(r"([A-Za-z'’]*)\d([A-Za-z'’]*)([.,;:!?]*-?)", w[4])
+            if not m or not odd(w[4]):
+                continue
+            before, j = [''], i                      # the syllables it may be joined to, nearest first
+            while j > 0 and row[j - 1][4].endswith('-') and len(before) < 5:
+                j -= 1; before.append(letters(row[j][4]) + before[-1])
+            after, k = [''], i
+            while row[k][4].endswith('-') and k + 1 < len(row) and len(after) < 5:
+                k += 1; after.append(after[-1] + letters(row[k][4]))
+            if not (m[1] or m[2] or len(before) > 1 or len(after) > 1):
+                continue                             # a number standing by itself is a number
+            known = lambda word: word in ok or (word.endswith("'s") and word[:-2] in ok)
+            # the longest word it can be part of decides ("fin-al-ly" before "fin"), however many hyphens came before it
+            fits = [(len(b) + len(a), -LIGATURES.index(lig), lig) for b in before for a in after for lig in LIGATURES if known(b + letters(m[1]) + lig + letters(m[2]) + a)]
+            if fits:
+                w[4] = m[1] + max(fits)[2] + m[2] + m[3]
+    return [tuple(w) for w in out]
+
+
 def clean_word(t):
     import unicodedata
     t = ''.join(ch for ch in unicodedata.normalize('NFKD', t) if not unicodedata.combining(ch))
@@ -718,10 +778,28 @@ def clean_word(t):
     return t.lower() if odd or (t.isupper() and len(core) <= 3 and core not in ('I', 'O')) else t
 
 
-def syllables(words, unit, img=None):
+def syllables(words, unit, img=None, initials=True):
     """Recognized words under a staff -> text lines (top first), each [(x, syllable)]; a syllable that is not
     the end of its word keeps its hyphen.  Hyphens are looked for on the page itself: a small dash at
-    mid-letter height between two words (text recognition drops most of them)."""
+    mid-letter height between two words (text recognition drops most of them).
+
+    A letter standing by itself is not a word, as a rule: a rehearsal letter, a chord, a speck.  But where the words
+    are the PDF's own text and so known exactly, capital letters set one to a note among ordinary words are sung by
+    name - "U S A", "T V's" - and are kept (initials=False: not here, e.g. above the staff, where chords stand)."""
+    if TEXT['pages']:
+        words = mend_ligatures(words, unit)
+    spelled = set()
+    if TEXT['pages'] and initials:                   # which of them are such letters: decided before capitals are lost
+        spelled = {(round(w[0], 1), round(w[1], 1)) for w in words if INITIALS.fullmatch(w[4]) and not re.search(r"[aeiouyAEIOUY]", w[4])}
+        plural = []                                  # "C Ds", "T Vs": after a letter said by name, a letter and s is that letter's
+        for w in words:                              # plural ("ems"), not a word of its own (the title "Ms")
+            if re.fullmatch(r"[B-DF-HJ-NP-TV-Z]s[.,;:!?]*-?", w[4]):
+                left = [v for v in words if abs(v[1] - w[1]) < 1.2 * unit and v[3] <= w[2] + 1]
+                if left and (round(max(left, key=lambda v: v[3])[0], 1), round(max(left, key=lambda v: v[3])[1], 1)) in spelled:
+                    plural.append(w)
+        if plural:
+            words = [w[:4] + (w[4][0] + "'" + w[4][1:],) if w in plural else w for w in words]
+            spelled |= {(round(w[0], 1), round(w[1], 1)) for w in plural}
     def marking(i, w):               # "poco rit.", "a tempo", "cresc." - and their misreadings ("noco")
         t = re.sub(r"[^a-z]", '', w[4].lower())
         near = lambda a, b: len(a) == len(b) and sum(x != y for x, y in zip(a, b)) <= 1
@@ -732,8 +810,9 @@ def syllables(words, unit, img=None):
     words = [w for i, w in enumerate(words) if not marking(i, w)]
     words = [w[:4] + (clean_word(w[4]),) for w in words if '(' not in w[4] and ')' not in w[4]
              and not (CHORD.match(w[4].strip('.,')) and (len(w[4]) > 1 and w[4] not in ('Be', 'Am', 'Em', 'Go', 'Do', 'Ad', 'Dim')))]
-    words = [w for w in words if not NOT_LYRICS.match(w[4]) and re.search(r"[aeiouyAEIOUY]", w[4])
-             and (len(w[4].strip(".,;:!?'-")) > 1 or w[4].strip(".,;:!?'-").lower() in ('a', 'e', 'i', 'o', 'u'))]
+    named = lambda w: (round(w[0], 1), round(w[1], 1)) in spelled
+    words = [w for w in words if named(w) or (not NOT_LYRICS.match(w[4]) and re.search(r"[aeiouyAEIOUY]", w[4])
+             and (len(w[4].strip(".,;:!?'-")) > 1 or w[4].strip(".,;:!?'-").lower() in ('a', 'e', 'i', 'o', 'u')))]
     if not words:
         return []
     rows = []
@@ -742,6 +821,11 @@ def syllables(words, unit, img=None):
             rows[-1].append(w)
         else:
             rows.append([w])
+    # letters said by name belong to a line of words: in a line with no words, or one, they are something else (chords)
+    rows = [[w for w in r if not named(w)] if sum(not named(w) for w in r) < 2 else r for r in rows]
+    rows = [r for r in rows if r]
+    if not rows:
+        return []
     most = max(len(r) for r in rows)                 # a couple of stray words on a line of their own ("poco rit." for the
     rows = [r for r in rows if len(r) >= max(2, .4 * most) or len(r) == most]      # staff below) are not a line of lyrics
     main_y = float(np.mean([w[1] for w in next(r for r in rows if len(r) == most)]))
@@ -1376,6 +1460,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                "it is written in another key than the choir's (a transposing instrument), so it is left out"))
     out, num, cur_time, length = [], 0, None, Fraction(4)
     paces, mlen, holds, worded = set(), {}, {}, False       # "rall."/"a tempo" marks; each measure's length; fermatas; a tempo given in words
+    swinging, evens = None, {}                               # swing as last marked; passages bracketed "straight", by measure
     imgs = {}
     def read_texts(c, img, M):
         texts = {}
@@ -1454,7 +1539,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             texts[si] = (syllables(words, unit, img), bars, unit, sorted(ys))
             if si == 0:              # the first tenors' own words, where they differ, are printed above the staff
                 up_words = ocr_words(exe, img, max(c['top'], top - 4.4 * unit), top - .5 * unit, work, tag + 'a', zoom=4)
-                rows_up = syllables(up_words, unit, img)
+                rows_up = syllables(up_words, unit, img, initials=False)
                 c['above'] = (rows_up[-1] if rows_up else [], unit)
                 row_ = c['above'][0]
                 c['above_line'] = len([t for _, t in row_ if re.fullmatch(r"[A-Za-z']+[-.,;:!?]*", t) and re.search('[aeiouy]', t.lower())]) >= 4 and \
@@ -1483,13 +1568,7 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
             log(f'  the words are Latin ({lat} Latin words against {eng} English ones): they will be sung as church Latin  (--language english if that is wrong)')
     words_ok = None
     if not language or language == 'english':
-        try:
-            import cmudict
-            sys.path.insert(0, HERE)
-            from choral import lyrics as _ly
-            words_ok = set(cmudict.dict()) | set(_ly.FIXED)      # the sung syllables that are no dictionary's words: pum, oo, ah
-        except Exception:
-            words_ok = None
+        words_ok = english_words()
     seen, loose = {}, {}
     for c in crops:
         for si, (lines, bars, unit, ys) in list(c.get('texts', {}).items()):
@@ -1512,8 +1591,8 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                             if best[j][0] + c_ < best[i][0]:
                                 best[i] = (best[j][0] + c_, best[j][1] + [i])
                     ends_ = set(best[n_][1])
-                    for m_ in range(n_):
-                        line[m_][1] = line[m_][1].rstrip('-') + ('' if (m_ + 1) in ends_ else '-')
+                    for m_ in range(n_):                # (a word broken at the end of the line keeps its hyphen: it goes on in the next)
+                        line[m_][1] = line[m_][1].rstrip('-') + ('' if (m_ + 1) in ends_ and not (m_ == n_ - 1 and hy[m_]) else '-')
                 run = []
                 for x, t in line:
                     run.append(key(t))
@@ -1593,6 +1672,10 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 if not re.search(r'=\s*(?:ca\.?\s*)?\d{2,3}', ' '.join(w[4] for w in ws)):
                     for xw, bpm in tempo_words(ws):
                         marks.setdefault(max(0, int(np.searchsorted(bars0, xw + 2 * unit0)) - 1), bpm); worded = True
+            swing_here = {}                          # "Uptempo swing" over a measure: from there the eighth notes go long-short
+            for ws in [ws for _, ws in rows_t] + list(rows_h.values()):
+                for xw, what in swing_words(ws, unit0):
+                    swing_here.setdefault(max(0, int(np.searchsorted(bars0, xw + 2 * unit0)) - 1), what)
             if not marks and not TEXT['pages']:
                 # On a scan a heading's two words can come back at different heights and with a staff's name before
                 # them and a dynamic after ("Trio Quietly flowing p"): words that follow one another along a line,
@@ -1617,6 +1700,21 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                         j_ = min(max(0, int(np.searchsorted(bars0, xw + unit0)) - 1), M - 1)
                         ons = [n['on'] for st in c['read'] if j_ < len(st['measures']) for n in st['measures'][j_]['notes'] if n.get('x') is not None and n['x'] >= xw - 2.5 * unit0]
                         paces.add((num + j_ + 1, min(ons) if ons else None, kind))
+                # "straight" over a few notes, with a bracket: those are sung evenly in the middle of the swing
+                for w in inside:
+                    if w[4].strip('.,').lower() != 'straight' or w[4][:1].isupper():
+                        continue
+                    below = [si_ for si_, (t_, b_) in enumerate(c['staves']) if t_ > w[1] and si_ < len(c['read'])]
+                    if not below:
+                        continue
+                    stf = c['read'][below[0]]
+                    reach = bracket_under(img, w, unit0, c['x1'])
+                    for j_ in range(min(M, len(stf['measures']))):
+                        lo_, hi_ = (reach[0] - .8 * unit0, reach[1] + .8 * unit0) if reach else (w[2] - 1.5 * unit0, bars0[min(int(np.searchsorted(bars0, w[2])), M)])
+                        under = [n for n in stf['measures'][j_]['notes'] if n.get('x') is not None and n['midi'] is not None and max(lo_, bars0[j_]) <= n['x'] < min(hi_, bars0[j_ + 1])]
+                        if under:
+                            a_ = min(n['on'] for n in under); b_ = max(n['on'] + n['ql'] for n in under)
+                            evens.setdefault(num + j_ + 1, set()).add((float(a_) + 1, float(b_ - a_)))
         plan = []
         for j in range(M):
             # How long is this measure?  Count it: the total most voices agree on.  (The printed time signature is
@@ -1731,6 +1829,9 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
                 out.append('time: ' + t)
             if j in marks and (num > 1 or marks[j] != tempo):
                 out.append(f'tempo: {marks[j]:g}')
+            if exe and j in swing_here and swing_here[j] != (swinging or 'off'):
+                swinging = swing_here[j]
+                out.append(f'swing: {swinging}')
             mlen[num] = length
             ferm = sorted({(Fraction(a_), Fraction(a_) + Fraction(b_)) for st in c['read'] if j < len(st['measures']) for a_, b_ in st['measures'][j].get('fermata', [])})
             while ferm:                              # signs over notes that sound together are one fermata: it lasts while all of them sound
@@ -1836,6 +1937,10 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
     for m_, hs in holds.items():
         at_ = out.index(f'== {m_}')
         out[at_:at_] = ['stretch: %g %g %g' % h for h in sorted(hs)]
+    if any(l.startswith('swing: ') for l in out):
+        for m_, spans in evens.items():
+            at_ = out.index(f'== {m_}')
+            out[at_:at_] = ['straight: %g %g' % s_ for s_ in sorted(spans)]
     if unit != 1 and (marked or worded):        # a metronome mark counts the beat: half notes in 2/2, dotted quarters in 6/8
         tempo *= unit
         out = [re.sub(r'^tempo: (\S+)$', lambda m_: 'tempo: %g' % (float(m_.group(1)) * unit), l) for l in out]
@@ -1861,6 +1966,48 @@ def assemble(crops, pages, work, title, tempo, language, log, marked=False):
         elif any(w.startswith('ds') for w, _ in nav) and not any(w == 'segno' for w, _ in nav):
             log('  ! a D.S. is printed but its sign was not found: add a  play:  line to the score by hand')
     return '\n'.join(head + out) + '\n'
+
+
+SWING_ON = re.compile(r"^(swing|swung|shuffle)[.,!:;]*$", re.I)
+SWING_OFF = re.compile(r"\b(straight|even)\s+(8ths?|eighths?|8s|eights)\b|\bno\s+swing\b", re.I)
+
+
+def swing_words(ws, unit):
+    """A heading's words -> [(x, 'on' | 'off')]: "Uptempo swing", "Swing!", "Shuffle" turn swing on, "Straight 8ths"
+    and "Even eighths" turn it off.  A heading is short and stands by itself; a line of lyrics that happens to hold
+    the word ("Swing low, sweet chariot") is long, or broken into syllables."""
+    out, run = [], []
+    for w in sorted((w for w in ws if re.search('[A-Za-z0-9]', w[4])), key=lambda w: w[2]) + [None]:
+        if w is not None and run and w[2] - run[-1][3] < 4 * unit:
+            run.append(w)
+            continue
+        said = [v for v in run if re.search('[A-Za-z]', v[4])]          # words printed one after another: one heading
+        if said and len(said) <= 5 and not any(v[4].endswith('-') for v in said):
+            text = ' '.join(v[4] for v in run)
+            hit = next((v for v in said if SWING_ON.match(v[4])), None)
+            if SWING_OFF.search(text):
+                out.append((said[0][2], 'off'))
+            elif hit is not None and (said[0][4][:1].isupper() or len(said) <= 2):
+                out.append((said[0][2], 'on'))
+        run = [w] if w is not None else []
+    return out
+
+
+def bracket_under(img, w, unit, x_end):
+    """The thin line of a bracket printed just under a word (the reach of "straight", of "rit.") -> (x0, x1) on the page,
+    or None.  It begins about where the word does, is no thicker than a staff line, and is not a staff line: it ends."""
+    xc, yc, x0, x1 = w[:4]
+    a, b = int(max(0, x0 - 2.5 * unit)), int(min(img.shape[1], x_end + unit))
+    best = None
+    for y in range(int(yc + .3 * unit), int(min(img.shape[0] - 2, yc + 2.6 * unit))):
+        dark = img[y, a:b] < 140
+        edges = np.flatnonzero(np.diff(np.r_[0, dark.astype(np.int8), 0]))
+        for s, e in zip(edges[::2], edges[1::2]):
+            if e - s >= 3 * unit and a + s <= x1 and e - s < .8 * (b - a) and (best is None or e - s > best[1] - best[0]):
+                above, below = img[max(0, y - int(.5 * unit)), a + s:a + e] < 140, img[y + int(.5 * unit) + 1, a + s:a + e] < 140
+                if above.mean() < .3 and below.mean() < .3:          # thin: a beam, or a staff line's neighbours, would be dark there too
+                    best = (a + s, a + e)
+    return best
 
 
 TEMPO_WORDS = sorted({'very slow': 48, 'very slowly': 48, 'moderately slow': 72, 'moderately slowly': 72, 'slowly': 60, 'slow': 60, 'tenderly': 69,

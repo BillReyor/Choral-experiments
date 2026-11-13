@@ -141,7 +141,7 @@ def measure(path, n, unsure=()):
             if not m:
                 continue                                   # a dynamic mark: left where it is, not shown
             note = dict(t=t, beats=scoremod._dur(m['d']), length=_length(m['d']), code=m['d'], rest=m['p'] == 'r',
-                        word='' if m['l'] in (None, '_', '*') else m['l'], held=m['l'] == '_', tie='~' in (m['f'] or ''), pitches=[])
+                        word='' if m['l'] in (None, '_', '*') else m['l'], held=m['l'] == '_', tie='~' in (m['f'] or ''), spoken='x' in (m['f'] or ''), pitches=[])
             if not note['rest']:
                 for k, p in enumerate(m['p'].split('+')):
                     q = PITCH.match(p)
@@ -414,6 +414,16 @@ def word(path, n, line, t, text):
         if m['l'] == '*':
             raise Refused('The words of this piece are kept in a separate file and cannot be changed here.')
         return m['p'] + '/' + m['d'] + (m['f'] or '') + ('=' + text if text else '')
+    return _change(path, n, line, t, new)
+
+
+def spoken(path, n, line, t, on):
+    """Mark one note as spoken, not sung (the x-shaped notehead of the printed music), or as sung again."""
+    def new(m):
+        if m['p'] == 'r':
+            raise Refused('That is a rest.')
+        flags = (m['f'] or '').replace('x', '')
+        return m['p'] + '/' + m['d'] + ('x' if on else '') + flags + ('=' + m['l'] if m['l'] else '')
     return _change(path, n, line, t, new)
 
 

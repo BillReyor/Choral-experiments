@@ -1804,3 +1804,46 @@ What is given up: GitHub's Mac was a machine nobody had used, and this one has A
 tools on it already, so the installer's wait for those is not tried. What is gained is a test
 that can start. (And one thing it found by being written: removing the program left a running
 copy running, with its files gone. The uninstall now stops it first.)
+
+**The eighth piece, heard by its owner.** The listener, with the tracks of the eighth piece: the
+voices do not say some names that are spelled out in letters, nor a date; the piece is marked swing
+and is sung straight; and the notes with an x for a head, which are spoken, are sung. Is this
+solvable? Each had a cause that could be pointed at.
+
+*The words.* The names are printed one capital letter to a note. A letter by itself
+under a staff had always been thrown away as a rehearsal letter, a chord or a speck, so those
+notes had no words and the vowel before them was held: eleven measures of it, the "T" of
+"TV" among them. Where the words are the PDF's own text they are known exactly, and capital
+letters standing among ordinary words are now kept and said by name. And the date was right but
+for its last word: this PDF stores the joined letters "fi" as the digit 9, so "five" arrived as
+"9ve" and "office" as "of-9ce". A digit among the letters of a sung word is now taken for such
+a pair, and the pair that makes a dictionary word of it is put back. Two smaller things came
+with them: a word broken at the end of a line lost its hyphen there and was sung as two; and
+words printed with hyphens between them (as "mer-ry-go-round" would be) reached the dictionary as one word
+it does not have, and are now said as the words they divide into.
+
+*Swing.* The heading over measure 27 reads "Uptempo swing" and a metronome mark. The mark was
+read and the word ignored. It now writes `swing: on`, and from there every moment that falls on
+the half of a beat is moved to two thirds of it, in voices and accompaniment alike, triplets
+excepted. A bracket marked "straight" over four notes later in the piece is found on the page
+and those notes are left even.
+
+*Speech.* The reader already knew an x-shaped notehead when it saw one - it needs to, to find
+its stem - and wrote it down as a note like any other. It now marks it, and the engine, which
+could only sing, says it: the syllable as long as saying it takes, at a speaking pitch that
+is each singer's own, higher on the beat, sinking through the breath and falling within the
+syllable, with no vibrato. Sung notes come out bit for bit as before.
+
+*Measured.* The nine other pieces read exactly as they did. In this one no note changed; 20
+lines of words did, and 150 notes are marked spoken. A recognizer that heard neither of the
+spelled names now hears both, and hears a hyphenated run of three words it heard none of before. A passage of speech
+it understood 2 words in 14 of when sung, it understands 8 of when spoken; another is the same
+either way. Swung or even makes no difference to it. Over the whole piece its count went down,
+from 60 to 56 in the hundred, and that is the count's doing: five letters said by name are five
+words to the score and one to the recognizer. It still does not catch the "twenty-five" of the
+date, three syllables in under half a second, though the score now has the word.
+
+*Not known:* how any of it sounds. The speaking above all is built on a description of speech
+and checked by a pitch tracker: the singers do speak at different pitches (three semitones
+apart and more) and each syllable falls. Whether it is a crowd of men or a row of machines is
+for the listener to say.

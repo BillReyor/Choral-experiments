@@ -311,9 +311,10 @@ function noteColumn(pid, m, st, nt) {
     if (nt.code[0] !== 'w') { const x = up ? cx + 8 : cx - 8; g.append(SVG('line', { x1: x, x2: x, y1: y(up ? ps[0].step : ps[ps.length - 1].step), y2: up ? y(ps[ps.length - 1].step) - 36 : y(ps[0].step) + 36, stroke: 'currentColor', 'stroke-width': 1.6 })); }
     ps.forEach((q, i) => {
       const side = i && q.step - ps[i - 1].step === 1 ? (up ? 15 : -15) : 0, picked = f.picked && f.picked.line === st.line && f.picked.t === nt.t && f.picked.k === q.k;
-      const head = SVG('g', { class: 'notehead' + (picked ? ' picked' : '') + (unsure ? ' doubt' : ''), tabindex: 0, role: 'button', 'aria-label': q.sounds + ', ' + nt.length + ' note. Press to choose it.' },
+      const head = SVG('g', { class: 'notehead' + (picked ? ' picked' : '') + (unsure ? ' doubt' : ''), tabindex: 0, role: 'button', 'aria-label': (nt.spoken ? 'Spoken' : q.sounds) + ', ' + nt.length + ' note. Press to choose it.' },
         SVG('circle', { class: 'halo', cx: cx + side, cy: y(q.step), r: 15 }),
-        SVG('ellipse', { class: 'head', cx: cx + side, cy: y(q.step), rx: 8.5, ry: 6, transform: 'rotate(-18 ' + (cx + side) + ' ' + y(q.step) + ')', fill: hollow ? 'var(--card)' : 'currentColor', stroke: 'currentColor', 'stroke-width': 2 }),
+        nt.spoken ? SVG('path', { class: 'head', d: 'M' + (cx + side - 7) + ' ' + (y(q.step) - 6) + ' l14 12 m-14 0 l14 -12', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.8, 'stroke-linecap': 'round' })
+          : SVG('ellipse', { class: 'head', cx: cx + side, cy: y(q.step), rx: 8.5, ry: 6, transform: 'rotate(-18 ' + (cx + side) + ' ' + y(q.step) + ')', fill: hollow ? 'var(--card)' : 'currentColor', stroke: 'currentColor', 'stroke-width': 2 }),
         q.sign ? SVG('text', { x: cx + side - 24, y: y(q.step) + 6, 'font-size': 19, fill: 'currentColor' }, SIGN[q.sign]) : null,
         nt.code.includes('.') ? SVG('circle', { cx: cx + side + 15, cy: y(q.step) - 3, r: 2.2, fill: 'currentColor' }) : null,
         (nt.tie || q.tie) ? SVG('path', { d: 'M' + (cx + side + 10) + ' ' + (y(q.step) + 9) + ' Q ' + (cx + 34) + ' ' + (y(q.step) + 17) + ' 86 ' + (y(q.step) + 9), fill: 'none', stroke: 'currentColor', 'stroke-width': 1.4 }) : null);
@@ -395,7 +396,8 @@ function paintFixer(pid) {
     const k = f.picked;
     if (k && k.line === st.line) {
       const nt = st.notes.find(x => x.t === k.t), q = nt && nt.pitches.find(x => x.k === k.k);
-      if (q) kids.push(el('div', { class: 'tools' }, el('span', { class: 'is' }, 'This note is ' + q.sounds + '.'),
+      if (q) kids.push(el('div', { class: 'tools' }, el('span', { class: 'is' }, nt.spoken ? 'This note is spoken, not sung.' : 'This note is ' + q.sounds + '.'),
+        el('button', { onclick: () => fixPost(pid, '/api/fix/spoken', { line: k.line, t: k.t, on: !nt.spoken }), 'aria-pressed': !!nt.spoken, title: 'In the printed music a spoken note has an x for its head' }, '✕ Spoken'), el('span', { class: 'gap' }),
         el('button', { onclick: () => moveNote(pid, { step: 1 }) }, '▲ Higher'), el('button', { onclick: () => moveNote(pid, { step: -1 }) }, '▼ Lower'), el('span', { class: 'gap' }),
         el('button', { onclick: () => moveNote(pid, { sign: '#' }), 'aria-pressed': q.sign === '#' }, '♯ Sharp'), el('button', { onclick: () => moveNote(pid, { sign: 'b' }), 'aria-pressed': q.sign === 'b' }, '♭ Flat'), el('button', { onclick: () => moveNote(pid, { sign: 'n' }), 'aria-pressed': q.sign === 'n' }, '♮ Natural'), q.sign ? el('button', { onclick: () => moveNote(pid, { sign: '' }) }, 'No sign') : null));
     }

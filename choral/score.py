@@ -4,7 +4,7 @@ The format mirrors the printed page: notes are written as they appear on the sta
 signature and accidentals-within-the-bar rules are applied here), one line per staff or voice per
 measure, with the sung syllable attached to each note.
 """
-import json, os, re
+import json, math, os, re
 from collections import defaultdict
 from . import lyrics, latin
 
@@ -16,7 +16,7 @@ VOCAL = {'TEN': ('T1', 'T2'), 'LOW': ('BR', 'BS'), 'T1': ('T1',), 'T2': ('T2',),
          'TRIO': ('TR1', 'TR2'), 'TR1': ('TR1',), 'TR2': ('TR2',), 'TR3': ('TR3',)}
 PIANO = ('RH', 'RH2', 'RH3', 'LH', 'LH2', 'LH3', 'IN', 'IN2', 'IN3', 'IN4')    # IN: an instrument's line (a clarinet over the choir), played by the piano
 TOKEN = re.compile(r"^(?P<p>r|[a-g](?:##|bb|[#bn])?-?\d~?(?:\+[a-g](?:##|bb|[#bn])?-?\d~?)*)/(?P<d>[whqest]3?\.*)"
-                   r"(?P<f>(?:~|\^|>|'|%gl)*)(?:=(?P<l>\S+))?$")
+                   r"(?P<f>(?:~|\^|>|'|x|%gl)*)(?:=(?P<l>\S+))?$")           # x: spoken, not sung (an x-shaped notehead)
 
 
 class ScoreError(Exception):
@@ -29,6 +29,8 @@ class Score:
         self.piano = []                                           # dicts: beat, dur, midi, hand, flags
         self.tempo = []                                           # (beat, bpm)
         self.stretch = []                                         # (beat, length, factor): a fermata, a step of a rallentando
+        self.swing = []                                           # (beat, share of the beat the first eighth of a pair takes, or None for even)
+        self.straight = []                                        # (beat, length): a passage played evenly in the middle of swing
         self.timing = None                                        # measured beat -> second map, if any
         self.language = 'english'
         self.printed = None                                       # performed measure -> printed measure, when a play: order is given
@@ -89,7 +91,7 @@ def unroll(text, warn=print):
     spec = next((l.split('//')[0].partition(':')[2].strip() for l in lines if l.split('//')[0].strip().startswith('play:')), None)
     if spec is None:
         return text, None
-    STATE = ('time', 'key', 'tempo', 'dynamic')
+    STATE = ('time', 'key', 'tempo', 'dynamic', 'swing')
     head, blocks, pre, cur = [], {}, [], None                 # blocks[n] = (lines before it, its own lines)
     for raw in lines:
         line = raw.split('//')[0].strip()
@@ -201,6 +203,19 @@ def parse(text, warn=print, base='.'):
             close()
             at, span, factor = (float(v) for v in rest.split())
             sc.stretch.append((beat0 + at - 1, span, factor))
+        elif head == 'swing':                         # "swing: on" - from the next measure, eighth notes go long-short; "swing: off"
+            close()                                   # ends it; "swing: 60" gives the first of each pair 60% of the beat
+            v = rest.lower()
+            if v not in ('on', 'off') and not re.fullmatch(r'\d+(\.\d+)?', v):
+                raise ScoreError(f'line {ln}: swing is "on", "off", or the share of the beat the first eighth takes (50 to 75)')
+            share = None if v == 'off' else 2 / 3 if v == 'on' else float(v) / 100
+            if share is not None and not .5 <= share <= .76:
+                raise ScoreError(f'line {ln}: swing gives the first eighth between 50 and 75 hundredths of the beat')
+            sc.swing.append((beat0, None if share == .5 else share))
+        elif head == 'straight':                      # "straight: 3 2" - from beat 3 of the next measure, 2 beats are not swung
+            close()
+            at, span = (float(v) for v in rest.split())
+            sc.straight.append((beat0 + at - 1, span))
         elif head == 'dynamic':                       # one level for a piece that prints none
             close()
             sc.marks['voice'].append((beat0, rest)); sc.marks['piano'].append((beat0, rest))
@@ -261,7 +276,7 @@ def _line(sc, mnum, name, toks, beat0, meas_len, keysig, warn):
         if not mt:
             raise ScoreError(f'measure {mnum} {name}: cannot read "{tok}"')
         d = _dur(mt['d'])
-        flags = set(re.findall(r"~|\^|>|'|%gl", mt['f']))
+        flags = set(re.findall(r"~|\^|>|'|x|%gl", mt['f']))
         lyric = mt['l']
         if lyric == '*':                               # take the next recognized syllable for this staff
             key = next((k for k in ((sc.system, name), (sc.system, 'TEN' if name in ('T1', 'T2') else 'LOW'))
@@ -407,3 +422,31 @@ def _finish(sc, warn):
         for n in notes:
             if n['lyric'] == '_':
                 n['phon'] = '-'
+
+    # --- swing: where it is marked, the two eighth notes of a beat are long and short.  Every moment that falls on
+    # the half of a beat is moved later, and what lies between follows in proportion - but not triplets, which are
+    # even already, and not a passage marked "straight".  Voices and accompaniment move together, since it is the
+    # written beat of each note that is changed here, before anything is timed.
+    if any(v for _, v in sc.swing):
+        marks = sorted(sc.swing)
+
+        def share(b):
+            now = None
+            for at, v in marks:
+                if at > b + 1e-9:
+                    break
+                now = v
+            return None if now is None or any(a - 1e-9 <= b < a + n - 1e-9 for a, n in sc.straight) else now
+
+        def swung(b):
+            whole = math.floor(b + 1e-9)
+            f = b - whole
+            r = share(b)
+            if r is None or f < 1e-6 or abs(f * 3 - round(f * 3)) < 1e-6:
+                return b
+            return whole + (f * 2 * r if f < .5 else r + (f - .5) * 2 * (1 - r))
+
+        for notes in list(sc.parts.values()) + [sc.piano]:
+            for n in notes:
+                a, b = swung(n['beat']), swung(n['beat'] + n['dur'])
+                n['beat'], n['dur'] = a, max(b - a, 1e-3)
