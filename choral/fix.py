@@ -288,6 +288,14 @@ def doubts(path, read_log=''):
             add('nowords', kind='nowords')
         elif line.startswith('a D.S. is printed but its sign was not found'):
             add('order', kind='order')
+    # A line of music whose barlines were not all found is common in scans, and seldom does harm: the words are put
+    # under the notes by where both stand.  One line of it is worth pointing at; many are one remark, not many alarms.
+    lost = [d for d in found.values() if d['kind'] == 'miscount']
+    if len(lost) > 2:
+        for d in lost:
+            del found[d['key']]
+        first = sorted(systems[(d['page'], d['system'])][0] for d in lost if systems.get((d['page'], d['system'])))
+        found['barlines'] = dict(key='barlines', kind='barlines', measures=first, notes={}, parts=[], lines=len(lost))
     words = None
     out = []
     for d in found.values():
@@ -325,6 +333,10 @@ def doubts(path, read_log=''):
         elif k == 'miscount':
             d.update(title=f'{place}: the words may sit under the wrong notes', text=f'The reader counted {d["saw"]} measure{"s" if d["saw"] != 1 else ""} in this line of music but read {d["read"]}, '
                      'so it spaced the words out evenly.', do='Compare these measures with your music: are the notes there, and is each word under the right note?')
+        elif k == 'barlines':
+            d.update(title=f'On {d["lines"]} lines of music the reader could not find every barline',
+                     text='That is common with scans. The words there were put under the notes by where each stands on the page, which is usually right.',
+                     do='If words sound a note early or late somewhere, look at that measure. Otherwise this is fine as it is.')
         elif k == 'staves':
             d.update(title=f'{place}: a part may be missing', text=f'The reader saw {d["saw"]} staves in this line of music and could read {d["read"]} of them.',
                      do='Compare these measures with your music: is every part there?')

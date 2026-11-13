@@ -1670,3 +1670,54 @@ itself, not under "More options".
 typed a word under a marked note (18 left), and at the syllable with no vowel saw it ringed in
 both tenor lines - the syllable of the prayer that pencil marks had hidden from the reader in
 the first place. Not tried by a singer.
+
+**A choir on two staves** (the eleventh piece). The listener found a piece the page could not
+read at all: "No tenor, baritone or bass part was found in this music." It is an anthem,
+unaccompanied, a minute and a quarter long, printed short - the tenors on one staff and the
+baritones and basses on another, joined by a bracket, with no names beside them - and the PDF is
+a phone's scan of it, each page a handful of picture tiles.
+
+*What went wrong.* Nothing in the reading of the notes: 363 of them, in 33 measures, all there.
+They were all called keyboard. A treble and a bass staff joined at the left look like a
+keyboard's to the staff finder; the rule that words between them make them the choir's was only
+asked where a system had three staves or more, on the reasoning that a keyboard sits under
+voices. A piece that is pairs of staves from end to end is a keyboard piece - or this.
+
+*Three rules, the second and third found by reading what the first produced against the page.*
+
+- Pairs of staves throughout, with a line of words between the two: the choir, tenors over
+  basses.
+- In the fourth line of this piece the first tenors have words of their own, printed above
+  their staff. That put a line of words between two systems, and the rule made for the sixth
+  piece - look further down for a lowest staff's words when none are found near it - gave them
+  to the basses of the line above, who sang the wrong text for four measures. Distance does not
+  settle whose such a line is: in the sixth piece the lowest staff's own words lie just as near
+  the next system. What does is that voices singing together sing much the same words. The line
+  is asked which neighbours it shares words with, the staves of its own system or the words
+  under the top staff of the next; here it shares five with the next and none with its own.
+- A whole line of words above the top staff is sung by the upper voice wherever the staff
+  beneath carries two. (Until now only the odd note the upper voice sings alone took its word
+  from above.)
+
+*As read now:* the same 33 measures, two staves split into four parts where the voices differ,
+the first tenors with their own words in the fourth line and the basses without the stray ones.
+Sung with the built-in voices it lasts 1:17 with no silent gap, and a recognizer gets 74% of the
+words from the choir and 66% from the baritones alone. The nine earlier pieces were read again
+with the changed reader and compared line for line: none differs.
+
+*Still wrong in it.* A word of the anthem is misread by one letter; one voice loses a syllable
+where two are printed under a half note; and on all eight lines the barlines were not all
+found - in music where every voice moves together, the stems of a chord on both staves stand as
+barlines do. The words were placed by the notes' positions and came out right, but the reader
+said so eight times. Many such remarks are now one: "on 8 lines of music the reader could not
+find every barline", with what that means. The sixth piece's list went from 20 places to 15.
+
+**Telling people there is something newer.** The listener: someone using the page will meet a
+piece that needs the code refined, as this one did, so there should be an update check and a
+way to update from the page. The installer now writes down exactly which version it installed.
+The page asks GitHub, when it starts and every six hours, what has been published since, and
+when there is something it says so at the top with the list of what is new and one button. The
+button runs the installer as a program of its own: it closes the running copy, puts the newest
+in its place and starts it, and the page that was open notices that it is talking to another
+run of the program and begins afresh. It is refused while a piece is being made. What is sent
+is the version, in the address of a public page; nothing of the user's.
