@@ -1954,3 +1954,33 @@ line) while putting two wrong ones right: sung text is full of things no diction
 dictionary is full of names. As it stands it changes this one word in the ten pieces and nothing
 else. A recognizer cannot tell the difference - it writes the right word either way, knowing the
 song - so this one rests on the engine's own account of what it sings, and on the listener.
+
+**Tests first.** Until now a fix was checked by measuring its result and by the listener; nothing
+kept it fixed. A set of unit tests arrived as a contribution - some five hundred, a part at a
+time - and the listener asked that work go test first from here on. Before that could mean
+anything the tests were tried themselves: the program was broken on purpose in forty places,
+one at a time, a rule from each part and each fix of the past weeks, to see whether some test
+noticed. Forty of forty, once the past week's work - which had no tests at all - had been given
+some: the letters said by name, the lost "fi", the misread letter, two voices on one staff,
+the upbeat that is measure 0, and the note a re-voiced voice is on.
+
+*What the writing found.* A test is a second reading of a rule, and second readings find
+things. A spelled name at the end of a sentence lost its last letter ("A." was taken for a
+chord symbol). Church Latin sang "Ag-nus" with a hard g where the printer had divided the word
+that way, and "an-ge-lus" as "ang-". A jump back to the first measure kept the swing, the key
+and the time of the last. And when the listener, the same afternoon, heard a possessive sung by
+its spelling, the test written for it showed it was nearly all possessives: the dictionary has
+the word and seldom its 's. "Beauty's" had been "bow-tis".
+
+*What a test is worth.* Two of the new tests passed before the fault was mended, and went on
+passing with the mending broken on purpose: one used a word the dictionary happened to have,
+the other a word with no stem in it. Neither guarded anything. So the order is kept strictly -
+the test fails, the program is mended, the mending is taken out and the test fails again - and
+it is in the third step that a hollow test shows. Two more things are particular to this
+program. The tests may hold no sheet music and no words of a song that is somebody's, so they
+draw their own: a page of quarter notes with a line down its left side is enough for the reader
+to be run from one end to the other. And a sound's note is never asked of a pitch tracker, which
+is what misled the last hunt: it is told from which overtones carry the strength, and from
+whether the sound repeats at the period it should. For real music there is a second net: the
+reader is run over the listener's own pieces before and after a change, and every reading that
+differs is looked at against its page. None of this says how it sounds. That is still a person.
