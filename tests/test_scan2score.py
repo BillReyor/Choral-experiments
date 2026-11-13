@@ -326,11 +326,134 @@ def test_join_split_systems_not_when_far_apart():
     assert len(S.join_split_systems([a, b], lambda *x: None)) == 2
 
 
-@pytest.mark.xfail(strict=True, reason="scan2score.join_split_systems: `rest = [g for g in inner if g != gap]` drops every inner "
-                   "gap equal in value to the gap between the groups, so evenly spaced staves (the clearest case of one system) "
-                   "leave `rest` empty and are never joined")
 def test_join_split_systems_evenly_spaced():
     a, b = _split_pair(41)          # 41: the same as the gap between a's two staves
     b['staves'] = [(262, 302), (343, 383), (424, 464)]
     a['staves'] = [(100, 140), (181, 221)]
     assert len(S.join_split_systems([a, b], lambda *x: None)) == 1
+
+
+# ------------------------------------------- letters the page did not mean ----
+@pytest.fixture
+def pdf_text(monkeypatch):
+    """The words are a PDF's own text: known exactly."""
+    monkeypatch.setitem(S.TEXT, 'pages', {1: []})
+
+
+def texts(rows):
+    return [[t for _, t in r] for r in rows]
+
+
+def test_ligature_lost_in_a_pdf_is_put_back(pdf_text):
+    # some PDFs store the joined letters "fi" as an unrelated character - a digit, in the file this was found in
+    ws = [W_(0, 30, 'twen-'), W_(40, 55, 'ty'), W_(65, 90, '9ve'), W_(100, 115, 'of-'), W_(125, 150, '9ce'), W_(160, 180, 'the'), W_(190, 215, '9eld')]
+    assert [w[4] for w in S.mend_ligatures(ws, 10)] == ['twen-', 'ty', 'five', 'of-', 'fice', 'the', 'field']
+
+
+def test_ligature_longest_word_decides_across_several_hyphens(pdf_text):
+    ws = [W_(0, 30, 'out-'), W_(40, 55, 'of-'), W_(65, 80, 'of-'), W_(90, 115, '9ce'), W_(125, 150, '9n-'), W_(160, 175, 'al-'), W_(185, 200, 'ly')]
+    assert [w[4] for w in S.mend_ligatures(ws, 10)] == ['out-', 'of-', 'of-', 'fice', 'fin-', 'al-', 'ly']
+
+
+def test_a_number_by_itself_stays_a_number(pdf_text):
+    ws = [W_(0, 10, '9'), W_(20, 45, '2nd'), W_(55, 80, '90s'), W_(90, 120, 'x9zq')]
+    assert [w[4] for w in S.mend_ligatures(ws, 10)] == ['9', '2nd', '90s', 'x9zq']
+
+
+LETTERS = [W_(0, 30, 'on'), W_(40, 70, 'the'), W_(80, 88, 'T'), W_(98, 112, "V's"), W_(122, 150, 'and'), W_(160, 168, 'U'), W_(178, 186, 'S'), W_(196, 204, 'A.')]
+
+
+def test_letters_said_by_name_are_kept_among_a_pdfs_own_words(pdf_text):
+    # "T V's", a name spelled out one capital to a note: thrown away as stray marks until a listener missed them
+    assert texts(S.syllables(LETTERS, 10)) == [['on', 'the', 't', "V's", 'and', 'u', 's', 'a.']]
+
+
+def test_letters_alone_are_not_words_on_a_recognized_page():
+    # recognized text is full of specks that look like letters: only a vowel may stand alone there
+    assert texts(S.syllables(LETTERS, 10)) == [['on', 'the', 'and', 'u', 'a.']]
+
+
+def test_letters_are_not_kept_where_chords_stand(pdf_text):
+    assert texts(S.syllables(LETTERS, 10, initials=False)) == [['on', 'the', 'and', 'u', 'a.']]       # above the staff
+    chords = [W_(0, 8, 'C'), W_(40, 48, 'G'), W_(80, 88, 'F'), W_(120, 150, 'and')]                   # a line with one word in it
+    assert texts(S.syllables(chords, 10)) == [['and']]
+
+
+def test_a_letter_and_s_after_a_letter_is_its_plural(pdf_text):
+    ws = [W_(0, 30, 'all'), W_(40, 60, 'my'), W_(70, 78, 'C'), W_(88, 104, 'Ds'), W_(114, 140, 'are'), W_(150, 180, 'Ms.'), W_(190, 230, 'Jones')]
+    assert texts(S.syllables(ws, 10)) == [['all', 'my', 'c', "D's", 'are', 'Jones']]      # ("Ms." has no vowel and follows no letter)
+
+
+needs_words = pytest.mark.skipif(S.english_words() is None, reason='the pronouncing dictionary is not installed')
+
+
+def as_line(words):
+    return [[10. * i, w] for i, w in enumerate(words)]
+
+
+@needs_words
+def test_a_misread_letter_is_put_back_when_only_that_makes_a_word():
+    line = as_line(['the', 'won-', 'der-', 'fui', 'moon-', 'iight', 'in', 'sum-', 'rner'])
+    assert [w[1] for w in S.mend_lookalikes(line, S.english_words())] == ['the', 'won-', 'der-', 'ful', 'moon-', 'light', 'in', 'sum-', 'mer']
+
+
+@needs_words
+def test_a_misread_letter_beside_syllables_that_are_words_as_they_stand():
+    line = as_line(['the', 'snow-', 'cov-', 'erecl', 'hill'])           # "snowcovered" is no dictionary's word; "snow" and "covered" are
+    said = []
+    assert [w[1] for w in S.mend_lookalikes(line, S.english_words(), said.append, 'page 1: ')] == ['the', 'snow-', 'cov-', 'ered', 'hill']
+    assert len(said) == 1 and 'page 1: ' in said[0]
+
+
+@needs_words
+@pytest.mark.parametrize('words', [
+    ['x', 'e-', 'lei-', 'son'],               # another language: no dictionary has it, and it is right
+    ['x', 'lu-', 'ia,'],                      # the end of a word begun on the line before
+    ['cem-', 'ber', 'sings'],                 # the same, at the head of a line
+    ['of', 'com-', 'tort', 'and'],            # two short words run together is not evidence
+    ['the', 'fiag'],                          # too short to be sure of: left for the listener
+    ['the', 'star', 'still', 'shines'],       # nothing wrong with it
+])
+def test_what_no_dictionary_has_is_left_as_it_was_read(words):
+    line = as_line(words)
+    assert [w[1] for w in S.mend_lookalikes(line, S.english_words())] == words
+
+
+# -------------------------------------------- two voices on a recognized staff ----
+def R_(on, ql, midi, name, voice, tie=False):
+    return N(on, ql, midi, name, voice, tie=tie, exact=False)
+
+
+def test_lines_of_recognized_voices_that_cross_are_dealt_by_height():
+    # the engine deals the two notes of a chord to its voices as it pleases: believed, it swapped parts in three pieces
+    notes = [R_(0, 2, 50, 'dn3', '5'), R_(2, 2, 50, 'dn3', '5'), R_(0, 2, 55, 'gn3', '6'), R_(2, 2, 43, 'gn2', '6')]
+    up, lo = S.lines_of(notes, F(4))
+    assert [n['name'] for n, a, b in up] == ['gn3', 'dn3'] and [n['name'] for n, a, b in lo] == ['dn3', 'gn2']
+
+
+def test_lines_of_held_note_and_moving_voice_on_one_pitch():
+    # basses hold a note for the measure; baritones, on the same note, rest and move on: the moving voice vanished
+    notes = [R_(0, F(3, 2), 53, 'fn3', '5'), dict(R_(F(3, 2), F(1, 2), None, None, '5')), R_(2, F(1, 2), 53, 'fn3', '5'), R_(F(5, 2), F(1, 2), 53, 'fn3', '5'),
+             R_(0, 3, 53, 'fn3', '6')]
+    up, lo = S.lines_of(notes, F(3))
+    assert [(n and n['name'], b - a) for n, a, b in up] == [('fn3', F(3, 2)), (None, F(1, 2)), ('fn3', F(1, 2)), ('fn3', F(1, 2))]
+    assert [(n['name'], b - a) for n, a, b in lo] == [('fn3', F(3))]
+
+
+def test_lines_of_a_tie_on_a_notehead_two_voices_share_is_both_voices():
+    notes = [R_(0, 1, 58, 'bb3', '1', tie=True), R_(1, 3, 58, 'bb3', '1'), R_(0, 1, 58, 'bb3', '2'), R_(1, 1, 58, 'bb3', '2'), R_(2, 2, 60, 'cn4', '2')]
+    S.lines_of(notes, F(4))
+    assert notes[2]['tie'] is True
+
+
+# ------------------------------------------------ swing: a bracket's reach ----
+def test_bracket_under_a_word_is_found_and_a_beam_is_not():
+    np = pytest.importorskip('numpy')
+    w = W_(100, 150, 'straight', y=50)
+    page = np.full((200, 600), 255, np.uint8)
+    page[62, 95:260] = 0                                 # a thin line just under the word, reaching on to the right
+    assert S.bracket_under(page, w, 10, 590) == (95, 260)
+    page = np.full((200, 600), 255, np.uint8)
+    page[58:72, 95:260] = 0                              # a beam is as long, and thick
+    assert S.bracket_under(page, w, 10, 590) is None
+    assert S.bracket_under(np.full((200, 600), 255, np.uint8), w, 10, 590) is None

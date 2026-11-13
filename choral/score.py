@@ -92,6 +92,7 @@ def unroll(text, warn=print):
     if spec is None:
         return text, None
     STATE = ('time', 'key', 'tempo', 'dynamic', 'swing')
+    USUAL = {'time': '4/4', 'key': '0', 'swing': 'off'}
     head, blocks, pre, cur = [], {}, [], None                 # blocks[n] = (lines before it, its own lines)
     for raw in lines:
         line = raw.split('//')[0].strip()
@@ -133,9 +134,10 @@ def unroll(text, warn=print):
             now[k_] = raw.split('//')[0].partition(':')[2].strip()
     for i, n in enumerate(order):
         out += [r for r in blocks[n][0] if r.split('//')[0].partition(':')[0].strip() not in STATE]
-        for k in STATE:
-            if at[n][k] is not None and at[n][k] != now[k]:
-                out.append(f'{k}: {at[n][k]}')
+        for k in STATE:                                       # (what a score that never says is taken to mean: 4/4, no sharps
+            want = at[n][k] if at[n][k] is not None else USUAL.get(k)        # or flats, even eighths - a jump back to its
+            if want is not None and want != (now[k] if now[k] is not None else USUAL.get(k)):       # beginning must restore them)
+                out.append(f'{k}: {want}')
         printed[i + 1] = n
         out.append(f'== {i + 1}   // printed {n}')
         jump = i + 1 < len(order) and order[i + 1] != n + 1
@@ -143,9 +145,8 @@ def unroll(text, warn=print):
             if jump:                                          # a tie cannot reach across a jump
                 toks = raw.split()
                 note, eq, lyr = toks[-1].partition('=')
-                if '/' in note and '~' in note.split('/')[-1]:
-                    d = note.rsplit('/', 1)
-                    toks[-1] = d[0] + '/' + d[1].replace('~', '') + eq + lyr
+                if '/' in note and '~' in note:                # (on the whole note, or on one note of a chord: c4~+e4/w)
+                    toks[-1] = note.replace('~', '') + eq + lyr
                     raw = ' '.join(toks)
             out.append(raw)
         now = dict(after[n])
@@ -209,7 +210,7 @@ def parse(text, warn=print, base='.'):
             if v not in ('on', 'off') and not re.fullmatch(r'\d+(\.\d+)?', v):
                 raise ScoreError(f'line {ln}: swing is "on", "off", or the share of the beat the first eighth takes (50 to 75)')
             share = None if v == 'off' else 2 / 3 if v == 'on' else float(v) / 100
-            if share is not None and not .5 <= share <= .76:
+            if share is not None and not .5 <= share <= .75:
                 raise ScoreError(f'line {ln}: swing gives the first eighth between 50 and 75 hundredths of the beat')
             sc.swing.append((beat0, None if share == .5 else share))
         elif head == 'straight':                      # "straight: 3 2" - from beat 3 of the next measure, 2 beats are not swung

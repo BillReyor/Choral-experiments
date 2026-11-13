@@ -16,6 +16,15 @@ def _front(rest):
     return rest.startswith(FRONT)
 
 
+def _hard(rest, nxt):
+    """Does a hard c, g, q or x follow (in this syllable, or opening the next)?  Before one an n is "ng" - sanc-tus,
+    san-guis; before a soft one it stays n - an-ge-lus, vin-cit."""
+    f = rest or nxt
+    if f[:1] == 'q' or (f[:1] == 'x' and rest):
+        return True
+    return f[:1] in ('c', 'g') and not _front(f[1:] or (nxt if rest else ''))
+
+
 def syllable(s, prev='', nxt=''):
     """One printed syllable -> engine phonemes.  prev / nxt are the neighbouring syllables of the same word."""
     s = s.lower()
@@ -47,7 +56,10 @@ def syllable(s, prev='', nxt=''):
             else:
                 ph = 'k'
         elif c == 'g':
-            ph = 'jh' if _front(after) else 'g'
+            if not rest and nxt.startswith('n'):
+                ph = ''                           # Ag-nus: gn is ny however the printer divided the word
+            else:
+                ph = 'jh' if _front(after) else 'g'
         elif c == 'h':
             ph = 'k' if (prev + s) in ('mihi', 'nihil') and i == 0 and prev else ''
         elif c == 'j' or (c == 'i' and not seen_vowel and rest[:1] in V and rest[:1] != ''):
@@ -61,7 +73,9 @@ def syllable(s, prev='', nxt=''):
             ph = 'd z'
         elif c == 's' and SOFT_S and i == 0 and prev[-1:] in V and rest[:1] in V:
             ph = 'z'                              # softened between vowels: Ho-san-na
-        elif c == 'n' and (rest[:1] in ('c', 'g', 'q', 'x') or (not rest and nxt[:1] in ('c', 'g', 'q'))):
+        elif c == 'n' and i == 0 and prev.endswith('g'):
+            ph = 'n y'                            # (Ag-)nus
+        elif c == 'n' and _hard(rest, nxt):
             ph = 'ng'
         elif c in V:
             if seen_vowel and out and out[-1] in V.values():   # two vowels left in one syllable: glide into the second

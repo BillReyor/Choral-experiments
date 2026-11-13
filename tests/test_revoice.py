@@ -237,3 +237,169 @@ def test_kept_depends_on_inputs(tmp_path):
     assert k != R._kept(job, ['other model'])
     assert k != R._kept(dict(job, reference=a), ['m'])
     assert k.startswith(R.CACHE) and k.endswith('.wav')
+
+
+# ------------------------------------------- the note a re-voiced voice is on ----
+# A listener heard real voices "going out of control and gliding all over the place".  Two things were wrong, and both
+# were missed at first by checking the result with a pitch tracker - which is what had been misled in the first place.
+# So nothing here asks a tracker: a sound's note is told from which of its overtones carry its strength, or from how
+# well it repeats after one cycle of the note it should be on.
+def voice_like(f, seconds=1., amp=.2, top=12):
+    """A steady sung tone: the note and its overtones, each weaker than the one below."""
+    t = np.arange(int(seconds * SR)) / SR
+    x = sum(np.sin(2 * np.pi * h * f * t + h) / h for h in range(1, top + 1))
+    fade = np.minimum(1, np.minimum(t, t[::-1]) / .05)
+    return amp * x * fade
+
+
+def repeats_at(x, f):
+    """How well a sound repeats after one cycle of the note f (1: exactly)."""
+    lag = int(round(SR / f)); a, b = x[:-lag], x[lag:]
+    return float(a @ b / np.sqrt((a @ a) * (b @ b) + 1e-20))
+
+
+def test_overtone_tells_a_note_from_the_octaves_above_it():
+    t = np.arange(.15, .85, .05)
+    low = np.full(len(t), 150.)
+    assert list(R._overtone(voice_like(150.), low, t)) == [1] * len(t)
+    assert list(R._overtone(voice_like(300.), low, t)) == [2] * len(t)      # an octave up: every second overtone of the low note
+    assert list(R._overtone(voice_like(450.), low, t)) == [3] * len(t)      # an octave and a fifth
+    assert list(R._overtone(voice_like(600.), low, t)) == [4] * len(t)      # two octaves
+    assert list(R._overtone(voice_like(300.), np.zeros(len(t)), t)) == [1] * len(t)     # where the engine has no voice, nothing is said
+
+
+def test_overtone_reads_moments_up_to_the_very_end():
+    x = voice_like(150., .5)
+    assert len(R._overtone(x, np.full(3, 150.), np.array([.2, .499, 5.]))) == 3          # (a moment past the end once stopped a render)
+
+
+def test_pitch_of_does_not_take_a_hiss_for_a_note(monkeypatch):
+    # the tracker reports a note in the hiss of an s: a voice rebuilt on it sings a short tone where it should hiss
+    from choral import pitch
+    rng = np.random.default_rng(3)
+    src = np.r_[voice_like(150., 1.), np.zeros(int(.05 * SR)), .05 * rng.standard_normal(int(.45 * SR))]
+
+    def tracker(x, sr, hop=64, **k):                     # ... says: 150 Hz for a second, a gap, then a note an octave up
+        tt = (np.arange((len(x) - 2048) // hop) * hop + 512) / sr
+        midi = np.where(tt < 1., 69 + 12 * np.log2(150 / 440), np.where(tt < 1.05, np.nan, 69 + 12 * np.log2(300 / 440)))
+        return tt, midi
+    monkeypatch.setattr(pitch, 'yin', tracker)
+    f, voiced = R._pitch_of(src)
+    assert voiced[int(.2 * SR):int(.8 * SR)].all()
+    assert not voiced[int(1.1 * SR):int(1.4 * SR)].any()
+    assert np.abs(f[int(.2 * SR):int(.8 * SR)] / 150. - 1).max() < .005        # and the sung note is read to the cycle
+
+
+def test_fit_job_hands_on_the_engines_pitch_sample_by_sample(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(R, '_read', lambda path: np.zeros(1000))
+    monkeypatch.setattr(R, '_fit', lambda y, src, rebuilt, alone, known: seen.update(known=known, rebuilt=rebuilt, alone=alone) or src)
+    coarse = 100. + np.arange(12)                        # one value every KNOWN_HOP samples; the stretch begins 250 samples into the first
+    R._fit_job(('x.wav', np.zeros(1000, np.float32), True, False, (coarse, 250)))
+    k = seen['known']
+    assert len(k) == 1000 and seen['rebuilt'] is True and seen['alone'] is False
+    assert k[0] == 102 and k[49] == 102 and k[50] == 103 and k[-1] == 111      # ... and never past the last value it was given
+    R._fit_job(('x.wav', np.zeros(1000, np.float32), False, True))             # no pitch handed over: as before
+    assert seen['known'] is None and seen['alone'] is True
+    R._fit_job(('x.wav', np.zeros(1000, np.float32), False, True, None))
+    assert seen['known'] is None
+
+
+def test_rebuilt_voice_is_on_the_engines_note_when_the_model_sang_an_octave_up():
+    pytest.importorskip('pyworld')
+    src, y = voice_like(150., 1.5), voice_like(300., 1.5)
+    known = np.where(np.abs(src) > 0, 150., 150.)
+    out = R._rebuild(y, src, known=known)
+    t = np.arange(.3, 1.2, .05)
+    assert list(R._overtone(y, np.full(len(t), 150.), t)) == [2] * len(t)       # what the model gave: an octave up
+    assert list(R._overtone(out, np.full(len(t), 150.), t)) == [1] * len(t)     # what is heard: the note
+
+
+def test_rebuilt_voice_takes_the_pitch_the_engine_hands_over():
+    pytest.importorskip('pyworld')
+    src = voice_like(150., 1.5)
+    out = R._rebuild(src.copy(), src, known=np.full(len(src), 200.))            # (a pitch no reading of this sound would give)
+    mid = out[int(.4 * SR):int(1.1 * SR)]
+    assert repeats_at(mid, 200.) > .9 and repeats_at(mid, 150.) < .5
+    plain = R._rebuild(src.copy(), src)[int(.4 * SR):int(1.1 * SR)]             # none handed over: read from the sound, as before
+    assert repeats_at(plain, 150.) > .9
+
+
+# -------------------------------------------- the whole of it, with a stand-in for the model ----
+MODEL = '''
+import json, sys
+sys.path.insert(0, {root!r})
+import numpy as np
+from choral import revoice as R
+jobs = json.load(open(sys.argv[-1]))
+print('model loaded', flush=True)
+for k, j in enumerate(jobs, 1):
+    x = R._read(j['source'])
+    n = len(x)
+    {change}
+    R._write(j['out'], x)
+    print(f're-voiced {{k}} of {{len(jobs)}} stretches', flush=True)
+'''
+
+
+@pytest.fixture
+def model(tmp_path, monkeypatch):
+    """model(change) sets up a voice model that is a few lines of Python: it gives back what it was given, changed
+    by `change` (a statement on x, the sound, and n, its length)."""
+    import json
+    import sys
+    monkeypatch.setattr(R, 'CACHE', str(tmp_path / 'kept'))
+    R._write(str(tmp_path / 'a voice.wav'), voice_like(120., 3.))
+
+    def set_up(change='pass'):
+        script = tmp_path / 'model.py'
+        script.write_text(MODEL.format(root=R.ROOT, change=change))
+        (tmp_path / 'command.json').write_text(json.dumps([sys.executable, str(script)]))
+        monkeypatch.setenv('CHORAL_REVOICE', str(tmp_path / 'command.json'))
+        return str(tmp_path / 'a voice.wav')
+    return set_up
+
+
+def test_revoice_from_one_end_to_the_other(model):
+    voice = model()
+    track = np.r_[np.zeros(SR // 2), voice_like(150., 2.), np.zeros(SR // 2)]
+    said = []
+    out, = R.revoice([track], [voice], log=said.append, rebuild=False)
+    assert len(out) == len(track) and out.dtype == np.float32
+    sung = slice(int(.9 * SR), int(2.1 * SR))
+    assert np.sqrt(np.mean(out[sung] ** 2)) == pytest.approx(np.sqrt(np.mean(track[sung] ** 2)), rel=.2)
+    assert repeats_at(out[sung], 150.) > .95
+    assert np.abs(out[:SR // 8]).max() < 1e-3                                    # silence stays silence
+    assert any('1 singers' in s for s in said)
+    # what was converted is kept: a second rendering does not ask the model again (here it could not answer)
+    model('raise SystemExit(1)')
+    again, = R.revoice([track], [voice], log=said.append, rebuild=False)
+    assert any('converted before and are reused' in s for s in said)
+    assert np.allclose(again, out)
+
+
+def test_revoice_says_so_when_the_model_fails(model):
+    voice = model('raise SystemExit(1)')
+    with pytest.raises(SystemExit, match='voice-conversion model failed'):
+        R.revoice([voice_like(150., 2.)], [voice], log=lambda *a: None, rebuild=False)
+
+
+def test_revoice_puts_a_voice_the_model_sang_an_octave_up_back_on_its_note(model):
+    pytest.importorskip('pyworld')
+    voice = model('x = np.tile(x[::2], 2)[:n]')                                  # the same sound at twice the speed, twice: an octave up
+    track = np.r_[np.zeros(SR // 2), voice_like(150., 2.), np.zeros(SR // 2)]
+    pitch = np.where(np.abs(track[::R.KNOWN_HOP]) > 0, 150., 0.)                  # as the engine hands it over
+    pitch = np.r_[pitch, 0., 0.]
+    out, = R.revoice([track], [voice], log=lambda *a: None, pitches=[pitch])
+    t = np.arange(1., 2., .05)
+    assert list(R._overtone(out.astype(float), np.full(len(t), 150.), t)) == [1] * len(t)
+
+
+def test_revoice_rebuilds_on_the_pitch_it_is_handed(model):
+    pytest.importorskip('pyworld')
+    voice = model()
+    track = np.r_[np.zeros(SR // 2), voice_like(150., 2.), np.zeros(SR // 2)]
+    pitch = np.r_[np.where(np.abs(track[::R.KNOWN_HOP]) > 0, 200., 0.), 0., 0.]  # (not the pitch a reading of the sound would give)
+    out, = R.revoice([track], [voice], log=lambda *a: None, pitches=[pitch])
+    mid = out[int(1. * SR):int(2. * SR)].astype(float)
+    assert repeats_at(mid, 200.) > .9 and repeats_at(mid, 150.) < .5

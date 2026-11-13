@@ -17,6 +17,13 @@ from choral import latin
     (['ho', 'sti', 'a'], ['LO', 's t LI', 'LA']),                    # ... but not after s
     (['ma', 'gna'], ['m LA', 'n y LA']),                             # gn is ny
     (['A', 'gnus'], ['LA', 'n y LU s']),
+    (['Ag', 'nus'], ['LA', 'n y LU s']),                             # ... however the printer divided the word
+    (['mag', 'na'], ['m LA', 'n y LA']),
+    (['dig', 'num'], ['d LI', 'n y LU m']),
+    (['reg', 'num'], ['r LE', 'n y LU m']),
+    (['an', 'ge', 'lus'], ['LA n', 'jh LE', 'l LU s']),              # n is ng only before a hard c or g: not here,
+    (['vin', 'cit'], ['v LI n', 'ch LI t']),                         # nor here,
+    (['san', 'guis'], ['s LA ng', 'g w LI s']),                      # but here
     (['Ho', 'san', 'na'], ['LO', 'z LA n', 'n LA']),                 # h silent, s softened between vowels
     (['mi', 'hi'], ['m LI', 'k LI']),                                # mihi: the h is a k
     (['ni', 'hil'], ['n LI', 'k LI l']),

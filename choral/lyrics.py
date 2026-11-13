@@ -198,6 +198,14 @@ def _near(w):
     return None
 
 
+def _without_v(p):
+    """'over' as "o'er" is sung on one note: the v gone and the weak vowel after it with it (its r kept) - O R, not O V."""
+    for i, x in enumerate(p[:-1]):
+        if x == 'V' and p[i + 1].rstrip('012') in VOWELS and i and p[i - 1].rstrip('012') in VOWELS:
+            return p[:i] + (['R'] if p[i + 1].startswith('ER') else []) + p[i + 2:]
+    return None
+
+
 SMALL = set('a i o of in on to the and or by at up go no so we me my be he do it is as an out off for'.split())
 
 
@@ -252,6 +260,8 @@ def pronounce(word, nsyl, overrides, next_word=None, warn=print, prev_word=None)
                 prons = [['AH0'] + p for p in _cmu()[w[1:]]]
         if not prons:
             prons = _near(w.strip("'")) or _near(w)
+            if prons and re.search(r"[aeiou]'[aeiou]", w):         # "o'er", "e'er", "ne'er", "e'en": on one note the v that is
+                prons = prons + [p for p in map(_without_v, prons) if p]         # left out stays out, and the two vowels are one
         if not prons:
             prons = _compound(w, nsyl)
         if not prons:

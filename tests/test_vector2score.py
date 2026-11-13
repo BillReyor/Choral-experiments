@@ -20,11 +20,15 @@ TREBLE, BASS = '&', '?'
 BARS = (150, 250, 350, 450, 550)
 
 
-def build_pdf(path, staves, width=600, height=400):
-    """staves: [(top, bars, glyphs [(char, x, k)], stems [(x, y0, y1)] relative to top)]; k = half-spaces below the top line."""
+def build_pdf(path, staves, width=600, height=400, joined=False, words=()):
+    """staves: [(top, bars, glyphs [(char, x, k)], stems [(x, y0, y1)] relative to top)]; k = half-spaces below the top line.
+    joined: the staves are one system - a line down their left side, as a choir's staves have.
+    words: [(x, y, text)] in an ordinary font, each centred on x - the lyrics, as the PDF's own text."""
     doc = pymupdf.open()
     page = doc.new_page(width=width, height=height)
     page.insert_font(fontname='F1', fontbuffer=pymupdf.Font('helv').buffer)
+    if joined:
+        page.draw_line((50, staves[0][0]), (50, staves[-1][0] + 4 * SP), width=1.4)
     for top, bars, glyphs, stems in staves:
         for i in range(5):
             page.draw_line((50, top + i * SP), (550, top + i * SP), width=.5)
@@ -37,6 +41,8 @@ def build_pdf(path, staves, width=600, height=400):
     for xref in range(1, doc.xref_length()):         # call the font what an old music font is called
         if doc.xref_get_key(xref, 'BaseFont')[0] == 'name':
             doc.xref_set_key(xref, 'BaseFont', '/Maestro')
+    for x, y, text in words:                         # (after that, so that this font keeps its own name)
+        page.insert_text((x - pymupdf.get_text_length(text, 'tiro', 9) / 2, y), text, fontname='tiro', fontsize=9)
     doc.save(str(path))
     return str(path)
 

@@ -94,9 +94,6 @@ def test_near_o_er_restores_the_v():
     assert L._near("o'er") == L._cmu()['over']
 
 
-@pytest.mark.xfail(strict=True, reason="lyrics.py:186-189 + 271-275: \"o'er\" is looked up as the two-syllable 'over' "
-                                       "and crowded into its one note by dropping the second vowel, so it is sung "
-                                       "'OW v' - the v the apostrophe elides kept, the r of 'o'er' lost")
 def test_o_er_on_one_note_keeps_its_r():
     out, _ = say("o'er", 1)
     assert out[0].split()[-1] == 'r' and 'v' not in out[0].split()
@@ -176,3 +173,15 @@ def test_syllabify(phones, want):
 def test_to_engine():
     assert L.to_engine(['AH0', 'B', 'AH1', '+', 'M']) == 'AX b AH + m'
     assert L.to_engine(['SH', 'IY1', 'NG', 'ZH', 'ER0']) == 'sh IY ng zh ER'
+
+
+# ------------------------------------------------- letters and run-together words ----
+@pytest.mark.parametrize('letter, want', [('t', 't IY'), ('s', 'EH s'), ('u', 'y UW'), ('b', 'b IY'), ("v's", 'v IY z')])
+def test_a_letter_set_to_a_note_is_said_by_its_name(letter, want):
+    out, warnings = say(letter)                 # a name spelled out, one capital to a note: the reader hands each on in lower case
+    assert out == [want] and not warnings
+
+
+def test_compound_may_use_the_small_common_words():
+    out, warnings = say('upanddown', 3)         # "up-and-down" as the reader joins it: "up" is too short for the rule, and allowed by name
+    assert out == ['AH', 'p AX n d', 'd AW n'] and not warnings

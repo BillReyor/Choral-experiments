@@ -261,18 +261,12 @@ def test_play_puts_key_tempo_and_time_right_at_a_jump():
     assert sorted(sc.tempo) == [(0., 60.), (0., 120.), (3., 60.), (7., 120.)]
 
 
-@pytest.mark.xfail(strict=True, reason='score.unroll only restores a STATE value that was set somewhere (score.py:137): '
-                                       'with no time: in the header, the default 4/4 is not put back after a jump '
-                                       'from a 3/4 passage, so a 4/4 measure is wrongly refused')
 def test_play_restores_default_time_signature_at_a_jump():
     text = 'play: 2 1\n== 1\nT1: c4/w\ntime: 3/4\n== 2\nT1: c4/h.\n'
     sc = parse(text)
     assert sc.measures == {1: (0., 3.), 2: (3., 4.)}
 
 
-@pytest.mark.xfail(strict=True, reason='score.unroll strips a tie before a jump only from the duration of the last '
-                                       'token (score.py:145-146); a tie on one chord note (c4~+e4/w) survives and '
-                                       'joins the note across the jump')
 def test_chord_note_tie_does_not_reach_across_a_jump():
     sc = parse('play: 1 1\n== 1\nRH: c4~+e4/w\n')
     c = sorted((n['beat'], n['dur']) for n in sc.piano if n['midi'] == 60)

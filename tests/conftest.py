@@ -1,5 +1,10 @@
 """Shared test setup: the repository root on the import path, the program's tools importable, and
-nothing a test does reaching the user's own library, browser or the network."""
+nothing a test does reaching the user's own library, browser or the network.
+
+How these tests are written (docs/how-it-works.md, "How a change is made"): the test comes first and is seen to
+fail; it is seen to fail again with the mending taken out.  No sheet music, no words of a real song and no
+recording goes in here - a test draws its own music and makes up its own words, and does not name the piece that
+showed the fault.  A sound's note is told from its overtones or its period, never asked of a pitch tracker."""
 import os
 import sys
 

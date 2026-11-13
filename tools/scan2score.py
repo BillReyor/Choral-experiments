@@ -797,10 +797,10 @@ LOOKALIKE = (('i', 'l'), ('l', 'i'), ('I', 'l'), ('1', 'l'), ('1', 'i'), ('rn', 
 
 def mend_lookalikes(line, ok, log=None, where=''):
     """One line of words as text recognition gave them, [[x, syllable], ...], with the letters it mistook put right.
-    Small print misleads it in a few known ways - an l read as an i ("span-gied"), rn as m, cl as d.  The syllables
+    Small print misleads it in a few known ways - an l read as an i ("won-der-fui"), rn as m, cl as d.  The syllables
     of a printed word (joined along their hyphens) that make no word, and that one such exchange turns into a word
     of six letters or more - by themselves, or beside other syllables of the same printed word that are words as
-    they stand ("star-" before "span-gled") - are taken to have been misread, if there is only one such exchange.
+    they stand ("snow-" before "cov-ered") - are taken to have been misread, if there is only one such exchange.
 
     It is kept this narrow on purpose.  Sung text is full of things no dictionary has - Hebrew, Latin, a syllable
     whose word began on the line before - and the dictionary is full of names: allowed short words, or words run
@@ -876,7 +876,7 @@ def syllables(words, unit, img=None, initials=True):
         return t == 'a' and any(near(re.sub(r"[^a-z]", '', v[4].lower()), 'tempo') for v in nxt)
     words = [w for i, w in enumerate(words) if not marking(i, w)]
     words = [w[:4] + (clean_word(w[4]),) for w in words if '(' not in w[4] and ')' not in w[4]
-             and not (CHORD.match(w[4].strip('.,')) and (len(w[4]) > 1 and w[4] not in ('Be', 'Am', 'Em', 'Go', 'Do', 'Ad', 'Dim')))]
+             and not (CHORD.match(w[4].strip('.,')) and (len(w[4].strip('.,')) > 1 and w[4] not in ('Be', 'Am', 'Em', 'Go', 'Do', 'Ad', 'Dim')))]     # ("A." is a word, or a letter, at the end of a sentence)
     named = lambda w: (round(w[0], 1), round(w[1], 1)) in spelled
     words = [w for w in words if named(w) or (not NOT_LYRICS.match(w[4]) and re.search(r"[aeiouyAEIOUY]", w[4])
              and (len(w[4].strip(".,;:!?'-")) > 1 or w[4].strip(".,;:!?'-").lower() in ('a', 'e', 'i', 'o', 'u')))]
@@ -1233,7 +1233,7 @@ def join_split_systems(crops, log=print):
             both = a['staves'] + c['staves']
             inner = [q[0] - p_[1] for p_, q in zip(both, both[1:])]
             gap = c['staves'][0][0] - a['staves'][-1][1]
-            rest = [g for g in inner if g != gap]
+            rest = inner[:len(a['staves']) - 1] + inner[len(a['staves']):]      # every gap but the one between the two groups
             if ma == mc and len(ma) == 1 and rest and gap < 1.5 * max(rest):
                 a['staves'] = both; a['kinds'] = a['kinds'] + c['kinds']; a['read'] = a['read'] + c['read']; a['bot'] = c['bot']
                 a['x1'] = max(a['x1'], c['x1'])
