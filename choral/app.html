@@ -97,6 +97,44 @@ details.more > summary { color: var(--link); }
 details.more > div { padding-top: 6px; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.45 ui-monospace, Menlo, monospace; margin: 6px 0 0; max-height: 220px; overflow: auto; }
 
+/* fixing a note or a word: one measure, drawn as on the page */
+.fixnav { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 12px 0 4px; }
+.fixnav .where { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.fixnav input { font: inherit; padding: 8px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); }
+.fixnav input[type=number] { width: 4.6em; text-align: center; }
+.fixnav input[type=search] { width: 9.5em; }
+.staffname { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; margin: 18px 0 2px; }
+.staffname b { font-family: ui-rounded, -apple-system, sans-serif; }
+.staff { display: flex; overflow-x: auto; padding: 2px 2px 10px; color: var(--ink); }
+.col { flex: none; width: 86px; text-align: center; }
+.col.clef { width: 46px; }
+.col svg { display: block; width: 100%; height: 132px; overflow: visible; }
+.col .len { font-size: 12.5px; line-height: 1.25; color: var(--soft); min-height: 32px; }
+.col .len b { display: block; color: var(--ink); font-size: 13.5px; }
+.col input { width: 78px; font: inherit; font-size: 15px; text-align: center; padding: 6px 2px; margin-top: 4px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); }
+.col input::placeholder { color: var(--soft); opacity: .8; }
+.notehead { cursor: pointer; outline: none; }
+.notehead:hover .head, .notehead:focus-visible .head { stroke: var(--accent); stroke-width: 3; }
+.notehead.picked .head { fill: var(--accent); stroke: var(--accent); }
+.notehead .halo { fill: transparent; }
+.notehead.picked .halo { fill: var(--accent); opacity: .16; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--chip); border-radius: 12px; padding: 10px 12px; margin: 0 0 6px; }
+.tools .is { font-weight: 600; margin-right: 6px; }
+.tools button { min-height: 40px; padding: 6px 12px; }
+.tools .gap { width: 10px; }
+
+/* what this computer can do */
+.can { list-style: none; padding: 0; margin: 12px 0 4px; }
+.can li { display: grid; grid-template-columns: 34px 1fr auto; gap: 2px 10px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--line); }
+.can li:first-child { border-top: 0; }
+.can .mark { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font-weight: 700; font-size: 15px; align-self: center; }
+.can .yes .mark { background: transparent; color: var(--good); border: 2px solid currentColor; }
+.can .slow .mark { background: var(--warn-bg); color: var(--warn-ink); }
+.can .no .mark { background: var(--bad-bg); color: var(--bad-ink); }
+.can b { font-family: ui-rounded, -apple-system, sans-serif; }
+.can .t { font-weight: 600; white-space: nowrap; }
+.can .why { grid-column: 2 / -1; font-size: 14.5px; color: var(--soft); }
+
 /* working */
 .bar { height: 12px; background: var(--bar); border-radius: 8px; overflow: hidden; margin: 12px 0 6px; }
 .bar > i { display: block; height: 100%; width: 0; background: var(--rainbow); border-radius: 8px; transition: width .6s; }
@@ -147,6 +185,7 @@ footer .heart { color: var(--ink); }
 
   <div id="pieces"></div>
   <div id="voices"></div>
+  <div id="computer"></div>
 
   <footer>
     <details>
@@ -195,14 +234,17 @@ function chooser(p) {
   const shared = r.parts.filter(x => x[2]).map(x => x[2]);
   const m = r.minutes || 3, was = made.voices || last.voices, size = made.singers || last.singers;
   const pick = was === 'built-in' || !real ? 'quick' : size == 12 ? 'full' : 'small';
+  const can = k => ((S.computer || {}).rows || []).find(x => x.key === k) || {};           // what the check of this computer found
+  const took = (k, guess) => { const c = can(k); return c.secs ? about(Math.max(60, c.secs * m / 3)).replace(/^a/, 'A') : guess; };
   const opts = [
-    ['quick', 'Quick listen', 'Built-in voices. Clear, but plainly a machine: good for checking the notes.', 'About a minute', false],
-    ['small', 'Real voices, small choir', 'Four singers to a part.', real ? 'About ' + Math.max(2, Math.round(m * 3.5 + 4)) + ' minutes' : 'Add real voices first (below)', !real],
-    ['full', 'Real voices, full choir', 'Twelve singers to a part: the best sound.', real ? 'About ' + Math.max(3, Math.round(m * 10 + 4)) + ' minutes' : 'Add real voices first (below)', !real]];
-  const sound = el('div', { class: 'choices' }, opts.map((o, i) => el('div', null, el('input', { type: 'radio', name: n + 's', id: n + 's' + i, value: o[0], checked: o[0] === pick, disabled: o[4] }), el('label', { class: 'choice', for: n + 's' + i }, el('b', null, o[1]), el('span', null, o[2]), el('span', { class: 'time' }, o[3])))));
+    ['quick', 'Quick listen', 'Built-in voices. Clear, but plainly a machine: good for checking the notes.', took('quick', 'About a minute'), false],
+    ['small', 'Real voices, small choir', 'Four singers to a part.', can('small').level === 'no' ? 'Not on this computer' : real ? took('small', 'About ' + Math.max(2, Math.round(m * 3.5 + 4)) + ' minutes') : 'Add real voices first (below)', !real || can('small').level === 'no'],
+    ['full', 'Real voices, full choir', 'Twelve singers to a part: the best sound.', can('full').level === 'no' ? 'Not on this computer' : real ? took('full', 'About ' + Math.max(3, Math.round(m * 10 + 4)) + ' minutes') : 'Add real voices first (below)', !real || can('full').level === 'no']];
+  const chosen = (opts.find(o => o[0] === pick && !o[4]) || opts.find(o => !o[4]))[0];        // (never one that cannot be had here)
+  const sound = el('div', { class: 'choices' }, opts.map((o, i) => el('div', null, el('input', { type: 'radio', name: n + 's', id: n + 's' + i, value: o[0], checked: o[0] === chosen, disabled: o[4] }), el('label', { class: 'choice', for: n + 's' + i }, el('b', null, o[1]), el('span', null, o[2]), el('span', { class: 'time' }, o[3])))));
   const node = el('div', null,
     el('fieldset', null, el('legend', null, 'Which part do you sing?'), parts, forAll, shared.length ? el('p', { class: 'small', style: 'margin-top:6px' }, shared.join(' ')) : null),
-    el('fieldset', null, el('legend', null, 'How should it sound?'), sound, real ? el('p', { class: 'small', style: 'margin-top:8px' }, 'Times are for a recent Mac; older ones take longer. You can close this window while it works. Keep the Mac plugged in.') : null));
+    el('fieldset', null, el('legend', null, 'How should it sound?'), sound, real ? el('p', { class: 'small', style: 'margin-top:8px' }, (S.computer ? 'Times are estimates from a short test of this computer. ' : 'Times are for a recent Mac; older ones take longer. ') + 'You can close this window while it works. Keep the Mac plugged in.') : null));
   const get = () => { const part = $('input[name=' + n + 'p]:checked', node), s = ($('input[name=' + n + 's]:checked', node) || {}).value || 'quick'; return { part: part && part.value, voices: s === 'quick' ? 'built-in' : 'real', singers: s === 'small' ? 4 : 12 }; };
   return { node, get };
 }
@@ -225,15 +267,113 @@ function goodToKnow(p) {
 
 function more(p, withFix) {
   return el('details', { class: 'more' }, el('summary', null, withFix ? 'Something sound wrong? More options' : 'More options'), el('div', null,
-    withFix ? el('p', { class: 'small' }, 'If a note or a word is wrong, you can correct what was read. It opens as plain text; change it, save, then make the tracks again. Only what you changed is sung again.') : null,
+    withFix ? el('p', { class: 'small' }, 'If a note or a word is wrong, you can fix it here. You see each measure as it is in your sheet music, move a note up or down, or retype a word, and hear it straight away. Then make the tracks again: only what you changed is sung again.') : null,
     el('div', { class: 'row', style: 'margin-top:4px' },
-      withFix ? el('button', { onclick: () => act('/api/score', { id: p.id }) }, 'Correct a note or a word') : null,
-      withFix ? el('a', { class: 'button', href: 'https://github.com/BillReyor/Palare-Piano/blob/main/docs/score-format.md', target: '_blank', rel: 'noopener' }, 'How the text is written') : null,
-      el('button', { onclick: () => { if (confirm('Move “' + (p.title || p.id) + '” and its tracks to the Trash?')) act('/api/remove', { id: p.id }); } }, 'Remove this piece'))));
+      withFix ? el('button', { class: 'main', onclick: () => openFixer(p) }, 'Fix a note or a word') : null,
+      el('button', { onclick: () => { if (confirm('Move “' + (p.title || p.id) + '” and its tracks to the Trash?')) act('/api/remove', { id: p.id }); } }, 'Remove this piece')),
+    withFix ? el('p', { class: 'small', style: 'margin-top:10px' }, 'A wrong rhythm or a missing note cannot be fixed here yet. For that, ', el('button', { class: 'quiet', onclick: () => act('/api/score', { id: p.id }) }, 'open the music as text'), ' (', el('a', { href: 'https://github.com/BillReyor/Palare-Piano/blob/main/docs/score-format.md', target: '_blank', rel: 'noopener' }, 'how it is written'), ').') : null));
+}
+
+// ---- Fix a note or a word: one measure drawn as on the page; click a note to move it, type under it to change its word
+const fixing = {};
+const SVG = (tag, attrs, ...kids) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in (attrs || {})) if (attrs[k] != null && attrs[k] !== false) e.setAttribute(k, attrs[k]); for (const c of kids.flat(Infinity)) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(c)); return e; };
+const SIGN = { '#': '♯', 'b': '♭', 'n': '♮', '##': '𝄪', 'bb': '𝄫' }, STEPH = 6, BOTTOM = 90;
+let AC = null;
+function tone(midi, when, dur) { const o = AC.createOscillator(), g = AC.createGain(); o.type = 'triangle'; o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12); g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(.15, when + .02); g.gain.setValueAtTime(.15, when + Math.max(.03, dur - .06)); g.gain.linearRampToValueAtTime(0, when + dur); o.connect(g); g.connect(AC.destination); o.start(when); o.stop(when + dur + .03); }
+function hear(m, staves) { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume(); const t0 = AC.currentTime + .06, beat = 60 / (m.tempo || 100); staves.forEach(st => { let t = 0; st.notes.forEach(nt => { if (!nt.rest) nt.pitches.forEach(q => tone(q.midi, t0 + t * beat, Math.max(.12, nt.beats * beat * .96))); t += nt.beats; }); }); }
+
+function noteColumn(pid, m, st, nt) {
+  const f = fixing[pid], base = st.clef === 'treble' ? 30 : 18, y = step => BOTTOM - (step - base) * STEPH, cx = 43;
+  const g = SVG('svg', { viewBox: '0 0 86 132', role: 'group' });
+  for (let i = 0; i < 5; i++) g.append(SVG('line', { x1: 0, x2: 86, y1: y(base + 2 * i), y2: y(base + 2 * i), stroke: 'currentColor', 'stroke-width': 1, opacity: .55 }));
+  if (nt.rest) g.append(SVG('text', { x: cx, y: y(base + 4) + 5, 'text-anchor': 'middle', 'font-size': 14, fill: 'currentColor', opacity: .7 }, 'rest'));
+  else {
+    const ps = nt.pitches.slice().sort((a, b) => a.step - b.step), hollow = 'wh'.includes(nt.code[0]);
+    const up = (ps[0].step + ps[ps.length - 1].step) / 2 < base + 4;
+    ps.forEach(q => { for (let s = base - 2; s >= q.step; s -= 2) g.append(SVG('line', { x1: cx - 15, x2: cx + 15, y1: y(s), y2: y(s), stroke: 'currentColor', 'stroke-width': 1.2 })); for (let s = base + 10; s <= q.step; s += 2) g.append(SVG('line', { x1: cx - 15, x2: cx + 15, y1: y(s), y2: y(s), stroke: 'currentColor', 'stroke-width': 1.2 })); });
+    if (nt.code[0] !== 'w') { const x = up ? cx + 8 : cx - 8; g.append(SVG('line', { x1: x, x2: x, y1: y(up ? ps[0].step : ps[ps.length - 1].step), y2: up ? y(ps[ps.length - 1].step) - 36 : y(ps[0].step) + 36, stroke: 'currentColor', 'stroke-width': 1.6 })); }
+    ps.forEach((q, i) => {
+      const side = i && q.step - ps[i - 1].step === 1 ? (up ? 15 : -15) : 0, picked = f.picked && f.picked.line === st.line && f.picked.t === nt.t && f.picked.k === q.k;
+      const head = SVG('g', { class: 'notehead' + (picked ? ' picked' : ''), tabindex: 0, role: 'button', 'aria-label': q.sounds + ', ' + nt.length + ' note. Press to choose it.' },
+        SVG('circle', { class: 'halo', cx: cx + side, cy: y(q.step), r: 15 }),
+        SVG('ellipse', { class: 'head', cx: cx + side, cy: y(q.step), rx: 8.5, ry: 6, transform: 'rotate(-18 ' + (cx + side) + ' ' + y(q.step) + ')', fill: hollow ? 'var(--card)' : 'currentColor', stroke: 'currentColor', 'stroke-width': 2 }),
+        q.sign ? SVG('text', { x: cx + side - 24, y: y(q.step) + 6, 'font-size': 19, fill: 'currentColor' }, SIGN[q.sign]) : null,
+        nt.code.includes('.') ? SVG('circle', { cx: cx + side + 15, cy: y(q.step) - 3, r: 2.2, fill: 'currentColor' }) : null,
+        (nt.tie || q.tie) ? SVG('path', { d: 'M' + (cx + side + 10) + ' ' + (y(q.step) + 9) + ' Q ' + (cx + 34) + ' ' + (y(q.step) + 17) + ' 86 ' + (y(q.step) + 9), fill: 'none', stroke: 'currentColor', 'stroke-width': 1.4 }) : null);
+      const pick = () => { f.picked = { line: st.line, t: nt.t, k: q.k }; paintFixer(pid); AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume(); tone(q.midi, AC.currentTime + .03, .5); };
+      head.addEventListener('click', pick);
+      head.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); f.picked = { line: st.line, t: nt.t, k: q.k }; moveNote(pid, { step: e.key === 'ArrowUp' ? 1 : -1 }); } });
+      g.append(head);
+    });
+  }
+  const names = nt.rest ? '' : nt.pitches.slice().sort((a, b) => b.step - a.step).map(q => q.sounds).join(' / ');
+  const box = nt.rest ? null : el('input', { type: 'text', value: nt.word, placeholder: nt.held ? '(held)' : '–', 'aria-label': 'Word under this note', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
+  if (box) box.addEventListener('change', () => fixPost(pid, '/api/fix/word', { line: st.line, t: nt.t, text: box.value }));
+  return el('div', { class: 'col' }, g, el('div', { class: 'len' }, names ? el('b', null, names) : null, nt.length), box);
+}
+
+function clefColumn(st) {
+  const base = st.clef === 'treble' ? 30 : 18, y = step => BOTTOM - (step - base) * STEPH, g = SVG('svg', { viewBox: '0 0 46 132' });
+  for (let i = 0; i < 5; i++) g.append(SVG('line', { x1: 0, x2: 46, y1: y(base + 2 * i), y2: y(base + 2 * i), stroke: 'currentColor', 'stroke-width': 1, opacity: .55 }));
+  g.append(st.clef === 'treble' ? SVG('text', { x: 6, y: BOTTOM + 3, 'font-size': 56, fill: 'currentColor' }, '𝄞') : SVG('text', { x: 6, y: BOTTOM - 13, 'font-size': 46, fill: 'currentColor' }, '𝄢'));
+  return el('div', { class: 'col clef' }, g, el('div', { class: 'len' }, st.clef === 'treble' ? 'treble clef' : 'bass clef'));
+}
+
+async function fixPost(pid, path, data) {
+  const f = fixing[pid]; f.msg = '';
+  try { const j = await post(path, Object.assign({ id: pid, n: f.m.n }, data)); if (j.measure) f.m = j.measure; if (j.changed != null) f.changed = j.changed; if (j.outline) { f.outline = j.outline; f.changed = j.outline.changed; } return j; }
+  catch (e) { f.msg = e.message; }
+  finally { paintFixer(pid); }
+}
+async function moveNote(pid, how) { const f = fixing[pid], k = f.picked; if (!k) return; const j = await fixPost(pid, '/api/fix/move', Object.assign({ line: k.line, t: k.t, k: k.k }, how)); if (j && j.measure) { const st = j.measure.staves.find(s => s.line === k.line), nt = st && st.notes.find(x => x.t === k.t), q = nt && nt.pitches.find(x => x.k === k.k); if (q) { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); AC.resume(); tone(q.midi, AC.currentTime + .03, .5); } } }
+async function goMeasure(pid, n) { const f = fixing[pid]; if (n == null || !f.outline.measures.includes(n)) { f.msg = 'There is no measure ' + n + ' in this piece. It runs from ' + f.m.first + ' to ' + f.m.last + '.'; return paintFixer(pid); } f.picked = null; f.found = null; f.m = Object.assign({}, f.m, { n }); await fixPost(pid, '/api/fix/measure', { n }); }
+
+function paintFixer(pid) {
+  const c = cards[pid], f = fixing[pid]; if (!c || !f) return;
+  const host = $('.fixbody', c.node), m = f.m, keep = document.activeElement && document.activeElement.closest && document.activeElement.closest('.staff') ? document.activeElement.closest('.staff').scrollLeft : 0;
+  const num = el('input', { type: 'number', value: m.n, min: m.first, max: m.last, 'aria-label': 'Measure number' });
+  num.addEventListener('change', () => goMeasure(pid, parseInt(num.value, 10)));
+  const word = el('input', { type: 'search', placeholder: 'a word', 'aria-label': 'Find a word' });
+  const find = async () => { if (!word.value.trim()) return; const j = await post('/api/fix/find', { id: pid, text: word.value }).catch(e => ({ found: [] })); if (!j.found.length) { f.msg = 'No measure has the word “' + word.value + '”.'; paintFixer(pid); } else { f.found = { text: word.value, at: j.found }; await goMeasure(pid, j.found[0]); f.found = { text: word.value, at: j.found }; paintFixer(pid); } };
+  word.addEventListener('keydown', e => { if (e.key === 'Enter') find(); });
+  const kids = [
+    el('p', null, 'Compare this with your sheet music, one measure at a time. ', el('b', null, 'Click a note'), ' to move it up or down. ', el('b', null, 'Type under a note'), ' to change its word.'),
+    el('div', { class: 'fixnav' },
+      el('span', { class: 'where' }, el('button', { disabled: m.prev == null, onclick: () => goMeasure(pid, m.prev), 'aria-label': 'Previous measure' }, '◀'), 'Measure', num, el('button', { disabled: m.next == null, onclick: () => goMeasure(pid, m.next), 'aria-label': 'Next measure' }, '▶')),
+      el('span', { class: 'where' }, 'or find', word, el('button', { onclick: find }, 'Find')),
+      el('button', { onclick: () => hear(m, m.staves) }, '▶ Hear this measure')),
+    f.found ? el('p', { class: 'small' }, '“' + f.found.text + '” is sung in measure' + (f.found.at.length > 1 ? 's ' : ' '), f.found.at.map((n, i) => [i ? ', ' : '', n === m.n ? el('b', null, n) : el('button', { class: 'quiet', onclick: () => { const keepFound = f.found; goMeasure(pid, n).then(() => { f.found = keepFound; paintFixer(pid); }); } }, n)]), '.') : null,
+    f.msg ? el('p', { class: 'note bad', role: 'alert' }, f.msg) : null];
+  if (f.outline.locked) kids.push(el('p', { class: 'note warn' }, 'The words of this piece are kept in a separate file, so they cannot be changed here. Notes can.'));
+  m.staves.forEach(st => {
+    kids.push(el('div', { class: 'staffname' }, el('span', null, el('b', null, st.label), st.hint ? el('span', { class: 'small' }, '  ' + st.hint) : null), el('button', { onclick: () => hear(m, [st]) }, '▶ Hear this line')));
+    kids.push(el('div', { class: 'staff' }, clefColumn(st), st.notes.map(nt => noteColumn(pid, m, st, nt))));
+    const k = f.picked;
+    if (k && k.line === st.line) {
+      const nt = st.notes.find(x => x.t === k.t), q = nt && nt.pitches.find(x => x.k === k.k);
+      if (q) kids.push(el('div', { class: 'tools' }, el('span', { class: 'is' }, 'This note is ' + q.sounds + '.'),
+        el('button', { onclick: () => moveNote(pid, { step: 1 }) }, '▲ Higher'), el('button', { onclick: () => moveNote(pid, { step: -1 }) }, '▼ Lower'), el('span', { class: 'gap' }),
+        el('button', { onclick: () => moveNote(pid, { sign: '#' }), 'aria-pressed': q.sign === '#' }, '♯ Sharp'), el('button', { onclick: () => moveNote(pid, { sign: 'b' }), 'aria-pressed': q.sign === 'b' }, '♭ Flat'), el('button', { onclick: () => moveNote(pid, { sign: 'n' }), 'aria-pressed': q.sign === 'n' }, '♮ Natural'), q.sign ? el('button', { onclick: () => moveNote(pid, { sign: '' }) }, 'No sign') : null));
+    }
+  });
+  if (!m.staves.length) kids.push(el('p', { class: 'note' }, 'Nobody sings in this measure.'));
+  kids.push(el('p', { class: 'small', style: 'margin-top:10px' }, 'A word that carries on to the next note ends with a hyphen, as in the music: “Shen-” “an-” “doah”. The key signature is not drawn; the name under each note is what it sounds as.'));
+  kids.push(el('div', { class: 'go' },
+    el('button', { class: 'main', onclick: () => { delete fixing[pid]; cards[pid].key = ''; refresh(); } }, 'Done'),
+    f.changed ? el('span', { class: 'small' }, f.changed + (f.changed === 1 ? ' line' : ' lines') + ' of music changed so far. ') : el('span', { class: 'small' }, 'Nothing changed yet.'),
+    f.changed ? el('button', { class: 'quiet', onclick: () => { if (confirm('Undo every change you have made to this piece, and go back to what was first read?')) { f.picked = null; fixPost(pid, '/api/fix/undo', {}); } } }, 'Undo all my changes') : null));
+  host.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
+  const row = host.querySelector('.staff'); if (row && keep) row.scrollLeft = keep;
+}
+
+async function openFixer(p) {
+  try { const j = await post('/api/fix/open', { id: p.id }); fixing[p.id] = { outline: j.outline, m: j.measure, changed: j.outline.changed, picked: null, msg: '' }; if (cards[p.id]) cards[p.id].key = ''; draw(); }
+  catch (e) { say(p.id, e.message); }
 }
 
 function build(p) {
   const st = p.status, r = p.read || {}, pill = PILL[st] || ['', ''];
+  if (fixing[p.id]) { const node = el('section', { class: 'card', 'aria-label': 'Fixing ' + (p.title || p.id) }, el('div', { class: 'head' }, el('h2', null, p.title || p.id), el('span', { class: 'pill' }, 'Fixing a note or a word')), el('div', { class: 'fixbody' })); setTimeout(() => paintFixer(p.id), 0); return node; }
   const kids = [el('div', { class: 'head' }, el('h2', null, p.title || p.id), el('span', { class: 'pill ' + pill[1] }, pill[0]))];
   if (r.measures) kids.push(el('p', { class: 'small' }, r.measures + ' measures' + (r.minutes ? ', about ' + (r.minutes < 1.5 ? 'a minute' : Math.round(r.minutes) + ' minutes') + ' of music' : '') + (r.latin ? ' · in Latin' : '')));
   kids.push(el('p', { class: 'note bad msg', hidden: true, role: 'alert' }));
@@ -242,6 +382,7 @@ function build(p) {
   if (st === 'unreadable') kids.push(el('div', { class: 'note bad' }, 'This could not be read as music for tenor and bass voices. It may be a different kind of score, or a scan too faint to read.', el('details', null, el('summary', null, 'What the reader said'), el('pre', null, (p.error || []).join('\n')))), more(p, false));
   if (st === 'failed') kids.push(el('div', { class: 'note bad' }, 'Making the tracks did not finish. You can try again; what was finished is kept.', el('details', null, el('summary', null, 'What it said'), el('pre', null, (p.error || []).join('\n')))));
   if (p.note) kids.push(el('p', { class: 'note' }, p.note));
+  if (p.stale && st === 'ready' && p.made) kids.push(el('div', { class: 'note warn' }, 'You have changed the music since these tracks were made. ', el('button', { onclick: () => act('/api/render', { id: p.id, part: p.made.part, voices: p.made.voices, singers: p.made.singers }) }, 'Make the tracks again')));
 
   if (st === 'queued' || st === 'rendering') kids.push(el('p', { class: 'stage' }, st === 'queued' ? 'Waiting for its turn: one piece is made at a time.' : 'Starting…'), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small eta' }),
     el('div', { class: 'row' }, el('button', { onclick: () => act('/api/stop', { id: p.id }) }, st === 'queued' ? 'Take it out of the line' : 'Stop'), st === 'rendering' ? el('span', { class: 'small' }, 'You can close this window; it keeps going.') : null));
@@ -287,16 +428,39 @@ function live(p, node) {
 }
 
 function drawVoices() {
-  const v = S.voices, key = JSON.stringify([v.ready, v.running, v.can, !!v.error]);
+  const blocked = ((S.computer || {}).rows || []).find(x => x.key === 'small' && x.level === 'no');
+  const v = S.voices, key = JSON.stringify([v.ready, v.running, v.can, !!v.error, !!blocked]);
   const box = $('#voices'), chip = $('#voicechip');
   chip.hidden = false; chip.className = 'pill' + (v.ready ? ' good' : ''); chip.textContent = v.ready ? '✓ Real voices' : v.running ? 'Adding real voices…' : 'Built-in voices';
   if (key !== voicesKey) {
     voicesKey = key; box.textContent = '';
     if (v.running) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'Adding real voices'), el('span', { class: 'pill' }, 'Working')), el('p', { class: 'stage' }), el('div', { class: 'bar busy' }, el('i')), el('p', { class: 'small' }, 'This downloads about 4 GB and can take half an hour on a slow connection. Meanwhile you can add pieces and make quick-listen tracks.')));
+    else if (!v.ready && v.can && blocked) box.append(el('p', { class: 'small' }, 'Real voices are not offered here: ' + blocked.why.charAt(0).toLowerCase() + blocked.why.slice(1) + ' Someone with a newer Mac can make tracks for every part and share them with you.'));
     else if (!v.ready && v.can) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'Want it to sound like a real choir?'), el('span', { class: 'pill' }, 'Optional')), el('p', null, 'Right now the choir is sung by built-in voices: clear, quick, and plainly a machine. You can add real recorded voices, and the tracks will sound like people singing.'), el('p', { class: 'small' }, 'It is a 4 GB download, once. After that, real-voice tracks take a good while to make: roughly ten minutes for every minute of music with the full choir.'), v.error ? el('div', { class: 'note bad' }, 'Adding the voices did not finish. Check the internet connection and try again.', el('details', null, el('summary', null, 'What it said'), el('pre', null, v.error))) : null, el('div', { class: 'go' }, el('button', { class: 'main', onclick: () => act('/api/voices') }, v.error ? 'Try again' : 'Add real voices'))));
     else if (!v.ready) box.append(el('p', { class: 'small' }, v.why));
   }
   if (v.running) { const s = $('.stage', box), bar = $('.bar', box); if (s) s.textContent = (v.stage || 'Starting') + '…'; if (bar) { const has = v.progress != null; bar.classList.toggle('busy', !has); $('i', bar).style.width = has ? Math.max(3, Math.round(v.progress * 100)) + '%' : ''; } }
+}
+
+let computerKey = '';
+function drawComputer() {
+  const c = S.computer, key = JSON.stringify([c, S.checking, S.voices.ready, S.voices.can]);
+  if (key === computerKey) return;
+  computerKey = key;
+  const box = $('#computer'); box.textContent = '';
+  if (!c) { if (S.checking) box.append(el('section', { class: 'card' }, el('div', { class: 'head' }, el('h2', null, 'What this computer can do'), el('span', { class: 'pill' }, 'Checking')), el('p', { class: 'stage' }, 'Trying it out for a few seconds…'), el('div', { class: 'bar busy' }, el('i')))); return; }
+  const MARK = { yes: ['✓', 'Works'], slow: ['~', 'Works, slowly'], no: ['✕', 'Not on this computer'] };
+  const mc = c.machine, all = c.rows.every(r => r.level === 'yes'), none = c.rows.filter(r => r.level === 'no').length;
+  box.append(el('section', { class: 'card', 'aria-label': 'What this computer can do' },
+    el('div', { class: 'head' }, el('h2', null, 'What this computer can do'), el('span', { class: 'pill' + (all ? ' good' : '') }, S.checking ? 'Checking again…' : all ? '✓ Everything' : none ? 'Not everything' : 'Everything, some of it slowly')),
+    el('p', { class: 'small' }, [mc.chip, mc.memory ? mc.memory + ' GB of memory' : null, mc.disk + ' GB of disk free'].filter(Boolean).join(' · ')),
+    el('ul', { class: 'can' }, c.rows.map(r => el('li', { class: r.level },
+      el('span', { class: 'mark', 'aria-hidden': 'true' }, MARK[r.level][0]),
+      el('span', null, el('b', null, r.what), el('span', { class: 'small' }, ' ' + r.detail), el('span', { class: 'small', style: 'display:block' }, MARK[r.level][1])),
+      el('span', { class: 't' }, r.time ? r.time.replace(/^a/, 'A') : ''),
+      r.why ? el('span', { class: 'why' }, r.why) : null))),
+    el('p', { class: 'small' }, 'Times are for a piece of three minutes, from a short test of this computer' + (c.rate ? '' : '; real voices are timed once they are added') + '. ' + (none ? 'For what does not work here, someone with a newer Mac can make the tracks for every part and share them. ' : '')),
+    el('div', { class: 'row' }, el('button', { disabled: S.checking, onclick: () => act('/api/check') }, 'Check again'))));
 }
 
 function draw() {
@@ -304,13 +468,15 @@ function draw() {
   $('#demo').hidden = !(S.demo && !S.pieces.length);
   $('#howto').hidden = S.pieces.length > 0;
   drawVoices();
+  drawComputer();
   const list = $('#pieces'), seen = {};
   S.pieces.forEach((p, i) => {
-    const key = JSON.stringify([p.status, p.tracks, p.read, p.error, p.note, p.made, p.title, S.voices.ready]);
+    const key = fixing[p.id] ? 'fixing' : JSON.stringify([p.status, p.tracks, p.read, p.error, p.note, p.made, p.title, p.stale, S.voices.ready, (S.computer || {}).when]);
     let c = cards[p.id];
     if (!c || c.key !== key) {
-      const using = c && c.node.contains(document.activeElement) && JSON.parse(c.key)[0] === p.status && document.activeElement.tagName === 'INPUT';
-      const playing = c && [...c.node.querySelectorAll('audio')].some(a => !a.paused) && JSON.stringify(JSON.parse(c.key)[1]) === JSON.stringify(p.tracks);
+      const old = c && c.key && c.key[0] === '[' ? JSON.parse(c.key) : null;        // (not while the fixer is opening or closing)
+      const using = old && c.node.contains(document.activeElement) && old[0] === p.status && document.activeElement.tagName === 'INPUT';
+      const playing = old && [...c.node.querySelectorAll('audio')].some(a => !a.paused) && JSON.stringify(old[1]) === JSON.stringify(p.tracks);
       if (!using && !playing) { const node = build(p); if (c) c.node.replaceWith(node); c = cards[p.id] = { key, node }; }
     }
     if (list.children[i] !== c.node) list.insertBefore(c.node, list.children[i] || null);

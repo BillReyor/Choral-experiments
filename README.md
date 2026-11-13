@@ -120,6 +120,16 @@ Click **Show the files in Finder**. A folder opens with your tracks in it. From 
 All your pieces are kept in the **Music** folder on your Mac, inside a folder called
 **Palare Piano**.
 
+## What will work on my computer?
+
+The first time it opens, Palare Piano tries your computer out for a few seconds. Near the bottom
+of the page, **What this computer can do** then lists each thing with a tick, a "works, slowly"
+or a cross, and how long a three-minute piece will take. Anything that will not work on your
+computer is switched off in the choices, with the reason.
+
+If real voices will not work on your Mac, you can still use **Quick listen**, or ask someone
+with a newer Mac to make the tracks for everyone (next section).
+
 ## Make tracks for your whole chorus
 
 One person can make the tracks for everybody, so that nobody else has to install anything.
@@ -152,9 +162,21 @@ tracks sound like people singing.
 Normal, especially for scans. Listen to the tracks first. Most of the time they are fine.
 
 **A note or a word is wrong.**
-Open **Something sound wrong? More options** under the piece. **Correct a note or a word** opens
-what was read as plain text. Fix it, save, and click **Make my tracks** again. Only the part you
-changed is sung again. [How the text is written](docs/score-format.md).
+You can fix it on the page, with your sheet music beside you:
+
+1. Under the piece, open **Something sound wrong? More options** and click **Fix a note or a
+   word**.
+2. Go to the measure: type its number, use the arrows, or type a word from the lyrics and click
+   **Find**. Each measure is drawn the way it looks in your music.
+3. **A wrong note:** click it, then click **Higher** or **Lower** until it sits where your
+   music has it. Sharp, flat and natural are there too. You hear the note each time.
+4. **A wrong word:** type the right one in the box under its note.
+5. Click **Hear this measure** to check it, then **Done**, then **Make the tracks again**. Only
+   what you changed is sung again.
+
+![Fixing a note or a word](docs/pictures/5-fix.jpg)
+
+**Undo all my changes** puts everything back as it was first read.
 
 **"No tempo is printed in this music."**
 Type the tempo your director takes (beats a minute) into the box and click **Set the tempo**.

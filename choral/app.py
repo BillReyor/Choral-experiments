@@ -30,6 +30,7 @@ jobs = queue.Queue()
 waiting = []                               # ids of the pieces in the queue, in order
 now = {}                                   # the job being done: id, kind, stage, progress, eta, proc
 setup = {'running': False, 'stage': '', 'progress': None, 'error': ''}
+checking = {'running': False}
 
 
 # ---- pieces on disk
@@ -69,6 +70,11 @@ def pieces():
                 continue
             d['id'] = pid
             d['tracks'] = [t for t in d.get('tracks', []) if os.path.exists(os.path.join(folder(pid), t))]
+            try:                                       # corrected since its tracks were made: they are out of date
+                sf = os.path.splitext(os.path.join(folder(pid), 'source', d['file']))[0] + '.score'
+                d['stale'] = bool(d['tracks']) and os.path.getmtime(sf) > (d.get('made') or {}).get('when', 1e18)
+            except (OSError, KeyError):
+                d['stale'] = False
             out.append(d)
     return sorted(out, key=lambda d: -d.get('added', 0))
 
@@ -157,9 +163,20 @@ def what_was_read(pid):
                 spelled=sum('is not in the dictionary' in l for l in said))
 
 
+def computer():
+    """What the last check of this computer found (choral/check.py), or None."""
+    try:
+        return json.load(open(os.path.join(LIB, '.computer.json')))
+    except (OSError, ValueError):
+        return None
+
+
 def run(cmd, logfile, follow=None):
     """Run a program, keep what it says in `logfile`, and hand every line to `follow`.  -> its exit code."""
     env = dict(os.environ, PYTHONUNBUFFERED='1')
+    found = computer()
+    if found and found.get('at_once'):                 # a machine short of memory sings fewer voices at once (render.at_once)
+        env.setdefault('CHORAL_WORKERS', str(found['at_once']))
     with open(logfile, 'w') as log:
         p = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace', env=env)
         now['proc'] = p
@@ -295,6 +312,23 @@ def share(pid):
     return out
 
 
+def do_check(opt):
+    """The short test of what this computer can do; with real voices installed, of how fast they are here too."""
+    checking.update(running=True)
+    logfile = os.path.join(LIB, '.computer.log')
+    got = {}
+
+    def follow(line):
+        if line.startswith('result: '):
+            got.update(json.loads(line[8:]))
+    try:
+        code = run([sys.executable, '-m', 'choral.check'] + (['--voices'] if opt.get('voices') else []), logfile, follow)
+        if not code and got:
+            json.dump(got, open(os.path.join(LIB, '.computer.json'), 'w'))
+    finally:
+        checking.update(running=False)
+
+
 def do_setup():
     setup.update(running=True, stage='Starting', progress=None, error='')
     logfile = os.path.join(LIB, '.voices-setup.log')
@@ -320,6 +354,10 @@ def worker():
         try:
             if kind == 'setup':
                 do_setup()
+                if voices_state()['ready']:            # now that they are here: how fast are they on this machine?
+                    do_check({'voices': True})
+            elif kind == 'check':
+                do_check(opt)
             elif not os.path.exists(info_file(pid)):
                 pass                                   # removed while it waited
             elif kind == 'read':
@@ -349,7 +387,7 @@ def stop_now():
 def state():
     with lock:
         job = {k: now.get(k) for k in ('id', 'kind', 'stage', 'progress', 'eta')} if now else None
-        return dict(pieces=pieces(), job=job, waiting=list(waiting), voices=voices_state(), library=LIB,
+        return dict(pieces=pieces(), job=job, waiting=list(waiting), voices=voices_state(), library=LIB, computer=computer(), checking=checking['running'],
                     last=settings(), demo=os.path.exists(os.path.join(ROOT, 'scores', 'demo_shenandoah.score')))
 
 
@@ -395,6 +433,33 @@ def act(path, q, body):
     if path == '/api/reveal':
         subprocess.run(['open', folder(pid)] if sys.platform == 'darwin' else ['xdg-open', folder(pid)])
         return {}
+    if path.startswith('/api/fix/'):                   # "Fix a note or a word": one measure, shown and changed (choral/fix.py)
+        from . import fix
+        with lock:
+            if now.get('id') == pid or pid in waiting:
+                raise ValueError('Wait until this piece has finished, then fix it.')
+        sf, n = score_of(pid), int(q.get('n') or 0)
+        try:
+            if path == '/api/fix/open':
+                o = fix.outline(sf)
+                return dict(outline=o, measure=fix.measure(sf, n if n in o['measures'] else o['measures'][0]))
+            if path == '/api/fix/measure':
+                return dict(measure=fix.measure(sf, n))
+            if path == '/api/fix/move':
+                m = fix.move(sf, n, int(q['line']), int(q['t']), int(q['k']), int(q.get('step') or 0), q.get('sign'))
+            elif path == '/api/fix/word':
+                m = fix.word(sf, n, int(q['line']), int(q['t']), q.get('text', ''))
+            elif path == '/api/fix/find':
+                return dict(found=fix.find(sf, q.get('text', '')))
+            elif path == '/api/fix/undo':
+                fix.undo_all(sf)
+                o = fix.outline(sf)
+                m = fix.measure(sf, n if n in o['measures'] else o['measures'][0])
+            else:
+                raise KeyError(path)
+        except fix.Refused as e:
+            raise ValueError(str(e))
+        return dict(measure=m, changed=fix.outline(sf)['changed'])
     if path == '/api/share':
         where = share(pid)
         subprocess.run(['open', where] if sys.platform == 'darwin' else ['xdg-open', where])
@@ -423,6 +488,11 @@ def act(path, q, body):
             return {}
         setup.update(running=True, stage='Waiting for its turn', error='')
         jobs.put(('setup', None, {}))
+        return {}
+    if path == '/api/check':
+        if not checking['running']:
+            checking.update(running=True)
+            jobs.put(('check', None, {'voices': voices_state()['ready']}))
         return {}
     if path == '/api/quit':
         stop_now()
@@ -569,6 +639,9 @@ def main():
                 waiting.append(d['id']); jobs.put(('read', d['id'], {}))
             elif d.get('status') in ('queued', 'rendering'):
                 save(d['id'], status='ready' if d.get('tracks') else 'read', note='This was interrupted. What was finished is kept: starting again goes on from there.')
+    if computer() is None:                             # first time here: see what this computer can do
+        checking.update(running=True)
+        jobs.put(('check', None, {'voices': voices_state()['ready']}))
     threading.Thread(target=worker, daemon=True).start()
     signal.signal(signal.SIGTERM, lambda *_: (stop_now(), os._exit(0)))
     print(f'Palare Piano is at http://127.0.0.1:{port}/  (pieces are kept in {LIB})', flush=True)

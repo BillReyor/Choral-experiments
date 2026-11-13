@@ -121,6 +121,16 @@ def loud(x):
     return float(np.sqrt(np.percentile(blk, 90)) + 1e-12)
 
 
+def at_once(most):
+    """How many singers are sung at the same time: one for each processor, up to `most`.  Each takes about half a
+    gigabyte while it sings, so a machine short of memory is given fewer (CHORAL_WORKERS) and takes longer."""
+    n = min(most, cpu_count())
+    try:
+        return max(1, min(n, int(os.environ['CHORAL_WORKERS'])))
+    except (KeyError, ValueError):
+        return n
+
+
 def _singer(task):
     """One singer's part.  An error of the kind that ends a loop (StopIteration), escaping from a worker, would end
     the list of singers without a word - a render of a few singers, or of none, written out as if it were whole."""
@@ -151,7 +161,7 @@ def sing(sc, clock, singers=12, log=print, tune=None, voices=None, late=0.):
              for i in ((1,) if sect in SINGLE else range(singers))]            # singer 1 is a section leader: on a close mic
     stems = {sect: np.zeros((3, N, 2), np.float32) for sect in voice.SECT if sc.parts[sect]}
     geo = np.random.default_rng(99)
-    with Pool(min(10, cpu_count())) as pool:
+    with Pool(at_once(10)) as pool:
         if voices:                                     # every singer first, then all of them to the voice model together
             from . import revoice
             done = list(pool.imap(_singer, tasks))

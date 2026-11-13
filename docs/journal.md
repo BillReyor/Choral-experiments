@@ -1581,3 +1581,58 @@ is touched. Both were tried in an empty home folder.
 
 *Not done:* anything that makes the program itself lighter. A Mac with 8 GB is as badly off as
 it was, unless someone else makes its owner's tracks.
+
+**Fixing a note without reading a file format.** The listener, on the page's "Correct a note or a
+word": it "needs to be MUCH MUCH MUCH more user friendly". It was a button that opened the score
+as a text file - `f4/e=Shen-` - in a text editor, which is how a programmer corrects a score and
+nobody else. Now the page draws the measure: a staff for each line of singers, the notes where
+they sit, the length of each and what it sounds as written under it, and under that a box with
+its word. Click a note and it can be moved up or down a step, or given a sharp, a flat or a
+natural, and it sounds each time; type in a box and the word is changed; "Hear this measure"
+plays what is written. A measure is found by its number, by stepping, or by a word of the text.
+
+*What it rests on.* The score mirrors the printed page, so the editing does too: a note is moved
+as one would point at the page, and what it sounds as is worked out again from the key signature
+and the accidentals before it in its measure - the same rules the reader of the score applies,
+written a second time so that a measure can be shown and played without singing it. The two
+were compared on three pieces, every sung note of every measure: 675 notes, none different. A
+change replaces one token of one line and leaves every other character of the file alone; the
+score is loaded afterwards, and if it no longer makes sense the file is put back and the
+reason given. The file as it was read is kept beside it, and "Undo all my changes" restores it
+to the byte. Tracks made before a change say so and offer to be made again.
+
+*What it does not do.* Rhythm, and notes that are missing or should not be there: a change of
+length must leave the measure adding up, and that takes two changes at once. The page says so,
+and the text file is still there for it. And it has been tried on the demo and by a program
+clicking; not by a singer with a page of music.
+
+**What this computer can do.** The listener asked for "a bench mark" in the page "that tells the
+user what functions will work on their computer and which are unlikely to", the aim being that
+it should run on most computers. The page now tries the computer out when it is first opened -
+one built-in voice singing a few seconds, which takes a quarter of a second here - and again
+when real voices are added, converting a few seconds with them. It shows the chip, the memory
+and the free disk, and for each of four things a tick, a "works, slowly" or a cross, with how
+long a three-minute piece will take and, where it will not work, why. What will not work is
+switched off in the choices.
+
+*The figures behind it*, all from the one machine (a piece of 3 minutes 24, twelve to a part):
+
+| Singers sung at once | Time | Memory at the peak |
+|---|---|---|
+| 10 | 61 s | 7.2 GB |
+| 4 | 80 s | 4.5 GB |
+| 2 | 109 s | 3.6 GB |
+| 1 | 162 s | 3.6 GB |
+
+So the singing is about 127 processor-seconds, shared out, and 48 seconds are work one processor
+does alone; and memory is about 3 GB however it is done plus half a gigabyte for each singer
+sung at once. Two singers at once take 109 seconds where ten take 61, and half the memory. So a
+machine with 8 GB or less is now given two at a time, one with 12 four, one with 18 six: slower
+by a minute, and it fits. On this machine the check says a minute for a quick listen, 13
+minutes for real voices with four to a part and 38 with twelve; the last was 33 and 43 minutes
+on the two pieces of that length rendered in the big test.
+
+*What it cannot know.* No smaller machine has been tried. A slower processor is assumed slower
+at everything in the proportion it is slower at a quarter-second of singing; the voice model is
+said to need 9 GB because it took 9 GB on a machine with 128, and it may make do with less where
+there is less, or fail. The crosses and the times on any machine but this one are reckoning.
