@@ -1774,6 +1774,8 @@ newest, and work is pushed as it goes: a singer pressing "Update now" could have
 middle of a change. They now take the newest version on a branch of its own, `stable`, and
 `tools/release.sh` moves that on only to a version that has passed the test on all three
 systems, at exactly that version. An installed copy remembers which branch it came from.
+The rule is not left to the script: the listener had the branch locked on GitHub, which now
+refuses a push to `stable` of any version without the three passed checks, whoever pushes.
 (GitHub's own machines stand in the way sometimes: twice in a day it had no Mac to give, and
 the test then ends without having run. The script starts it again when asked again.)
 

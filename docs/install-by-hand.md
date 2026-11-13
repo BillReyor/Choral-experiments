@@ -105,6 +105,10 @@ sh tools/release.sh --look      # what people would get
 sh tools/release.sh             # test it on the three systems if that has not been done, then move stable
 ```
 
-It moves `stable` only to a version the test above has passed, at exactly that version.
+It moves `stable` only to a version the test above has passed, at exactly that version. GitHub
+holds to the same rule by itself: `stable` is a protected branch that requires the three checks
+(Linux, Windows, Mac), for the owner too, so a push by hand of an untested version is refused. If
+GitHub has no machine to run a test on for a long while and a fix cannot wait, the lock is lifted
+under Settings, Branches on the repository's page - by a person, on purpose.
 `PALARE_CHANNEL=main` in front of the install line installs the work in progress instead, and that
 copy then follows `main`.
