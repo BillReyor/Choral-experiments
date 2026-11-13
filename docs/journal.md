@@ -1984,3 +1984,17 @@ is what misled the last hunt: it is told from which overtones carry the strength
 whether the sound repeats at the period it should. For real music there is a second net: the
 reader is run over the listener's own pieces before and after a change, and every reading that
 differs is looked at against its page. None of this says how it sounds. That is still a person.
+
+**The fixer's sound, while tracks are made.** The listener: with one piece being made, the notes
+of "Fix a note or a word" in another did not play. In a copy of the page with a render under way
+and every core busy, "Hear this measure" set out all its notes and each one ended on time - in
+one kind of browser, which is all that could be tried. What did turn up: a note that is *moved*
+sounded only when the change had been written and the piece looked over again - a quarter of a
+second on a quiet computer, up to five seconds on a busy one - and the page asked the browser
+for sound only then. A browser lets a page make sound just after a click, not seconds after.
+So the measure now says beforehand what each note would sound as if it were moved, and the page
+plays that at the click; it wakes its sound inside the click before waiting for anything; a
+second later it looks at whether the sound's clock has moved, makes the output again if it has
+not, and if that fails says so in words instead of staying silent. Whether this was all of what
+the listener met is not known: silence cannot be measured from here, and now at least it has
+something to say for itself.
