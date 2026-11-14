@@ -163,6 +163,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.45 ui-monos
 .where-in .now[hidden] { display: none; }
 .where-in .now b { font-size: 19px; min-width: 1.6em; display: inline-block; text-align: center; white-space: nowrap; }
 .where-in .jump { margin-left: auto; }
+.where-in .jump.again { margin-left: 0; }
+.where-in .pace { margin-left: auto; }
+.where-in select { font: inherit; font-size: 15px; padding: 6px 8px; min-height: 38px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); }
+.where-in button[aria-pressed=true] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--chip); }
 .where-in button { min-height: 38px; padding: 6px 12px; font-size: 15px; }
 .where-in input[type=number] { width: 4.6em; padding: 6px; text-align: center; }
 .row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-top: 14px; }
@@ -257,9 +261,32 @@ function runs(ms) {                                 // [0, 1, 2, 3, 4, 7, 9] -> 
   return (ms.length === 1 ? 'measure ' : 'measures ') + (out.length > 1 ? out.slice(0, -1).join(', ') + ' and ' + out[out.length - 1] : out[0]);
 }
 function measureAt(p, t) { const tl = p.timeline || []; if (!tl.length) return null; let lo = 0, hi = tl.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (tl[mid][0] <= t + .05) lo = mid; else hi = mid - 1; } return tl[lo][1]; }
+// A passage to repeat: from the beginning of measure a to the end of measure b, in a track whose measures begin at
+// tl ([seconds, measure], in the order played).  -> { from, to } in seconds (to: null for the end of the track), or
+// { missing: n } for a measure the piece has not.  Given the wrong way round they are taken the right way; where a
+// measure is played more than once (a repeat), the passage is the shortest that begins with a and ends with b.
+function stretch(tl, a, b) {
+  for (const n of [a, b]) if (!tl.some(x => x[1] === n)) return { missing: n };
+  const span = (a, b) => { const j = tl.findIndex((x, k) => x[1] === b && k >= tl.findIndex(y => y[1] === a)); if (j < 0) return null; let i = j; while (tl[i][1] !== a) i--; return { from: tl[i][0], to: j + 1 < tl.length ? tl[j + 1][0] : null }; };
+  return span(a, b) || span(b, a);
+}
+// Slower, for learning: the browser plays a track at less than its speed and keeps its pitch, so nothing is made again.
+const SPEEDS = [[1, 'As written'], [.85, 'A little slower'], [.7, 'Slower'], [.5, 'Half speed']];
+function speedOf(kept) { const v = parseFloat(kept); return SPEEDS.some(s => s[0] === v) ? v : 1; }
+let SPEED = 1; try { SPEED = speedOf(localStorage.getItem('palare-speed')); } catch (e) {}
+function setSpeed(v) {                               // for every track on the page, and the next time it is opened
+  SPEED = speedOf(v); try { localStorage.setItem('palare-speed', String(SPEED)); } catch (e) {}
+  document.querySelectorAll('audio').forEach(a => { a.defaultPlaybackRate = SPEED; a.playbackRate = SPEED; });
+  document.querySelectorAll('select.speed').forEach(x => { x.value = String(SPEED); });
+}
+const REPEATS = {};                                  // what was last asked to be repeated in each track: kept while the page is open
 const trackNode = (p, f, theirs) => {
   const [name, w] = trackName(f, theirs); const url = '/file/' + encodeURIComponent(p.id) + '/' + f.split('/').map(encodeURIComponent).join('/');
   const audio = el('audio', { controls: true, preload: 'none', src: url }), kids = [el('b', null, name), el('span', { class: 'small' }, w[0]), audio];
+  audio.preservesPitch = audio.webkitPreservesPitch = audio.mozPreservesPitch = true; audio.defaultPlaybackRate = audio.playbackRate = SPEED;
+  const speed = el('select', { class: 'speed', 'aria-label': 'Speed' }, SPEEDS.map(x => el('option', { value: String(x[0]) }, x[1])));
+  speed.value = String(SPEED); speed.addEventListener('change', () => setSpeed(speed.value));
+  const pace = el('label', { class: 'pace' }, 'Speed ', speed);
   if (/ muted\.[^.]+$/.test(f)) {                     // where another part sings this part's very notes, leaving it out does not take its line away
     const r = p.read || {}, label = theirs ? f.split('/')[0] : null, part = theirs ? ((r.parts || []).find(x => x[1] === label) || [])[0] : (p.made || {}).part;
     const ms = (r.doubled || {})[part] || [];
@@ -276,8 +303,37 @@ const trackNode = (p, f, theirs) => {
     const box = el('input', { type: 'number', min: first, max: last, inputmode: 'numeric', 'aria-label': 'Measure to start from' });
     const go = () => { const n = parseInt(box.value, 10), hit = tl.find(x => x[1] === n); if (!hit) return say(p.id, 'There is no measure ' + (box.value || 'with that number') + ' in this piece. It runs from ' + first + ' to ' + last + '.'); say(p.id, ''); audio.currentTime = Math.max(0, hit[0] - .15); audio.play(); };
     box.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
-    kids.push(el('div', { class: 'where-in' }, now, el('span', { class: 'jump' }, el('label', null, 'Start from measure ', box), el('button', { onclick: go }, '▶ Play from there'))));
-  }
+    kids.push(el('div', { class: 'where-in' }, now, el('span', { class: 'jump' }, el('label', null, 'Start from measure ', box), el('button', { onclick: () => { stop(); go(); } }, '▶ Play from there'))));
+    // Repeat a passage: from the beginning of one measure to the end of another, over and over, until it is stopped.
+    // The end is met by a clock set for it (the browser says where a track is only four times a second: by that
+    // alone a passage would run a quarter of a second into the next measure before it turned back).
+    const key = p.id + '/' + f, kept = REPEATS[key] || {};
+    const from = el('input', { type: 'number', min: first, max: last, inputmode: 'numeric', 'aria-label': 'Repeat from measure', value: kept.a != null ? kept.a : '' });
+    const to = el('input', { type: 'number', min: first, max: last, inputmode: 'numeric', 'aria-label': 'Repeat to measure', value: kept.b != null ? kept.b : '' });
+    const again = el('button', { 'aria-pressed': 'false' }, '↻ Repeat');
+    let loop = null, clock = null;
+    const back = () => { audio.currentTime = Math.max(0, loop.from - .15); if (audio.paused) audio.play(); };
+    const watch = () => {                              // where the track is, against where the passage ends
+      clearTimeout(clock); if (!loop || audio.paused) return;
+      const end = loop.to != null ? loop.to : audio.duration, left = (end - audio.currentTime) / (audio.playbackRate || 1);
+      if (audio.currentTime < loop.from - .5 || left <= .03) return back();        // (also: moved by hand to somewhere outside it)
+      if (isFinite(left)) clock = setTimeout(watch, Math.min(left * 1000, 2000));
+    };
+    function stop() { loop = null; clearTimeout(clock); again.textContent = '↻ Repeat'; again.setAttribute('aria-pressed', 'false'); }
+    const start = () => {
+      const a = parseInt(from.value, 10), b = parseInt(to.value || from.value, 10);
+      if (isNaN(a)) return say(p.id, 'Say which measures to repeat: the first and the last of the passage.');
+      const s = stretch(tl, a, isNaN(b) ? a : b);
+      if (s.missing != null) return say(p.id, 'There is no measure ' + s.missing + ' in this piece. It runs from ' + first + ' to ' + last + '.');
+      say(p.id, ''); loop = s; REPEATS[key] = { a, b: isNaN(b) ? a : b };
+      again.textContent = '■ Stop repeating'; again.setAttribute('aria-pressed', 'true'); back(); watch();
+    };
+    again.onclick = () => loop ? stop() : start();
+    [from, to].forEach(x => x.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); start(); } }));
+    ['play', 'seeked', 'ratechange', 'timeupdate'].forEach(e => audio.addEventListener(e, watch));
+    audio.addEventListener('ended', () => { if (loop) back(); });
+    kids.push(el('div', { class: 'where-in' }, el('span', { class: 'jump again' }, el('label', null, 'Repeat measures ', from), el('label', null, 'to ', to), again), pace));
+  } else kids.push(el('div', { class: 'where-in' }, pace));
   return el('div', { class: 'track', style: w[1] ? '--tint:' + w[1] : null }, kids);
 };
 const about = s => s < 90 ? 'about a minute' : 'about ' + Math.round(s / 60) + ' minutes';

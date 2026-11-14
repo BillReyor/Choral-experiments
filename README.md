@@ -158,6 +158,10 @@ ready** under your pieces.)
 While a track plays, the page shows which measure you are hearing. To start somewhere else, type
 a measure number in **Start from measure** and click **Play from there**.
 
+To work on a hard passage, type its first and last measure after **Repeat measures** and click
+**Repeat**: it plays over and over until you click **Stop repeating**. **Speed** plays any track
+slower, down to half speed, at the same pitch. Nothing has to be made again for either.
+
 ![The finished tracks](docs/pictures/3-tracks.jpg)
 
 | Track | What you hear |
