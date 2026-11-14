@@ -1998,3 +1998,24 @@ second later it looks at whether the sound's clock has moved, makes the output a
 not, and if that fails says so in words instead of staying silent. Whether this was all of what
 the listener met is not known: silence cannot be measured from here, and now at least it has
 something to say for itself.
+
+**A cure that was the illness.** The day after the fixer's sound was made "sturdier", the
+listener: the play button has stopped working. The picture showed the button with its ring on -
+so the click had been taken and the notes set out - and no sound. What had been added the day
+before was a check: half a second after notes were set out the page looked at whether the
+sound's clock had moved, and if not threw the output away and made another. It was written for
+a fault that had never been seen, and tried only against an output that started at once or
+never. An output that takes two seconds to start - headphones that have to be woken, a computer
+busy making tracks - was thrown away before it began, and so was its successor, at every click,
+for ever; and the successor was made outside a click, where some browsers will not wake one at
+all. Run against a stand-in for such an output, the page as given out made six outputs in five
+clicks and sounded none of them.
+
+It is now waited for: notes set out on an output that has not started are heard when it does,
+since its clock stands still until then. Nothing is thrown away for being slow, and nothing is
+made outside a click. Only after five seconds of nothing does the page say so, and only at the
+next click is an output that is still giving nothing made anew. The stand-in browser is in the
+tests now, with its slow start, its never starting, and its rule about clicks: what the page
+does with each was written down before the page was changed. The lesson is an old one. A guard
+against a fault nobody has seen can only be tried against the faults its author imagines, and
+here the author imagined the wrong ones; the plain version had worked.

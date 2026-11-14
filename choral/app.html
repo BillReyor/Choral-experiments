@@ -396,22 +396,31 @@ let AC = null;
 function tone(midi, when, dur) { const o = AC.createOscillator(), g = AC.createGain(); o.type = 'triangle'; o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12); g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(.15, when + .02); g.gain.setValueAtTime(.15, when + Math.max(.03, dur - .06)); g.gain.linearRampToValueAtTime(0, when + dur); o.connect(g); g.connect(AC.destination); o.start(when); o.stop(when + dur + .03); }
 // The page's own sound: the notes of "Fix a note or a word".  A browser lets a page make sound only just after a click,
 // so sound() is called in the click itself, before anything is waited for: it makes the output if there is none (or
-// the browser has closed it) and wakes it if the browser has put it to sleep.
-function sound() { const C = window.AudioContext || window.webkitAudioContext; if (!AC || AC.state === 'closed') AC = new C(); if (AC.state !== 'running') { const r = AC.resume(); if (r && r.catch) r.catch(() => {}); } return AC; }
+// the browser has closed it) and wakes it if the browser has put it to sleep.  An output that gave nothing the last
+// time it was asked - and is still giving nothing - is made anew: here, in a click, where a browser allows it.
+function sound() {
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (AC && AC.stuck && AC.state !== 'closed') { if (AC.state === 'running' && AC.currentTime > AC.stuck.at + .1) AC.stuck = null; else { try { AC.close(); } catch (e) {} AC = null; } }
+  if (!AC || AC.state === 'closed') AC = new C();
+  if (AC.state !== 'running') { const r = AC.resume(); if (r && r.catch) r.catch(() => {}); }
+  return AC;
+}
 // play(pid, plan): plan(t0) sets the notes out from the moment t0 on the sound's own clock and says how many seconds
-// they last.  A second later the clock is looked at: if it has not moved, the output is stuck - a browser that
-// has slept, a computer busy making tracks - and it is thrown away, made again and the notes set out once more.
-// If that does not move either, the page says so instead of staying silent.
-const NO_SOUND = 'Your browser is not letting this page make sound just now. Click the button once more. If it stays silent, reload this page (your corrections are kept).';
-function play(pid, plan, btn, again) {
+// they last.  The clock stands still until the output has started, so notes set out on an output that is slow to
+// start - headphones to be woken, a computer busy making tracks - are simply heard late.  It is never thrown away
+// for being slow: a version that gave it under a second, then made another, was silent at every click on a computer
+// whose output took two.  Only if nothing has moved after five seconds does the page say so, and mark the output
+// to be looked at again at the next click.
+const NO_SOUND = 'No sound came from your browser just now. Click the button once more. If it stays silent, reload this page (your corrections are kept).';
+function play(pid, plan, btn) {
   const ac = sound(), from = ac.currentTime, secs = plan(from + .08);
   if (btn) { btn.classList.add('sounding'); setTimeout(() => btn.classList.remove('sounding'), Math.max(300, secs * 1000 + 150)); }
   setTimeout(() => {
-    const f = fixing[pid];
-    if (ac !== AC || (ac.state === 'running' && ac.currentTime > from + .1)) { if (ac === AC && f && f.msg === NO_SOUND) { f.msg = ''; paintFixer(pid); } return; }
-    if (!again) { try { ac.close(); } catch (e) {} AC = null; return play(pid, plan, btn, true); }
-    if (f) { f.msg = NO_SOUND; paintFixer(pid); }
-  }, again ? 1500 : 900);
+    if (ac !== AC) return;
+    const f = fixing[pid], moved = ac.state === 'running' && ac.currentTime > from + .1;
+    ac.stuck = moved ? null : { at: ac.currentTime };
+    if (f && (moved ? f.msg === NO_SOUND : f.msg !== NO_SOUND)) { f.msg = moved ? '' : NO_SOUND; paintFixer(pid); }
+  }, 5000);
 }
 function hear(pid, m, staves, btn) { const beat = 60 / (m.tempo || 100); play(pid, t0 => { let end = 0; staves.forEach(st => { let t = 0; st.notes.forEach(nt => { if (!nt.rest) nt.pitches.forEach(q => tone(q.midi, t0 + t * beat, Math.max(.12, nt.beats * beat * .96))); t += nt.beats; }); end = Math.max(end, t); }); return end * beat; }, btn); }
 
