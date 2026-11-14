@@ -472,3 +472,146 @@ def test_the_page_wakes_its_sound_in_the_click_before_it_waits_for_anything():
     move = page_function('moveNote')
     assert 'sound()' in move and move.index('sound()') < move.index('await')
     assert '.would' in move and move.index('play(') < move.index("fixPost(pid, '/api/fix/move'")      # ... and sounds before it is sent
+
+
+
+# ---- a sound when tracks are ready
+# With real voices a piece takes up to an hour: nobody watches a page that long.  The computer makes the sound, not
+# the page - a browser lets a page make sound only just after a click, and the page may be closed.
+@pytest.fixture
+def heard(monkeypatch):
+    """What was announced by ear: True for "ready", False for "went wrong"."""
+    got = []
+    monkeypatch.setattr(app, 'ding', lambda ok=True: got.append(ok))
+    return got
+
+
+def test_tracks_that_are_ready_are_announced(lib, heard, monkeypatch):
+    pid = app.add('a.score', demo_bytes())
+    monkeypatch.setattr(app, 'do_render', lambda pid, opt: app.save(pid, status='ready', tracks=['a - Bass.mp3']))
+    app.work('render', pid, {'part': 'bass'})
+    assert heard == [True]
+    assert app.now == {} and pid not in app.waiting
+
+
+def test_a_render_that_went_wrong_is_announced_as_that(lib, heard, monkeypatch):
+    pid = app.add('a.score', demo_bytes())
+    monkeypatch.setattr(app, 'do_render', lambda pid, opt: app.save(pid, status='failed', error=['it said why']))
+    app.work('render', pid, {'part': 'bass'})
+
+    def broke(pid, opt):
+        raise RuntimeError('out of disk')
+    monkeypatch.setattr(app, 'do_render', broke)
+    app.work('render', pid, {'part': 'bass'})
+    assert heard == [False, False] and app.load(pid)['status'] == 'failed'
+
+
+def test_a_render_someone_stopped_is_not_announced(lib, heard, monkeypatch):
+    pid = app.add('a.score', demo_bytes())
+
+    def stopped(pid, opt):
+        app.now['stopped'] = True
+        app.save(pid, status='read', note='Stopped.')
+    monkeypatch.setattr(app, 'do_render', stopped)
+    app.work('render', pid, {'part': 'bass'})
+    assert heard == []
+
+
+def test_only_tracks_are_announced_not_a_piece_read_or_one_taken_away(lib, heard, monkeypatch):
+    pid = app.add('a.score', demo_bytes())
+    monkeypatch.setattr(app, 'do_read', lambda pid, again=False: app.save(pid, status='read'))
+    app.work('read', pid, {})
+    monkeypatch.setattr(app, 'do_render', lambda pid, opt: pytest.fail('it is gone'))
+    app.work('render', 'a piece removed while it waited', {'part': 'bass'})
+    assert heard == []
+
+
+@pytest.mark.parametrize('ok, system, has, want', [
+    (True, 'mac', {'afplay'}, ['afplay', '/System/Library/Sounds/Glass.aiff']),
+    (False, 'mac', {'afplay'}, ['afplay', '/System/Library/Sounds/Basso.aiff']),
+    (True, 'mac', set(), None),
+    (True, 'windows', set(), 'SystemAsterisk'),
+    (False, 'windows', set(), 'SystemHand'),
+    (True, 'linux', {'canberra-gtk-play', 'paplay'}, ['canberra-gtk-play', '-i', 'complete']),
+    (False, 'linux', {'paplay'}, ['paplay', '/usr/share/sounds/freedesktop/stereo/dialog-error.oga']),
+    (True, 'linux', {'pw-play', 'paplay'}, ['pw-play', '/usr/share/sounds/freedesktop/stereo/complete.oga']),
+    (True, 'linux', set(), None),                     # a computer with nothing to make a sound with: none, and no harm
+])
+def test_the_sound_is_the_computers_own(ok, system, has, want):
+    assert app.sound_for(ok, system, which=lambda name: name if name in has else None, exists=lambda path: True) == want
+
+
+def test_a_sound_whose_file_is_not_there_is_not_asked_for():
+    assert app.sound_for(True, 'mac', which=lambda name: name, exists=lambda path: False) is None
+    assert app.sound_for(True, 'linux', which=lambda name: name if name == 'paplay' else None, exists=lambda path: False) is None
+
+
+@pytest.fixture
+def player(lib, tmp_path, monkeypatch):
+    """A stand-in for the computer's sound player: it writes down that it was run.  -> what it wrote, or None."""
+    import sys
+    import time
+    mark = tmp_path / 'played'
+    monkeypatch.delenv('PALARE_QUIET', raising=False)
+    monkeypatch.setattr(app, 'sound_for', lambda ok, *a, **k: [sys.executable, '-c', f'open({str(mark)!r}, "w").write({"done" if ok else "wrong"!r})'])
+
+    def played(wait=5.):
+        end = time.time() + wait
+        while time.time() < end:
+            if mark.exists() and mark.read_text():
+                return mark.read_text()
+            time.sleep(.05)
+        return None
+    return played
+
+
+def test_ding_runs_the_player_and_does_not_wait_for_it(player):
+    assert app.ding() is True
+    assert player() == 'done'
+
+
+def test_ding_for_a_render_that_went_wrong(player):
+    assert app.ding(False) is True
+    assert player() == 'wrong'
+
+
+def test_ding_is_silent_when_switched_off(player):
+    app.settings(ding=False)
+    assert app.ding() is False
+    assert player(wait=.4) is None
+    app.settings(ding=True)
+    assert app.ding() is True and player() == 'done'
+
+
+def test_ding_is_silent_in_tests(player, monkeypatch):
+    monkeypatch.setenv('PALARE_QUIET', '1')
+    assert app.ding() is False
+    assert player(wait=.4) is None
+
+
+def test_ding_on_windows_uses_the_system_sound(lib, monkeypatch):
+    import sys
+    import types
+    asked = []
+    fake = types.SimpleNamespace(SND_ALIAS=0x10000, SND_ASYNC=1, PlaySound=lambda name, flags: asked.append((name, flags)))
+    monkeypatch.setitem(sys.modules, 'winsound', fake)
+    monkeypatch.delenv('PALARE_QUIET', raising=False)
+    monkeypatch.setattr(app, 'sound_for', lambda ok, *a, **k: 'SystemAsterisk' if ok else 'SystemHand')
+    assert app.ding() is True and app.ding(False) is True
+    assert asked == [('SystemAsterisk', 0x10001), ('SystemHand', 0x10001)]
+
+
+def test_a_player_that_cannot_be_run_harms_nothing(lib, monkeypatch):
+    monkeypatch.delenv('PALARE_QUIET', raising=False)
+    monkeypatch.setattr(app, 'sound_for', lambda ok, *a, **k: ['/no/such/player', 'x'])
+    assert app.ding() in (True, False)                 # (it is asked for; that it cannot be run stops nothing)
+
+
+def test_the_switch_on_the_page_is_kept_and_tries_the_sound(lib, heard):
+    assert app.state()['last'].get('ding', True) is True              # on, until someone says otherwise
+    app.act('/api/setting', {'ding': False}, None)
+    assert app.settings()['ding'] is False and heard == []
+    app.act('/api/setting', {'ding': True}, None)
+    assert app.settings()['ding'] is True and heard == [True]         # switched on: it is played once, to be heard
+    app.act('/api/setting', {'something else': 1}, None)
+    assert 'something else' not in app.settings()
